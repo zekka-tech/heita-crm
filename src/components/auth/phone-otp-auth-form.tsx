@@ -38,7 +38,7 @@ export function PhoneOtpAuthForm({
       void fetch("/api/auth/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone })
+        body: JSON.stringify({ phone, mode })
       })
         .then(async (response) => {
           const payload = (await response.json()) as {
@@ -69,6 +69,7 @@ export function PhoneOtpAuthForm({
       void signIn("phone-otp", {
         phone,
         code,
+        mode,
         redirect: false,
         redirectTo: "/home"
       }).then((result) => {
@@ -95,8 +96,10 @@ export function PhoneOtpAuthForm({
           {mode === "sign-in" ? "Sign in to Heita" : "Join Heita"}
         </h1>
         <p className="text-sm leading-6 text-ink-muted">
-          We send a one-time code to your phone. Google and Apple sign-in appear
-          automatically when configured.
+          {mode === "sign-in"
+            ? "We only issue sign-in codes to verified phone numbers. New customers should create an account first."
+            : "We verify your phone number before creating an account so recycled SIMs cannot silently take over an identity."}{" "}
+          Google and Apple sign-in appear automatically when configured.
         </p>
       </header>
 

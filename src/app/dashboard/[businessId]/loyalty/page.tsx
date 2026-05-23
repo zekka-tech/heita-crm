@@ -80,6 +80,7 @@ export default async function LoyaltyDashboardPage({
             </header>
             <form action={earnPointsAction} className="grid gap-3">
               <input type="hidden" name="businessId" value={business.id} />
+              <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
               <Select name="membershipId" label="Customer" defaultValue="" required>
                 <option value="" disabled>
                   Select a member
@@ -113,6 +114,7 @@ export default async function LoyaltyDashboardPage({
             </header>
             <form action={redeemPointsAction} className="grid gap-3">
               <input type="hidden" name="businessId" value={business.id} />
+              <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
               <Select name="membershipId" label="Customer" defaultValue="" required>
                 <option value="" disabled>
                   Select a member

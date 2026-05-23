@@ -110,6 +110,7 @@ export default async function BusinessRewardsPage({
                       <input type="hidden" name="businessId" value={business.id} />
                       <input type="hidden" name="slug" value={business.slug} />
                       <input type="hidden" name="rewardId" value={reward.id} />
+                      <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
                       <Button
                         type="submit"
                         variant={canRedeem ? "primary" : "secondary"}

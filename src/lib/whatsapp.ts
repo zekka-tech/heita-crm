@@ -5,12 +5,17 @@ export async function sendWhatsAppTextMessage(input: {
   to: string;
   body: string;
 }) {
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  if (!accessToken) {
+    throw new Error("WHATSAPP_ACCESS_TOKEN is missing.");
+  }
+
   const response = await fetch(
     `${baseUrl}/${process.env.WHATSAPP_API_VERSION ?? "v21.0"}/${input.phoneNumberId}/messages`,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN ?? ""}`,
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -18,7 +23,8 @@ export async function sendWhatsAppTextMessage(input: {
         to: input.to,
         type: "text",
         text: { body: input.body }
-      })
+      }),
+      signal: AbortSignal.timeout(30_000)
     }
   );
 
@@ -28,4 +34,3 @@ export async function sendWhatsAppTextMessage(input: {
 
   return response.json();
 }
-

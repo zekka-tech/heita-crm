@@ -1,16 +1,18 @@
-import { OtpPurpose } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getOtpPurposeForMode, type AuthOtpMode } from "@/lib/auth-intent";
 import { logger } from "@/lib/logger";
 import { issueOtpCode } from "@/lib/otp";
 import { normalizeZaPhone } from "@/lib/phone";
+import { prisma } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/security";
 import { sendOtpSms } from "@/lib/sms";
 
 const RequestOtpSchema = z.object({
-  phone: z.string().min(8).max(20)
+  phone: z.string().min(8).max(20),
+  mode: z.enum(["sign-in", "sign-up"]).default("sign-in")
 });
 
 const OTP_PER_PHONE_PER_HOUR = 5;
@@ -40,6 +42,33 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Enter a valid South African phone number (e.g. +27 82 000 0000)." },
       { status: 400 }
+    );
+  }
+
+  const user = await prisma.user.findUnique({
+    where: {
+      phone
+    },
+    select: {
+      id: true,
+      phoneVerifiedAt: true
+    }
+  });
+
+  const mode = parsed.data.mode as AuthOtpMode;
+  const otpPurpose = getOtpPurposeForMode(mode);
+
+  if (mode === "sign-in") {
+    if (!user?.phoneVerifiedAt) {
+      return NextResponse.json(
+        { error: "No verified account exists for this number yet. Create an account first." },
+        { status: 404 }
+      );
+    }
+  } else if (user?.phoneVerifiedAt) {
+    return NextResponse.json(
+      { error: "An account already exists for this number. Sign in instead." },
+      { status: 409 }
     );
   }
 
@@ -81,13 +110,17 @@ export async function POST(request: Request) {
 
   const { code, expiresAt } = await issueOtpCode({
     phone,
-    purpose: OtpPurpose.SIGN_IN
+    purpose: otpPurpose
   });
 
   try {
     await sendOtpSms({ to: phone, code });
   } catch (error) {
     logger.error({ err: error, phone: phone.slice(-4) }, "otp.send_failed");
+    return NextResponse.json(
+      { error: "We could not deliver a verification code right now. Please try again shortly." },
+      { status: 502 }
+    );
   }
 
   return NextResponse.json({

@@ -1,31 +1,19 @@
 "use server";
 
+import { StaffRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/staff";
 import { earnPoints, redeemPoints } from "@/server/services/loyalty.service";
-
-async function assertStaffAccess(businessId: string, userId: string) {
-  const staff = await prisma.staffMember.findUnique({
-    where: {
-      businessId_userId: {
-        businessId,
-        userId
-      }
-    }
-  });
-
-  if (!staff) {
-    throw new Error("You do not have access to manage this business.");
-  }
-}
 
 export async function earnPointsAction(formData: FormData) {
   const session = await auth();
   const userId = session?.user?.id;
   const businessId = String(formData.get("businessId") ?? "");
   const membershipId = String(formData.get("membershipId") ?? "");
+  const idempotencyKey = String(formData.get("idempotencyKey") ?? "");
   const points = Number(formData.get("points") ?? 0);
   const description = String(formData.get("description") ?? "").trim() || null;
 
@@ -33,13 +21,18 @@ export async function earnPointsAction(formData: FormData) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/loyalty`);
   }
 
-  await assertStaffAccess(businessId, userId);
+  await requireRole({
+    businessId,
+    userId,
+    allowedRoles: [StaffRole.STAFF]
+  });
 
   await earnPoints({
     businessId,
     membershipId,
     points,
     actorUserId: userId,
+    idempotencyKey,
     description
   });
 
@@ -51,6 +44,7 @@ export async function redeemPointsAction(formData: FormData) {
   const userId = session?.user?.id;
   const businessId = String(formData.get("businessId") ?? "");
   const membershipId = String(formData.get("membershipId") ?? "");
+  const idempotencyKey = String(formData.get("idempotencyKey") ?? "");
   const points = Number(formData.get("points") ?? 0);
   const description = String(formData.get("description") ?? "").trim() || null;
 
@@ -58,13 +52,18 @@ export async function redeemPointsAction(formData: FormData) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/loyalty`);
   }
 
-  await assertStaffAccess(businessId, userId);
+  await requireRole({
+    businessId,
+    userId,
+    allowedRoles: [StaffRole.MANAGER]
+  });
 
   await redeemPoints({
     businessId,
     membershipId,
     points,
     actorUserId: userId,
+    idempotencyKey,
     description
   });
 
@@ -84,7 +83,11 @@ export async function createRewardAction(formData: FormData) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/loyalty`);
   }
 
-  await assertStaffAccess(businessId, userId);
+  await requireRole({
+    businessId,
+    userId,
+    allowedRoles: [StaffRole.MANAGER]
+  });
 
   if (!title || !Number.isFinite(pointsCost) || pointsCost <= 0) {
     throw new Error("Reward title and points cost are required.");
@@ -102,4 +105,3 @@ export async function createRewardAction(formData: FormData) {
 
   redirect(`/dashboard/${businessId}/loyalty?updated=reward`);
 }
-

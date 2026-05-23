@@ -12,6 +12,7 @@ export async function redeemRewardAction(formData: FormData) {
   const businessId = String(formData.get("businessId") ?? "");
   const slug = String(formData.get("slug") ?? "");
   const rewardId = String(formData.get("rewardId") ?? "");
+  const idempotencyKey = String(formData.get("idempotencyKey") ?? "");
 
   if (!userId) {
     redirect(`/sign-in?callbackUrl=/b/${slug}/rewards`);
@@ -34,9 +35,9 @@ export async function redeemRewardAction(formData: FormData) {
     businessId,
     membershipId: membership.id,
     rewardId,
-    actorUserId: userId
+    actorUserId: userId,
+    idempotencyKey
   });
 
   redirect(`/b/${slug}/rewards?redeemed=1`);
 }
-

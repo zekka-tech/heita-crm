@@ -3,14 +3,15 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export function constantTimeEqual(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
+  const maxLength = Math.max(leftBuffer.length, rightBuffer.length, 1);
+  const paddedLeft = Buffer.alloc(maxLength);
+  const paddedRight = Buffer.alloc(maxLength);
 
-  if (leftBuffer.length !== rightBuffer.length) {
-    const padded = Buffer.alloc(leftBuffer.length);
-    timingSafeEqual(leftBuffer, padded);
-    return false;
-  }
+  leftBuffer.copy(paddedLeft);
+  rightBuffer.copy(paddedRight);
 
-  return timingSafeEqual(leftBuffer, rightBuffer);
+  const equal = timingSafeEqual(paddedLeft, paddedRight);
+  return equal && leftBuffer.length === rightBuffer.length;
 }
 
 export function hmacSha256(secret: string, payload: string | Buffer): string {
@@ -34,6 +35,21 @@ export function getClientIp(headers: Headers): string {
     headers.get("x-real-ip") ??
     "0.0.0.0"
   );
+}
+
+export function isUnixTimestampWithinSkew(
+  timestamp: string | number,
+  skewSeconds: number,
+  now = Date.now()
+): boolean {
+  const normalizedTimestamp =
+    typeof timestamp === "string" ? Number.parseInt(timestamp, 10) : timestamp;
+
+  if (!Number.isFinite(normalizedTimestamp)) {
+    return false;
+  }
+
+  return Math.abs(now - normalizedTimestamp * 1000) <= skewSeconds * 1000;
 }
 
 export function isPrivateIp(ip: string): boolean {

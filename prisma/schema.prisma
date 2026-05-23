@@ -13,7 +13,7 @@ model User {
   emailVerified     DateTime?
   image             String?
   phone             String?             @unique
-  passwordHash      String?
+  phoneVerifiedAt   DateTime?
   preferredAiMode   String?             @default("auto")
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
@@ -338,6 +338,7 @@ model Message {
   user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([businessId, channel, createdAt])
+  @@unique([channel, externalId])
 }
 
 model LoyaltyTransaction {

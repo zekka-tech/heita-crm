@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   constantTimeEqual,
   hmacSha256,
+  isUnixTimestampWithinSkew,
   isPrivateIp,
   verifyMetaWhatsappSignature
 } from "@/lib/security";
@@ -97,5 +98,21 @@ describe("isPrivateIp", () => {
   it("does not flag public addresses", () => {
     expect(isPrivateIp("8.8.8.8")).toBe(false);
     expect(isPrivateIp("196.201.213.55")).toBe(false);
+  });
+});
+
+describe("isUnixTimestampWithinSkew", () => {
+  it("accepts timestamps within the allowed window", () => {
+    const now = Date.UTC(2026, 0, 1, 12, 0, 0);
+    const timestamp = Math.floor((now - 2 * 60 * 1000) / 1000);
+
+    expect(isUnixTimestampWithinSkew(timestamp, 5 * 60, now)).toBe(true);
+  });
+
+  it("rejects stale timestamps", () => {
+    const now = Date.UTC(2026, 0, 1, 12, 0, 0);
+    const timestamp = Math.floor((now - 10 * 60 * 1000) / 1000);
+
+    expect(isUnixTimestampWithinSkew(timestamp, 5 * 60, now)).toBe(false);
   });
 });

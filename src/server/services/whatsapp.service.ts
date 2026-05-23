@@ -3,7 +3,10 @@ import { z } from "zod";
 
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { isUnixTimestampWithinSkew } from "@/lib/security";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp";
+
+const WEBHOOK_TIMESTAMP_SKEW_SECONDS = 5 * 60;
 
 const InboundTextMessageSchema = z.object({
   object: z.string().optional(),
@@ -24,6 +27,7 @@ const InboundTextMessageSchema = z.object({
                     z.object({
                       from: z.string(),
                       id: z.string(),
+                      timestamp: z.string(),
                       text: z
                         .object({
                           body: z.string()
@@ -85,6 +89,13 @@ export async function handleWhatsappInboundPayload(payload: unknown): Promise<vo
 
       for (const message of messages) {
         if (message.type !== "text" || !message.text?.body) continue;
+        if (!isUnixTimestampWithinSkew(message.timestamp, WEBHOOK_TIMESTAMP_SKEW_SECONDS)) {
+          logger.warn(
+            { externalId: message.id, timestamp: message.timestamp },
+            "whatsapp.payload.stale_message"
+          );
+          continue;
+        }
         await routeInboundTextToBusiness({
           businessId: business.id,
           businessSlug: business.slug,
@@ -103,6 +114,14 @@ async function persistStatusUpdates(
   statuses: { id: string; status: string; timestamp: string }[]
 ): Promise<void> {
   for (const status of statuses) {
+    if (!isUnixTimestampWithinSkew(status.timestamp, WEBHOOK_TIMESTAMP_SKEW_SECONDS)) {
+      logger.warn(
+        { externalId: status.id, timestamp: status.timestamp },
+        "whatsapp.payload.stale_status"
+      );
+      continue;
+    }
+
     await prisma.message.updateMany({
       where: { externalId: status.id },
       data: {
@@ -129,6 +148,21 @@ async function routeInboundTextToBusiness(input: RouteInput): Promise<void> {
   const existingUser = await prisma.user.findFirst({
     where: { phone: input.fromPhone }
   });
+
+  const existingMessage = await prisma.message.findFirst({
+    where: {
+      channel: MessageChannel.WHATSAPP,
+      externalId: input.externalId
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (existingMessage) {
+    logger.info({ externalId: input.externalId }, "whatsapp.payload.duplicate_ignored");
+    return;
+  }
 
   await prisma.message.create({
     data: {
