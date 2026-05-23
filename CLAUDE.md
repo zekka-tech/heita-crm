@@ -1,30 +1,82 @@
 # CLAUDE.md
 
-This repository contains the Heita CRM bootstrap: a mobile-first Next.js 15 CRM/PWA for South African retailers and small businesses.
+This repository is the **Heita CRM** — a mobile-first PWA loyalty + messaging + AI co-worker platform built for South African retailers and small businesses.
 
 ## Stack
-- Next.js 15 App Router with TypeScript and Turbopack
-- Tailwind CSS v4 and shadcn/ui
-- PostgreSQL 16 + Prisma + pgvector
-- Auth.js v5, tRPC v11, TanStack Query v5
-- BullMQ + Redis, MinIO/R2, Ollama + Anthropic fallback
 
-## Core Commands
-- `npm run dev`
-- `npm run typecheck`
-- `npm run lint`
-- `npm run docker:up`
-- `npm run db:migrate`
-- `npm run db:seed`
-- `npm run worker:dev`
+- **Framework**: Next.js 15 (App Router, Turbopack) with TypeScript
+- **Styling**: Tailwind CSS v4 + Stitch-inspired design tokens (Electric Blue / Eco Green / Deep Navy, Poppins + Inter)
+- **Database**: PostgreSQL 16 + Prisma 7 + pgvector
+- **Auth**: Auth.js v5 (next-auth@beta) — phone OTP (Africa's Talking), Google, Apple
+- **AI**: Ollama (local) with Anthropic Claude fallback, streamed over SSE
+- **WhatsApp**: Meta Cloud API (HMAC-verified webhook)
+- **SMS**: Africa's Talking
+- **Queue / cache**: BullMQ + Redis (ioredis), with in-memory fallback for OTP/rate-limit
+- **Storage**: Cloudflare R2 (prod) / MinIO (local) — S3-compatible
+- **Logging**: pino with sensitive-field redaction
 
-## Architecture Notes
-- `src/app`: App Router pages, route groups, API endpoints, dashboard surfaces
-- `src/lib`: infrastructure clients and AI integrations
-- `src/server`: tRPC setup, routers, business services
-- `src/workers`: BullMQ workers for document ingestion and WhatsApp AI replies
-- `prisma/schema.prisma`: shared multi-tenant data model with `businessId` on business-scoped entities
+## Commands
 
-## Current Status
-- Phase 0 scaffold is in place.
-- Node.js/npm were not available in the shell during bootstrap, so dependencies were not installed and the project has not yet been built or migrated.
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Next dev server (port 3000, Turbopack) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | ESLint with `next/core-web-vitals` |
+| `npm test` | Vitest unit suite |
+| `npm run test:coverage` | Vitest with v8 coverage on security-critical files |
+| `npm run test:e2e` | Playwright e2e (boots `next start` automatically) |
+| `npm run build` | Next production build |
+| `npm run ci` | Full pipeline: typecheck → lint → test → build |
+| `npm run db:migrate` | Prisma migrations |
+| `npm run db:seed` | Seed dev data |
+| `npm run worker:dev` | BullMQ workers (tsx watch) |
+| `npm run docker:up` | Local stack (postgres + redis + minio + ollama) |
+| `npm run docker:setup` | Pull Ollama models + create MinIO bucket |
+
+## Architecture map
+
+- `src/app` — App Router pages, API routes, server actions
+  - `(auth)` — split-pane auth flow (sign-in, sign-up, verify, forgot-password)
+  - `(app)` — bottom-nav customer shell (home, wallet, notifications, profile)
+  - `b/[slug]` — public business surfaces (profile, join, rewards, events, chat)
+  - `dashboard/[businessId]` — staff dashboard (loyalty, AI workspace, messaging)
+  - `api/webhooks/whatsapp` — HMAC-verified Meta webhook
+  - `api/webhooks/africas-talking` — IP-allowlist + shared-secret protected
+  - `api/auth/request-otp` — rate-limited (per phone burst, per phone hour, per IP hour)
+  - `api/ai/chat` — SSE streaming, RAG pipeline (Ollama → Anthropic fallback)
+  - `api/health` — DB + Redis liveness for orchestrators
+- `src/lib` — infrastructure
+  - `auth`, `prisma`, `redis` — singletons
+  - `phone` — E.164 normalisation
+  - `security` — HMAC, constant-time compare, Meta signature verification
+  - `rate-limit` — Redis-backed sliding window with in-memory fallback
+  - `otp` — HMAC-SHA256 codes, single-use, 10-min TTL
+  - `logger` — pino with sensitive-field redaction
+  - `ai/{ollama,anthropic,rag}` — streamed RAG with graceful fallback
+- `src/server/services` — domain services (loyalty, membership, business, whatsapp, notification)
+- `src/components/{ui,layout,business,loyalty,ai,auth,shared}` — shared Stitch component library
+- `src/workers` — BullMQ workers (document ingestion, WhatsApp AI replies)
+- `prisma/schema.prisma` — shared multi-tenant data model with `businessId` on tenant-scoped tables; pgvector(1024) for AI embeddings
+
+## Security posture
+
+- WhatsApp webhook verifies `x-hub-signature-256` HMAC against `WHATSAPP_APP_SECRET`
+- Africa's Talking webhook accepts only documented IP ranges or shared-secret callers
+- OTP request hits three rate-limiters (burst, per-phone hour, per-IP hour) and HMAC-signs codes with `AUTH_SECRET`
+- Cron endpoints use constant-time secret comparison
+- Strict CSP, HSTS (prod), X-Frame-Options DENY, Permissions-Policy enforced via `next.config.ts`
+- `pino` logger redacts auth headers, OTP codes, tokens
+
+## Deployment
+
+- `Dockerfile` — multi-stage, non-root, dumb-init, health-checked
+- `docker-compose.prod.yml` — app + postgres (pgvector) + redis with healthchecks
+- `.github/workflows/ci.yml` — typecheck, lint, test, build, npm audit, gitleaks
+- `.github/workflows/docker.yml` — GHCR publish on tags + main
+
+## Conventions
+
+- Server-only data access lives in `src/server/services`; UI never touches Prisma directly outside of read-only Server Components
+- All Prisma writes are wrapped in `prisma.$transaction` with explicit `maxWait`/`timeout` when they span more than two operations
+- Phone numbers stored in E.164; UI accepts loose input and normalises on the server
+- AI conversations stream SSE `data:` frames so the UI can render token-by-token without polyfills

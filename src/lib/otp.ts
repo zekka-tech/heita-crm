@@ -1,36 +1,44 @@
-import { createHash, randomInt, timingSafeEqual } from "node:crypto";
+import { createHmac, randomInt } from "node:crypto";
 
 import { OtpPurpose } from "@prisma/client";
 
-import { getRedis } from "@/lib/redis";
 import { prisma } from "@/lib/prisma";
+import { getRedis } from "@/lib/redis";
+import { constantTimeEqual } from "@/lib/security";
 
 const OTP_TTL_SECONDS = 600;
 
-function hashOtp(phone: string, code: string) {
-  return createHash("sha256")
-    .update(`${phone}:${code}:${process.env.AUTH_SECRET ?? "heita-dev-secret"}`)
+function getOtpSecret(): string {
+  const secret = process.env.AUTH_SECRET ?? process.env.OTP_SECRET;
+
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "AUTH_SECRET is required in production for OTP signing."
+      );
+    }
+    return "heita-dev-secret-do-not-use-in-prod";
+  }
+
+  return secret;
+}
+
+function hashOtp(phone: string, code: string, purpose: OtpPurpose): string {
+  return createHmac("sha256", getOtpSecret())
+    .update(`${purpose}:${phone}:${code}`)
     .digest("hex");
 }
 
-function safeCompare(left: string, right: string) {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-
-  if (leftBuffer.length !== rightBuffer.length) {
-    return false;
-  }
-
-  return timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-export function generateOtpCode() {
+export function generateOtpCode(): string {
   return randomInt(0, 1_000_000).toString().padStart(6, "0");
 }
 
-export async function issueOtpCode(input: { phone: string; purpose: OtpPurpose }) {
+export async function issueOtpCode(input: {
+  phone: string;
+  purpose: OtpPurpose;
+}): Promise<{ code: string; expiresAt: Date }> {
   const code = generateOtpCode();
-  const codeHash = hashOtp(input.phone, code);
+  const codeHash = hashOtp(input.phone, code, input.purpose);
   const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
 
   await prisma.otpCode.updateMany({
@@ -58,31 +66,37 @@ export async function issueOtpCode(input: { phone: string; purpose: OtpPurpose }
 
   if (redis) {
     try {
-      await redis.set(`otp:phone:${input.phone}`, codeHash, "EX", OTP_TTL_SECONDS);
+      await redis.set(
+        `otp:${input.purpose}:${input.phone}`,
+        codeHash,
+        "EX",
+        OTP_TTL_SECONDS
+      );
     } catch {
-      // Redis is an optimization here; the DB remains the source of truth.
+      // Redis is an optimization; DB remains the source of truth.
     }
   }
 
-  return {
-    code,
-    expiresAt
-  };
+  return { code, expiresAt };
 }
 
 export async function verifyOtpAttempt(input: {
   phone: string;
   code: string;
   purpose: OtpPurpose;
-}) {
-  const expectedHash = hashOtp(input.phone, input.code);
+}): Promise<boolean> {
+  if (!/^\d{6}$/.test(input.code)) {
+    return false;
+  }
+
+  const expectedHash = hashOtp(input.phone, input.code, input.purpose);
   const redis = getRedis();
 
   if (redis) {
     try {
-      const cachedHash = await redis.get(`otp:phone:${input.phone}`);
+      const cachedHash = await redis.get(`otp:${input.purpose}:${input.phone}`);
 
-      if (cachedHash && !safeCompare(cachedHash, expectedHash)) {
+      if (cachedHash && !constantTimeEqual(cachedHash, expectedHash)) {
         return false;
       }
     } catch {
@@ -95,31 +109,23 @@ export async function verifyOtpAttempt(input: {
       phone: input.phone,
       purpose: input.purpose,
       consumedAt: null,
-      expiresAt: {
-        gt: new Date()
-      }
+      expiresAt: { gt: new Date() }
     },
-    orderBy: {
-      createdAt: "desc"
-    }
+    orderBy: { createdAt: "desc" }
   });
 
-  if (!otpRecord || !safeCompare(otpRecord.codeHash, expectedHash)) {
+  if (!otpRecord || !constantTimeEqual(otpRecord.codeHash, expectedHash)) {
     return false;
   }
 
   await prisma.otpCode.update({
-    where: {
-      id: otpRecord.id
-    },
-    data: {
-      consumedAt: new Date()
-    }
+    where: { id: otpRecord.id },
+    data: { consumedAt: new Date() }
   });
 
   if (redis) {
     try {
-      await redis.del(`otp:phone:${input.phone}`);
+      await redis.del(`otp:${input.purpose}:${input.phone}`);
     } catch {
       // Best-effort cleanup only.
     }

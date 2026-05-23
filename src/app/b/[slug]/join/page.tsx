@@ -1,8 +1,13 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { JoinChannel } from "@prisma/client";
 import { notFound } from "next/navigation";
+import { BadgeCheck, CheckCircle2, Gift, MessageCircle, QrCode } from "lucide-react";
 
 import { joinBusinessAction } from "@/app/b/[slug]/join/actions";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -18,13 +23,9 @@ export default async function BusinessJoinPage({
   const { slug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = await auth();
-  const business = await prisma.business.findUnique({
-    where: { slug }
-  });
+  const business = await prisma.business.findUnique({ where: { slug } });
 
-  if (!business) {
-    notFound();
-  }
+  if (!business) notFound();
 
   const membership = session?.user?.id
     ? await prisma.membership.findUnique({
@@ -45,50 +46,89 @@ export default async function BusinessJoinPage({
 
   return (
     <main className="px-4 py-6 sm:px-8">
-      <section className="surface mx-auto max-w-2xl rounded-[2rem] p-6 sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#af5f33]">
-          Join / {slug}
-        </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#143127]">
-          Join {business.name}
-        </h1>
-        <p className="mt-3 text-sm leading-6 text-[#456356]">
-          This membership gives the customer one shared wallet for points, rewards,
-          promotions, and AI chat with {business.name}.
-        </p>
+      <Card variant="surface" className="mx-auto max-w-2xl space-y-6">
+        <header className="space-y-3">
+          <Chip variant="primary" size="sm">
+            <QrCode className="h-3 w-3" /> Join via {prettyChannel(channel)}
+          </Chip>
+          <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">
+            Join {business.name}
+          </h1>
+          <p className="text-sm leading-6 text-ink-muted">
+            Get one wallet across every business you join. Earn points at every
+            visit, redeem rewards, and chat with the team.
+          </p>
+        </header>
+
+        <ul className="grid gap-2">
+          {[
+            {
+              icon: Gift,
+              text: `Welcome bonus of ${business.loyaltySignupBonus} points on sign-up`
+            },
+            { icon: BadgeCheck, text: "Auto tier progression as you earn" },
+            { icon: MessageCircle, text: "Direct WhatsApp + in-app updates" }
+          ].map(({ icon: Icon, text }) => (
+            <li
+              key={text}
+              className="flex items-center gap-3 rounded-xl bg-surface-elevated px-3 py-2.5 text-sm text-ink"
+            >
+              <Icon className="h-4 w-4 text-primary-action" />
+              {text}
+            </li>
+          ))}
+        </ul>
 
         {membership ? (
-          <div className="mt-8 rounded-[1.5rem] bg-white p-5">
-            <p className="text-sm font-semibold text-[#143127]">
-              You already belong to this loyalty programme.
+          <Card variant="outline" className="bg-accent/5">
+            <CheckCircle2 className="h-6 w-6 text-success" />
+            <h2 className="mt-2 font-display text-lg font-semibold">
+              You&apos;re already a member.
+            </h2>
+            <p className="mt-1 text-sm text-ink-muted">
+              Current balance:{" "}
+              <strong>{membership.pointsBalance.toLocaleString()} points</strong>
             </p>
-            <p className="mt-2 text-sm text-[#456356]">
-              Current points balance: {membership.pointsBalance}
-            </p>
-          </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button asChild variant="primary">
+                <Link href={`/b/${business.slug}/rewards` as Route}>
+                  See rewards
+                </Link>
+              </Button>
+              <Button asChild variant="secondary">
+                <Link href="/wallet">Open wallet</Link>
+              </Button>
+            </div>
+          </Card>
         ) : session?.user?.id ? (
-          <form action={joinBusinessAction} className="mt-8 grid gap-4">
+          <form action={joinBusinessAction} className="grid gap-4">
             <input type="hidden" name="businessId" value={business.id} />
             <input type="hidden" name="slug" value={business.slug} />
             <input type="hidden" name="channel" value={channel} />
-            <button
-              type="submit"
-              className="rounded-full bg-[#1d3c34] px-5 py-3 text-sm font-medium text-[#f9f6f1]"
-            >
-              Join and claim {business.loyaltySignupBonus} welcome points
-            </button>
+            <Button type="submit" variant="gradient" size="lg">
+              Claim {business.loyaltySignupBonus} welcome points
+            </Button>
           </form>
         ) : (
-          <div className="mt-8">
+          <Button asChild variant="primary" size="lg">
             <Link
-              href={`/sign-in?callbackUrl=/b/${business.slug}/join`}
-              className="inline-flex rounded-full bg-[#1d3c34] px-5 py-3 text-sm font-medium text-[#f9f6f1]"
+              href={`/sign-in?callbackUrl=/b/${business.slug}/join${
+                channel ? `?channel=${channel}` : ""
+              }`}
             >
               Sign in to join
             </Link>
-          </div>
+          </Button>
         )}
-      </section>
+      </Card>
     </main>
   );
+}
+
+function prettyChannel(channel: JoinChannel) {
+  return channel
+    .toLowerCase()
+    .split("_")
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
 }

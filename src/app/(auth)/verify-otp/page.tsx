@@ -1,25 +1,23 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Chip } from "@/components/ui/badge";
 
 export default function VerifyOtpPage() {
   return (
-    <section className="surface w-full rounded-[2rem] p-6 sm:p-8">
-      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#af5f33]">
-        Authentication
-      </p>
-      <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#143127]">
+    <Card variant="surface" className="w-full max-w-md space-y-4">
+      <Chip variant="primary" size="sm">Authentication</Chip>
+      <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">
         Verify phone OTP
       </h1>
-      <p className="mt-3 text-sm leading-6 text-[#456356]">
-        OTP verification is now handled directly from the sign-in and sign-up pages.
-        Use this screen as a fallback handoff point if you need to restart the flow.
+      <p className="text-sm leading-6 text-ink-muted">
+        OTP verification is handled directly from the sign-in and sign-up pages
+        now. Use this fallback to restart the flow if you got stuck.
       </p>
-      <div className="mt-6">
-        <Button asChild>
-          <Link href="/sign-in">Return to sign-in</Link>
-        </Button>
-      </div>
-    </section>
+      <Button asChild variant="primary">
+        <Link href="/sign-in">Return to sign-in</Link>
+      </Button>
+    </Card>
   );
 }

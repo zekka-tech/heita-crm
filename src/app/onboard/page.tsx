@@ -1,11 +1,19 @@
+import { redirect } from "next/navigation";
+import { Sparkles } from "lucide-react";
+
+import { createBusinessAction } from "@/app/onboard/actions";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Chip } from "@/components/ui/badge";
+import { Input, Select, Textarea } from "@/components/ui/input";
 import { auth } from "@/lib/auth";
 import {
   businessCategories,
   formatEnumLabel,
   provinces
 } from "@/lib/business";
-import { createBusinessAction } from "@/app/onboard/actions";
-import { redirect } from "next/navigation";
+
+export const metadata = { title: "Onboard a business" };
 
 export default async function OnboardPage() {
   const session = await auth();
@@ -15,120 +23,90 @@ export default async function OnboardPage() {
   }
 
   return (
-    <main className="px-4 py-6 sm:px-8">
-      <section className="surface mx-auto max-w-3xl rounded-[2rem] p-6 sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#af5f33]">
-          Business Onboarding
-        </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#143127]">
-          Create a new business
-        </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-[#456356]">
-          This creates the business, owner staff membership, default Bronze/Silver/Gold
-          tiers, a primary QR code, a primary join link, and the AI workspace.
-        </p>
+    <main className="px-4 pb-24 pt-6 sm:px-8">
+      <Card variant="surface" className="mx-auto max-w-3xl space-y-6">
+        <header className="space-y-3">
+          <Chip variant="primary" size="sm">
+            <Sparkles className="h-3 w-3" /> Onboarding
+          </Chip>
+          <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">
+            Create a new business
+          </h1>
+          <p className="max-w-xl text-sm leading-6 text-ink-muted">
+            We&apos;ll provision your owner role, three default tiers
+            (Bronze/Silver/Gold), a primary QR code, a join link, and your AI
+            workspace.
+          </p>
+        </header>
 
-        <form action={createBusinessAction} className="mt-8 grid gap-4">
-          <label className="grid gap-2 text-sm text-[#143127]">
-            Business name
-            <input
-              name="name"
-              required
-              className="rounded-2xl border border-[rgba(20,49,39,0.14)] bg-white px-4 py-3 outline-none"
-              placeholder="Mpho's Corner Store"
-            />
-          </label>
+        <form action={createBusinessAction} className="grid gap-5">
+          <Input
+            label="Business name"
+            name="name"
+            required
+            placeholder="Mpho's Corner Store"
+          />
 
-          <label className="grid gap-2 text-sm text-[#143127]">
-            Description
-            <textarea
-              name="description"
-              rows={4}
-              className="rounded-2xl border border-[rgba(20,49,39,0.14)] bg-white px-4 py-3 outline-none"
-              placeholder="Tell customers what makes this business worth joining."
-            />
-          </label>
+          <Textarea
+            label="Description"
+            name="description"
+            rows={4}
+            placeholder="Tell customers what makes this business worth joining."
+          />
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-2 text-sm text-[#143127]">
-              Category
-              <select
-                name="category"
-                required
-                className="rounded-2xl border border-[rgba(20,49,39,0.14)] bg-white px-4 py-3 outline-none"
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  Select category
+            <Select label="Category" name="category" defaultValue="" required>
+              <option value="" disabled>
+                Select category
+              </option>
+              {businessCategories.map((category) => (
+                <option key={category} value={category}>
+                  {formatEnumLabel(category)}
                 </option>
-                {businessCategories.map((category) => (
-                  <option key={category} value={category}>
-                    {formatEnumLabel(category)}
-                  </option>
-                ))}
-              </select>
-            </label>
+              ))}
+            </Select>
 
-            <label className="grid gap-2 text-sm text-[#143127]">
-              Province
-              <select
-                name="province"
-                required
-                className="rounded-2xl border border-[rgba(20,49,39,0.14)] bg-white px-4 py-3 outline-none"
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  Select province
+            <Select label="Province" name="province" defaultValue="" required>
+              <option value="" disabled>
+                Select province
+              </option>
+              {provinces.map((province) => (
+                <option key={province} value={province}>
+                  {formatEnumLabel(province)}
                 </option>
-                {provinces.map((province) => (
-                  <option key={province} value={province}>
-                    {formatEnumLabel(province)}
-                  </option>
-                ))}
-              </select>
-            </label>
+              ))}
+            </Select>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-2 text-sm text-[#143127]">
-              Business phone
-              <input
-                name="phone"
-                className="rounded-2xl border border-[rgba(20,49,39,0.14)] bg-white px-4 py-3 outline-none"
-                placeholder="+27 11 555 1234"
-              />
-            </label>
-
-            <label className="grid gap-2 text-sm text-[#143127]">
-              Business email
-              <input
-                name="email"
-                type="email"
-                className="rounded-2xl border border-[rgba(20,49,39,0.14)] bg-white px-4 py-3 outline-none"
-                placeholder="hello@business.co.za"
-              />
-            </label>
+            <Input
+              label="Business phone"
+              name="phone"
+              type="tel"
+              placeholder="+27 11 555 1234"
+            />
+            <Input
+              label="Business email"
+              name="email"
+              type="email"
+              placeholder="hello@business.co.za"
+            />
           </div>
 
-          <label className="grid gap-2 text-sm text-[#143127]">
-            Loyalty signup bonus
-            <input
-              name="loyaltySignupBonus"
-              type="number"
-              min="0"
-              defaultValue="100"
-              className="rounded-2xl border border-[rgba(20,49,39,0.14)] bg-white px-4 py-3 outline-none"
-            />
-          </label>
+          <Input
+            label="Loyalty signup bonus"
+            name="loyaltySignupBonus"
+            type="number"
+            min={0}
+            defaultValue={100}
+            hint="Welcome points awarded automatically to new members."
+          />
 
-          <button
-            type="submit"
-            className="rounded-full bg-[#1d3c34] px-5 py-3 text-sm font-medium text-[#f9f6f1]"
-          >
+          <Button type="submit" variant="gradient" size="lg">
             Create business
-          </button>
+          </Button>
         </form>
-      </section>
+      </Card>
     </main>
   );
 }

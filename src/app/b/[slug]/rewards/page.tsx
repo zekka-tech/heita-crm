@@ -1,6 +1,12 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Gift, Sparkles } from "lucide-react";
 
 import { redeemRewardAction } from "@/app/b/[slug]/rewards/actions";
+import { RewardCard } from "@/components/loyalty/reward-card";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Chip, TierBadge } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -13,16 +19,13 @@ export default async function BusinessRewardsPage({
 }: BusinessRewardsPageProps) {
   const { slug } = await params;
   const session = await auth();
+
   const business = await prisma.business.findUnique({
     where: { slug },
     include: {
       rewards: {
-        where: {
-          isActive: true
-        },
-        orderBy: {
-          pointsCost: "asc"
-        }
+        where: { isActive: true },
+        orderBy: { pointsCost: "asc" }
       }
     }
   });
@@ -39,73 +42,110 @@ export default async function BusinessRewardsPage({
             userId: session.user.id
           }
         },
-        include: {
-          tier: true
-        }
+        include: { tier: true }
       })
     : null;
 
   return (
-    <main className="px-4 py-6 sm:px-8">
-      <section className="surface rounded-[2rem] p-6 sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#af5f33]">
-          Rewards / {slug}
+    <main className="px-4 pb-24 pt-6 sm:px-8">
+      <Card variant="hero" className="px-6 py-8 sm:px-10">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
+          {business.name} · Rewards
         </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#143127]">
-          {business.name} rewards catalogue
+        <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+          Spend points on rewards you actually want
         </h1>
-        <p className="mt-3 text-sm leading-6 text-[#456356]">
-          {membership
-            ? `You currently have ${membership.pointsBalance} points on the ${membership.tier?.name ?? "current"} tier.`
-            : "Join this business to redeem rewards with your points."}
-        </p>
+        {membership ? (
+          <div className="mt-5 flex flex-wrap items-center gap-3 text-white/90">
+            <Chip
+              variant="primary"
+              className="bg-white/15 text-white border-white/20"
+            >
+              <Sparkles className="h-3 w-3" />
+              {membership.pointsBalance.toLocaleString()} points
+            </Chip>
+            <TierBadge tier={membership.tier?.name} />
+          </div>
+        ) : (
+          <p className="mt-3 text-white/85">
+            Join this business to unlock and redeem rewards.
+          </p>
+        )}
+      </Card>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          {business.rewards.length ? (
-            business.rewards.map((reward) => {
-              const canRedeem =
-                membership &&
+      {!membership && session?.user?.id ? (
+        <Card variant="surface" className="mt-6 flex items-center justify-between">
+          <p className="text-sm text-ink-muted">
+            Membership required to redeem rewards.
+          </p>
+          <Button asChild variant="primary">
+            <Link href={`/b/${slug}/join`}>Join now</Link>
+          </Button>
+        </Card>
+      ) : null}
+
+      <section className="mt-6 grid gap-4 md:grid-cols-2">
+        {business.rewards.length ? (
+          business.rewards.map((reward) => {
+            const stockOK =
+              reward.stock === null || reward.stock === undefined
+                ? true
+                : reward.stock > 0;
+            const canRedeem = Boolean(
+              membership &&
                 membership.pointsBalance >= reward.pointsCost &&
-                (reward.stock === null || reward.stock > 0);
+                stockOK
+            );
 
-              return (
-                <article key={reward.id} className="rounded-[1.5rem] bg-white p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-lg font-semibold text-[#143127]">{reward.title}</h2>
-                      <p className="mt-2 text-sm text-[#456356]">
-                        {reward.description || "No description provided."}
-                      </p>
-                    </div>
-                    <p className="text-lg font-semibold text-[#1d3c34]">
-                      {reward.pointsCost} pts
-                    </p>
-                  </div>
-                  <p className="mt-4 text-sm text-[#456356]">
-                    Stock: {reward.stock === null ? "Unlimited" : reward.stock}
-                  </p>
-
-                  {membership ? (
-                    <form action={redeemRewardAction} className="mt-5">
+            return (
+              <RewardCard
+                key={reward.id}
+                reward={reward}
+                available={Boolean(
+                  membership && membership.pointsBalance >= reward.pointsCost
+                )}
+                action={
+                  membership ? (
+                    <form action={redeemRewardAction}>
                       <input type="hidden" name="businessId" value={business.id} />
                       <input type="hidden" name="slug" value={business.slug} />
                       <input type="hidden" name="rewardId" value={reward.id} />
-                      <button
+                      <Button
                         type="submit"
+                        variant={canRedeem ? "primary" : "secondary"}
+                        size="sm"
                         disabled={!canRedeem}
-                        className="rounded-full bg-[#1d3c34] px-5 py-3 text-sm font-medium text-[#f9f6f1] disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {canRedeem ? "Redeem reward" : "Not enough points"}
-                      </button>
+                        {canRedeem
+                          ? "Redeem"
+                          : !stockOK
+                            ? "Sold out"
+                            : "Not enough"}
+                      </Button>
                     </form>
-                  ) : null}
-                </article>
-              );
-            })
-          ) : (
-            <p className="text-sm text-[#456356]">No rewards published yet.</p>
-          )}
-        </div>
+                  ) : (
+                    <Button asChild variant="primary" size="sm">
+                      <Link
+                        href={
+                          session?.user?.id
+                            ? `/b/${slug}/join`
+                            : `/sign-in?callbackUrl=/b/${slug}/rewards`
+                        }
+                      >
+                        Join to redeem
+                      </Link>
+                    </Button>
+                  )
+                }
+              />
+            );
+          })
+        ) : (
+          <Card variant="outline" className="md:col-span-2 text-center">
+            <Gift className="mx-auto h-7 w-7 text-ink-subtle" />
+            <p className="mt-3 text-ink-muted">No rewards published yet.</p>
+          </Card>
+        )}
       </section>
     </main>
   );

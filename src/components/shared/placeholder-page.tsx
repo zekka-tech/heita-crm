@@ -1,7 +1,10 @@
 import type { Route } from "next";
 import Link from "next/link";
+import { Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Chip } from "@/components/ui/badge";
 
 type PlaceholderPageProps = {
   eyebrow: string;
@@ -19,23 +22,20 @@ export function PlaceholderPage({
   primaryLabel
 }: PlaceholderPageProps) {
   return (
-    <section className="surface rounded-[2rem] p-6 sm:p-8">
-      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#af5f33]">
+    <Card variant="surface" className="space-y-4">
+      <Chip variant="primary" size="sm">
+        <Sparkles className="h-3 w-3" />
         {eyebrow}
-      </p>
-      <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#143127]">
+      </Chip>
+      <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">
         {title}
       </h1>
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-[#456356]">
-        {description}
-      </p>
+      <p className="max-w-2xl text-sm leading-6 text-ink-muted">{description}</p>
       {primaryHref && primaryLabel ? (
-        <div className="mt-6">
-          <Button asChild>
-            <Link href={primaryHref}>{primaryLabel}</Link>
-          </Button>
-        </div>
+        <Button asChild>
+          <Link href={primaryHref}>{primaryLabel}</Link>
+        </Button>
       ) : null}
-    </section>
+    </Card>
   );
 }

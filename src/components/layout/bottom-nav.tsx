@@ -2,43 +2,48 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { Bell, Home, Trophy, User } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { Bell, Home, User, Wallet } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-const items = [
-  { href: "/home" as Route, label: "Home", icon: Home },
-  { href: "/wallet" as Route, label: "Wallet", icon: Trophy },
-  { href: "/notifications" as Route, label: "Alerts", icon: Bell },
-  { href: "/profile" as Route, label: "Profile", icon: User }
+const items: { href: Route; label: string; icon: typeof Home }[] = [
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/wallet", label: "Wallet", icon: Wallet },
+  { href: "/notifications", label: "Alerts", icon: Bell },
+  { href: "/profile", label: "Profile", icon: User }
 ];
 
 export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="surface fixed inset-x-4 bottom-4 z-20 rounded-full px-3 py-2 sm:left-1/2 sm:right-auto sm:w-[24rem] sm:-translate-x-1/2">
-      <ul className="grid grid-cols-4 gap-2">
-        {items.map(({ href, icon: Icon, label }) => {
-          const active = pathname === href;
-
-          return (
-            <li key={href}>
-              <Link
-                href={href}
-                className={cn(
-                  "flex flex-col items-center rounded-2xl px-3 py-2 text-xs font-medium transition",
-                  active ? "bg-[#1d3c34] text-[#f9f6f1]" : "text-[#456356] hover:bg-[#f5efe3]"
-                )}
-              >
-                <Icon className="mb-1 h-4 w-4" />
-                {label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+    <nav
+      aria-label="Primary"
+      className="fixed inset-x-4 bottom-4 z-30 mx-auto flex max-w-md justify-around gap-1 rounded-full border border-line bg-surface/95 px-2 py-2 shadow-lg backdrop-blur sm:left-1/2 sm:right-auto sm:w-[28rem] sm:-translate-x-1/2"
+      style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
+    >
+      {items.map(({ href, label, icon: Icon }) => {
+        const active =
+          pathname === href ||
+          (typeof pathname === "string" && pathname.startsWith(`${href}/`));
+        return (
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "flex flex-1 flex-col items-center justify-center gap-1 rounded-full px-3 py-2 text-[0.6875rem] font-semibold transition",
+              active
+                ? "bg-primary text-white shadow-glow"
+                : "text-ink-muted hover:bg-surface-elevated hover:text-ink"
+            )}
+          >
+            <Icon className="h-4 w-4" strokeWidth={active ? 2.5 : 1.8} />
+            {label}
+          </Link>
+        );
+      })}
     </nav>
   );
 }
