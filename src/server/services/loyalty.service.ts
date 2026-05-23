@@ -4,6 +4,11 @@ import { prisma } from "@/lib/prisma";
 
 type LoyaltyTx = Prisma.TransactionClient;
 
+const LOYALTY_TRANSACTION_OPTIONS = {
+  maxWait: 5_000,
+  timeout: 20_000
+};
+
 type EarnPointsInput = {
   businessId: string;
   membershipId: string;
@@ -119,140 +124,146 @@ export async function earnPoints(input: EarnPointsInput) {
     throw new Error("Points to earn must be greater than zero.");
   }
 
-  return prisma.$transaction(async (tx) => {
-    const membership = await tx.membership.findUniqueOrThrow({
-      where: {
-        id: input.membershipId
-      },
-      include: {
-        business: true
-      }
-    });
-
-    if (membership.businessId !== input.businessId) {
-      throw new Error("Membership does not belong to this business.");
-    }
-
-    const updatedMembership = await tx.membership.update({
-      where: {
-        id: membership.id
-      },
-      data: {
-        pointsBalance: {
-          increment: input.points
+  return prisma.$transaction(
+    async (tx) => {
+      const membership = await tx.membership.findUniqueOrThrow({
+        where: {
+          id: input.membershipId
+        },
+        include: {
+          business: true
         }
-      }
-    });
+      });
 
-    await tx.loyaltyTransaction.create({
-      data: {
-        businessId: membership.businessId,
+      if (membership.businessId !== input.businessId) {
+        throw new Error("Membership does not belong to this business.");
+      }
+
+      const updatedMembership = await tx.membership.update({
+        where: {
+          id: membership.id
+        },
+        data: {
+          pointsBalance: {
+            increment: input.points
+          }
+        }
+      });
+
+      await tx.loyaltyTransaction.create({
+        data: {
+          businessId: membership.businessId,
+          membershipId: membership.id,
+          userId: input.actorUserId,
+          type: TransactionType.EARN,
+          pointsDelta: input.points,
+          description: input.description || "Points earned"
+        }
+      });
+
+      await recalculateTier(tx, {
         membershipId: membership.id,
-        userId: input.actorUserId,
-        type: TransactionType.EARN,
-        pointsDelta: input.points,
-        description: input.description || "Points earned"
-      }
-    });
+        actorUserId: input.actorUserId
+      });
 
-    await recalculateTier(tx, {
-      membershipId: membership.id,
-      actorUserId: input.actorUserId
-    });
-
-    return updatedMembership;
-  });
+      return updatedMembership;
+    },
+    LOYALTY_TRANSACTION_OPTIONS
+  );
 }
 
 export async function redeemPoints(input: RedeemPointsInput) {
-  return prisma.$transaction(async (tx) => {
-    const membership = await tx.membership.findUniqueOrThrow({
-      where: {
-        id: input.membershipId
-      },
-      include: {
-        business: true
-      }
-    });
-
-    if (membership.businessId !== input.businessId) {
-      throw new Error("Membership does not belong to this business.");
-    }
-
-    let pointsToRedeem = 0;
-    let description = input.description || "Points redeemed";
-
-    if ("rewardId" in input) {
-      const reward = await tx.reward.findFirstOrThrow({
+  return prisma.$transaction(
+    async (tx) => {
+      const membership = await tx.membership.findUniqueOrThrow({
         where: {
-          id: input.rewardId,
-          businessId: input.businessId,
-          isActive: true
+          id: input.membershipId
+        },
+        include: {
+          business: true
         }
       });
 
-      pointsToRedeem = reward.pointsCost;
-      description = input.description || `Redeemed reward: ${reward.title}`;
-
-      if (reward.stock !== null && reward.stock <= 0) {
-        throw new Error("That reward is out of stock.");
+      if (membership.businessId !== input.businessId) {
+        throw new Error("Membership does not belong to this business.");
       }
 
-      await tx.reward.update({
+      let pointsToRedeem = 0;
+      let description = input.description || "Points redeemed";
+
+      if ("rewardId" in input) {
+        const reward = await tx.reward.findFirstOrThrow({
+          where: {
+            id: input.rewardId,
+            businessId: input.businessId,
+            isActive: true
+          }
+        });
+
+        pointsToRedeem = reward.pointsCost;
+        description = input.description || `Redeemed reward: ${reward.title}`;
+
+        if (reward.stock !== null && reward.stock <= 0) {
+          throw new Error("That reward is out of stock.");
+        }
+
+        await tx.reward.update({
+          where: {
+            id: reward.id
+          },
+          data: {
+            stock: reward.stock === null ? null : { decrement: 1 }
+          }
+        });
+      } else {
+        pointsToRedeem = input.points;
+      }
+
+      if (!Number.isFinite(pointsToRedeem) || pointsToRedeem <= 0) {
+        throw new Error("Points to redeem must be greater than zero.");
+      }
+
+      if (membership.pointsBalance < pointsToRedeem) {
+        throw new Error("Insufficient points balance.");
+      }
+
+      const updatedMembership = await tx.membership.update({
         where: {
-          id: reward.id
+          id: membership.id
         },
         data: {
-          stock: reward.stock === null ? null : { decrement: 1 }
+          pointsBalance: {
+            decrement: pointsToRedeem
+          }
         }
       });
-    } else {
-      pointsToRedeem = input.points;
-    }
 
-    if (!Number.isFinite(pointsToRedeem) || pointsToRedeem <= 0) {
-      throw new Error("Points to redeem must be greater than zero.");
-    }
-
-    if (membership.pointsBalance < pointsToRedeem) {
-      throw new Error("Insufficient points balance.");
-    }
-
-    const updatedMembership = await tx.membership.update({
-      where: {
-        id: membership.id
-      },
-      data: {
-        pointsBalance: {
-          decrement: pointsToRedeem
+      await tx.loyaltyTransaction.create({
+        data: {
+          businessId: membership.businessId,
+          membershipId: membership.id,
+          userId: input.actorUserId,
+          type: TransactionType.REDEEM,
+          pointsDelta: -pointsToRedeem,
+          description
         }
-      }
-    });
+      });
 
-    await tx.loyaltyTransaction.create({
-      data: {
-        businessId: membership.businessId,
+      await recalculateTier(tx, {
         membershipId: membership.id,
-        userId: input.actorUserId,
-        type: TransactionType.REDEEM,
-        pointsDelta: -pointsToRedeem,
-        description
-      }
-    });
+        actorUserId: input.actorUserId
+      });
 
-    await recalculateTier(tx, {
-      membershipId: membership.id,
-      actorUserId: input.actorUserId
-    });
+      await createNotificationInTx(tx, {
+        userId: membership.userId,
+        title: `Points redeemed at ${membership.business.name}`,
+        body: `${pointsToRedeem} points were redeemed from your wallet.`,
+        type: "POINTS_REDEEMED",
+        actionUrl: `/wallet`
+      });
 
-    await createNotificationInTx(tx, {
-      userId: membership.userId,
-      title: `Points redeemed at ${membership.business.name}`,
-      body: `${pointsToRedeem} points were redeemed from your wallet.`,
-      type: "POINTS_REDEEMED",
-      actionUrl: `/wallet`
-    });
-
-    return updatedMembership;
-  });
+      return updatedMembership;
+    },
+    LOYALTY_TRANSACTION_OPTIONS
+  );
 }
