@@ -13,7 +13,8 @@ export const Input = React.forwardRef<
   HTMLInputElement,
   React.InputHTMLAttributes<HTMLInputElement> & FieldProps
 >(({ label, hint, error, className, id, ...props }, ref) => {
-  const inputId = id ?? React.useId();
+  const generatedId = React.useId();
+  const inputId = id ?? generatedId;
   return (
     <div className={cn("label-stack", className)}>
       {label ? (
@@ -50,7 +51,8 @@ export const Textarea = React.forwardRef<
   HTMLTextAreaElement,
   React.TextareaHTMLAttributes<HTMLTextAreaElement> & FieldProps
 >(({ label, hint, error, className, id, ...props }, ref) => {
-  const inputId = id ?? React.useId();
+  const generatedId = React.useId();
+  const inputId = id ?? generatedId;
   return (
     <div className={cn("label-stack", className)}>
       {label ? (
@@ -82,7 +84,8 @@ export const Select = React.forwardRef<
   HTMLSelectElement,
   React.SelectHTMLAttributes<HTMLSelectElement> & FieldProps
 >(({ label, hint, error, className, id, children, ...props }, ref) => {
-  const inputId = id ?? React.useId();
+  const generatedId = React.useId();
+  const inputId = id ?? generatedId;
   return (
     <div className={cn("label-stack", className)}>
       {label ? (

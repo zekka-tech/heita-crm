@@ -10,14 +10,24 @@ export async function createTRPCContext() {
   };
 }
 
+export type TRPCContext = Awaited<ReturnType<typeof createTRPCContext>>;
+export type ProtectedTRPCContext = TRPCContext & {
+  session: NonNullable<TRPCContext["session"]>;
+  userId: string;
+};
+
 export function router<T extends Record<string, unknown>>(definition: T) {
   return definition;
 }
 
 export const publicProcedure = {
-  query<T>(resolver: T) {
+  query<T>(resolver: (options: { ctx: TRPCContext }) => T) {
     return resolver;
   }
 };
 
-export const protectedProcedure = publicProcedure;
+export const protectedProcedure = {
+  query<T>(resolver: (options: { ctx: ProtectedTRPCContext }) => T) {
+    return resolver;
+  }
+};

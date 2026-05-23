@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "@/server/trpc";
 
 export const eventsRouter = router({
-  upcoming: protectedProcedure.query(async ({ ctx }: { ctx: any }) => {
+  upcoming: protectedProcedure.query(async ({ ctx }) => {
     return ctx.prisma.event.findMany({
       where: {
         business: {

@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 import type { NextConfig } from "next";
 
 const isProd = process.env.NODE_ENV === "production";
@@ -39,11 +41,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  experimental: {
-    typedRoutes: true
-  },
+  typedRoutes: true,
   poweredByHeader: false,
   reactStrictMode: true,
+  outputFileTracingRoot: resolve(import.meta.dirname),
   eslint: {
     ignoreDuringBuilds: true
   },

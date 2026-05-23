@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "@/server/trpc";
 
 export const businessRouter = router({
-  listMine: protectedProcedure.query(async ({ ctx }: { ctx: any }) => {
+  listMine: protectedProcedure.query(async ({ ctx }) => {
     return ctx.prisma.business.findMany({
       where: {
         staffMembers: {

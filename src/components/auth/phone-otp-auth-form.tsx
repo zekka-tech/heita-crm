@@ -133,7 +133,12 @@ export function PhoneOtpAuthForm({
         className="grid gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          step === "phone" ? requestOtp() : submitCode();
+          if (step === "phone") {
+            requestOtp();
+            return;
+          }
+
+          submitCode();
         }}
       >
         <Input

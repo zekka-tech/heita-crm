@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "@/server/trpc";
 
 export const loyaltyRouter = router({
-  wallet: protectedProcedure.query(async ({ ctx }: { ctx: any }) => {
+  wallet: protectedProcedure.query(async ({ ctx }) => {
     return ctx.prisma.membership.findMany({
       where: {
         userId: ctx.userId
