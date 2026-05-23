@@ -4,7 +4,9 @@ import { Gift, Plus, Receipt, Users } from "lucide-react";
 import {
   createRewardAction,
   earnPointsAction,
-  redeemPointsAction
+  redeemPointsAction,
+  requestStaffStepUpAction,
+  verifyStaffStepUpAction
 } from "@/app/dashboard/[businessId]/loyalty/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,15 +14,19 @@ import { Chip, TierBadge } from "@/components/ui/badge";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hasFreshStaffStepUp } from "@/lib/staff-step-up";
 
 type LoyaltyDashboardPageProps = {
   params: Promise<{ businessId: string }>;
+  searchParams?: Promise<{ stepUp?: string; devCode?: string }>;
 };
 
 export default async function LoyaltyDashboardPage({
-  params
+  params,
+  searchParams
 }: LoyaltyDashboardPageProps) {
   const { businessId } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = await auth();
 
   if (!session?.user?.id) {
@@ -51,6 +57,11 @@ export default async function LoyaltyDashboardPage({
 
   if (!business) notFound();
 
+  const stepUpVerified = await hasFreshStaffStepUp({
+    userId: session.user.id,
+    businessId
+  });
+
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
       <div className="grid gap-5">
@@ -71,6 +82,52 @@ export default async function LoyaltyDashboardPage({
             ))}
           </div>
         </Card>
+
+        {!stepUpVerified ? (
+          <Card variant="outline" className="space-y-4 border-warning/40 bg-warning/5">
+            <h2 className="section-title">Staff verification required</h2>
+            <p className="text-sm text-ink-muted">
+              Enter a fresh OTP before issuing points, redeeming balances, or changing the
+              reward catalogue. The verification stays valid for 15 minutes.
+            </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <form action={requestStaffStepUpAction} className="grid gap-3">
+                <input type="hidden" name="businessId" value={business.id} />
+                <Button type="submit" variant="secondary">
+                  Send staff OTP
+                </Button>
+              </form>
+              <form action={verifyStaffStepUpAction} className="grid gap-3">
+                <input type="hidden" name="businessId" value={business.id} />
+                <Input
+                  name="code"
+                  label="Verification code"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  placeholder="123456"
+                  required
+                />
+                <Button type="submit" variant="primary">
+                  Verify staff access
+                </Button>
+              </form>
+            </div>
+            {resolvedSearchParams.stepUp ? (
+              <p className="text-sm text-ink-muted">
+                {resolvedSearchParams.stepUp === "requested"
+                  ? "Verification code sent."
+                  : resolvedSearchParams.stepUp === "invalid"
+                    ? "Verification failed. Request a new code and try again."
+                    : "Staff verification completed."}
+                {resolvedSearchParams.devCode ? ` Dev OTP: ${resolvedSearchParams.devCode}` : ""}
+              </p>
+            ) : null}
+          </Card>
+        ) : (
+          <Card variant="surface" className="text-sm text-success">
+            Staff verification is active for this business for the next 15 minutes.
+          </Card>
+        )}
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card variant="surface" className="space-y-4">

@@ -25,6 +25,7 @@ export function PhoneOtpAuthForm({
   const [status, setStatus] = useState<{ kind: "info" | "error"; text: string } | null>(
     null
   );
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
   const [step, setStep] = useState<"phone" | "code">("phone");
   const [isRequesting, startRequestTransition] = useTransition();
@@ -70,6 +71,7 @@ export function PhoneOtpAuthForm({
         phone,
         code,
         mode,
+        acceptTerms: acceptTerms ? "true" : "false",
         redirect: false,
         redirectTo: "/home"
       }).then((result) => {
@@ -169,6 +171,29 @@ export function PhoneOtpAuthForm({
           />
         ) : null}
 
+        {mode === "sign-up" ? (
+          <label className="flex items-start gap-3 rounded-xl border border-line bg-surface-elevated px-3 py-3 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={acceptTerms}
+              onChange={(event) => setAcceptTerms(event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-line"
+              required
+            />
+            <span>
+              I agree to the{" "}
+              <a href="/terms" className="text-primary-action underline">
+                Terms
+              </a>{" "}
+              and{" "}
+              <a href="/privacy" className="text-primary-action underline">
+                Privacy Policy
+              </a>
+              .
+            </span>
+          </label>
+        ) : null}
+
         <Button
           type="submit"
           variant="primary"
@@ -176,7 +201,7 @@ export function PhoneOtpAuthForm({
           disabled={
             step === "phone"
               ? !phone || isRequesting
-              : code.length !== 6 || isSubmitting
+              : code.length !== 6 || isSubmitting || (mode === "sign-up" && !acceptTerms)
           }
         >
           {step === "phone" ? (

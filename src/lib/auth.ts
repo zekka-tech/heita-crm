@@ -1,3 +1,4 @@
+import { ConsentType } from "@prisma/client";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Apple from "next-auth/providers/apple";
@@ -9,11 +10,13 @@ import { getOtpPurposeForMode, isAuthOtpMode, type AuthOtpMode } from "@/lib/aut
 import { verifyOtpAttempt } from "@/lib/otp";
 import { normalizeZaPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { recordConsent } from "@/server/services/account.service";
 
 export async function authorizePhoneOtp(input: {
   phone: string;
   code: string;
   mode: AuthOtpMode;
+  acceptTerms?: boolean;
 }) {
   const phone = normalizeZaPhone(input.phone.trim());
   const code = input.code.trim();
@@ -39,7 +42,7 @@ export async function authorizePhoneOtp(input: {
   });
 
   if (input.mode === "sign-in") {
-    if (!user?.phoneVerifiedAt) {
+    if (!user?.phoneVerifiedAt || user.deletedAt) {
       return null;
     }
 
@@ -53,7 +56,15 @@ export async function authorizePhoneOtp(input: {
     };
   }
 
+  if (!input.acceptTerms) {
+    return null;
+  }
+
   if (user?.phoneVerifiedAt) {
+    return null;
+  }
+
+  if (user?.deletedAt) {
     return null;
   }
 
@@ -77,6 +88,19 @@ export async function authorizePhoneOtp(input: {
     });
   }
 
+  await Promise.all([
+    recordConsent({
+      userId: verifiedUser.id,
+      type: ConsentType.TERMS_OF_SERVICE,
+      source: "sign-up"
+    }),
+    recordConsent({
+      userId: verifiedUser.id,
+      type: ConsentType.PRIVACY_POLICY,
+      source: "sign-up"
+    })
+  ]);
+
   return {
     id: verifiedUser.id,
     name: verifiedUser.name,
@@ -94,7 +118,8 @@ const providers: NonNullable<NextAuthConfig["providers"]> = [
     credentials: {
       phone: { label: "Phone", type: "tel" },
       code: { label: "Code", type: "text" },
-      mode: { label: "Mode", type: "text" }
+      mode: { label: "Mode", type: "text" },
+      acceptTerms: { label: "Accept terms", type: "text" }
     },
     async authorize(credentials) {
       const mode = String(credentials?.mode ?? "sign-in");
@@ -105,7 +130,8 @@ const providers: NonNullable<NextAuthConfig["providers"]> = [
       return authorizePhoneOtp({
         phone: String(credentials?.phone ?? ""),
         code: String(credentials?.code ?? ""),
-        mode
+        mode,
+        acceptTerms: String(credentials?.acceptTerms ?? "") === "true"
       });
     }
   })

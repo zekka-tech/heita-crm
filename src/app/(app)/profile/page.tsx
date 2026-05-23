@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { Mail, Phone, Sparkles, Trash2, UserRound } from "lucide-react";
 
+import { ProfileSettings } from "@/components/account/profile-settings";
+import { PushSubscriptionCard } from "@/components/account/push-subscription-card";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
@@ -115,17 +117,22 @@ export default async function ProfilePage() {
         </Card>
       ) : null}
 
+      <ProfileSettings
+        initialName={user.name ?? ""}
+        initialEmail={user.email ?? ""}
+        initialPreferredAiMode={user.preferredAiMode ?? "auto"}
+      />
+
+      <PushSubscriptionCard />
+
       <Card variant="outline" className="space-y-3 border-danger/30 bg-danger/5">
         <div className="flex items-center gap-2 text-danger">
           <Trash2 className="h-4 w-4" />
           <h2 className="font-display text-base font-semibold">Danger zone</h2>
         </div>
         <p className="text-sm text-ink-muted">
-          Deleting your account removes all memberships and notifications. Contact{" "}
-          <a href="mailto:support@heita.co.za" className="text-primary-action underline">
-            support@heita.co.za
-          </a>{" "}
-          to start the process.
+          Deleting your account now starts a 30-day deletion window, cancels active
+          memberships, and revokes active consents.
         </p>
       </Card>
     </section>

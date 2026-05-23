@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
+import { ServiceWorkerRegister } from "@/components/layout/service-worker-register";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -58,6 +59,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <ServiceWorkerRegister />
         <div className="app-frame">{children}</div>
       </body>
     </html>

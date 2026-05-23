@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 
+import { sendEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
+import { sendPushToUser } from "@/lib/push";
 
 type NotificationInput = {
   userId: string;
@@ -12,7 +14,7 @@ type NotificationInput = {
 };
 
 export async function sendNotification(input: NotificationInput) {
-  return prisma.notification.create({
+  const notification = await prisma.notification.create({
     data: {
       userId: input.userId,
       title: input.title,
@@ -22,4 +24,30 @@ export async function sendNotification(input: NotificationInput) {
       metadata: input.metadata as Prisma.InputJsonValue | undefined
     }
   });
+
+  const user = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: {
+      email: true
+    }
+  });
+
+  await Promise.allSettled([
+    sendPushToUser({
+      userId: input.userId,
+      title: input.title,
+      body: input.body,
+      url: input.actionUrl
+    }),
+    user?.email
+      ? sendEmail({
+          to: user.email,
+          subject: input.title,
+          text: input.body,
+          html: `<p>${input.body}</p>`
+        })
+      : Promise.resolve(null)
+  ]);
+
+  return notification;
 }

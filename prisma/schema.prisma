@@ -15,6 +15,7 @@ model User {
   phone             String?             @unique
   phoneVerifiedAt   DateTime?
   preferredAiMode   String?             @default("auto")
+  deletedAt         DateTime?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   accounts          Account[]
@@ -27,6 +28,7 @@ model User {
   aiChatSessions    AiChatSession[]
   loyaltyEvents     LoyaltyTransaction[]
   messages          Message[]
+  consents          UserConsent[]
 }
 
 model Account {
@@ -99,6 +101,7 @@ model Business {
   city                  String?
   postalCode            String?
   isActive              Boolean              @default(true)
+  deletedAt             DateTime?
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   qrCodes               QrCode[]
@@ -115,6 +118,7 @@ model Business {
   events                Event[]
   messages              Message[]
   loyaltyTransactions   LoyaltyTransaction[]
+  consents              UserConsent[]
 }
 
 model QrCode {
@@ -389,6 +393,22 @@ model PushSubscription {
   @@index([userId])
 }
 
+model UserConsent {
+  id         String       @id @default(cuid())
+  userId     String
+  businessId String?
+  type       ConsentType
+  channel    ConsentChannel
+  source     String
+  grantedAt  DateTime     @default(now())
+  revokedAt  DateTime?
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business   Business?    @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  @@index([userId, type, grantedAt])
+  @@index([businessId, type])
+}
+
 enum StaffRole {
   OWNER
   MANAGER
@@ -418,6 +438,21 @@ enum OtpPurpose {
   SIGN_UP
   PASSWORD_RESET
   VERIFY_PHONE
+  STAFF_STEP_UP
+}
+
+enum ConsentType {
+  TERMS_OF_SERVICE
+  PRIVACY_POLICY
+  COOKIE_PREFERENCES
+  WHATSAPP_MARKETING
+}
+
+enum ConsentChannel {
+  WEB
+  WHATSAPP
+  SMS
+  EMAIL
 }
 
 enum TransactionType {

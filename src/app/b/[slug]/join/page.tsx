@@ -105,6 +105,17 @@ export default async function BusinessJoinPage({
             <input type="hidden" name="businessId" value={business.id} />
             <input type="hidden" name="slug" value={business.slug} />
             <input type="hidden" name="channel" value={channel} />
+            <label className="flex items-start gap-3 rounded-xl border border-line bg-surface-elevated px-3 py-3 text-sm text-ink">
+              <input
+                type="checkbox"
+                name="marketingConsent"
+                value="true"
+                className="mt-1 h-4 w-4 rounded border-line"
+              />
+              <span>
+                I consent to receive WhatsApp loyalty updates and offers from {business.name}.
+              </span>
+            </label>
             <Button type="submit" variant="gradient" size="lg">
               Claim {business.loyaltySignupBonus} welcome points
             </Button>
