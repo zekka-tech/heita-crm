@@ -1,0 +1,15 @@
+.next
+node_modules
+.tooling
+.claude
+.env
+.env.local
+.env.production
+dist
+coverage
+.turbo
+*.log
+*.tsbuildinfo
+prisma/dev.db
+public/sw.js
+public/workbox-*.js

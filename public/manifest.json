@@ -1,0 +1,26 @@
+{
+  "name": "Heita CRM",
+  "short_name": "Heita",
+  "description": "Mobile-first loyalty CRM for South African retailers and small businesses.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9f6f1",
+  "theme_color": "#1d3c34",
+  "orientation": "portrait",
+  "lang": "en-ZA",
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

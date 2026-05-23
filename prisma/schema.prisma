@@ -1,0 +1,467 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                String              @id @default(cuid())
+  name              String?
+  email             String?             @unique
+  emailVerified     DateTime?
+  image             String?
+  phone             String?             @unique
+  passwordHash      String?
+  preferredAiMode   String?             @default("auto")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  accounts          Account[]
+  sessions          Session[]
+  memberships       Membership[]
+  staffMemberships  StaffMember[]
+  notifications     Notification[]
+  pushSubscriptions PushSubscription[]
+  otpCodes          OtpCode[]
+  aiChatSessions    AiChatSession[]
+  loyaltyEvents     LoyaltyTransaction[]
+  messages          Message[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model OtpCode {
+  id         String     @id @default(cuid())
+  userId     String?
+  phone      String
+  codeHash   String
+  purpose    OtpPurpose
+  channel    MessageChannel
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([phone, purpose])
+}
+
+model Business {
+  id                    String               @id @default(cuid())
+  slug                  String               @unique
+  name                  String
+  legalName             String?
+  description           String?
+  category              BusinessCategory
+  province              Province
+  phone                 String?
+  email                 String?
+  logoUrl               String?
+  coverImageUrl         String?
+  loyaltySignupBonus    Int                  @default(0)
+  wabaPhoneId           String?              @unique
+  whatsappPhoneNumber   String?
+  addressLine1          String?
+  addressLine2          String?
+  suburb                String?
+  city                  String?
+  postalCode            String?
+  isActive              Boolean              @default(true)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  qrCodes               QrCode[]
+  joinLinks             JoinLink[]
+  memberships           Membership[]
+  staffMembers          StaffMember[]
+  aiWorkspace           AiWorkspace?
+  documents             BusinessDocument[]
+  documentChunks        DocumentChunk[]
+  aiChatSessions        AiChatSession[]
+  loyaltyTiers          LoyaltyTier[]
+  rewards               Reward[]
+  promotions            Promotion[]
+  events                Event[]
+  messages              Message[]
+  loyaltyTransactions   LoyaltyTransaction[]
+}
+
+model QrCode {
+  id          String    @id @default(cuid())
+  businessId  String
+  name        String
+  token       String    @unique
+  description String?
+  scanCount   Int       @default(0)
+  isPrimary   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+}
+
+model JoinLink {
+  id          String      @id @default(cuid())
+  businessId  String
+  token       String      @unique
+  name        String
+  channel     JoinChannel
+  clickCount  Int         @default(0)
+  isActive    Boolean     @default(true)
+  expiresAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, channel])
+}
+
+model Membership {
+  id             String               @id @default(cuid())
+  businessId     String
+  userId         String
+  joinChannel    JoinChannel
+  joinedAt       DateTime             @default(now())
+  pointsBalance  Int                  @default(0)
+  tierId         String?
+  isActive       Boolean              @default(true)
+  business       Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier           LoyaltyTier?         @relation(fields: [tierId], references: [id], onDelete: SetNull)
+  transactions   LoyaltyTransaction[]
+
+  @@unique([businessId, userId])
+  @@index([userId])
+}
+
+model StaffMember {
+  id          String    @id @default(cuid())
+  businessId  String
+  userId      String
+  role        StaffRole
+  invitedById String?
+  joinedAt    DateTime  @default(now())
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, userId])
+  @@index([userId, role])
+}
+
+model AiWorkspace {
+  id               String            @id @default(cuid())
+  businessId       String            @unique
+  systemPrompt     String?
+  preferredRuntime String            @default("auto")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  documents        BusinessDocument[]
+  chatSessions     AiChatSession[]
+}
+
+model BusinessDocument {
+  id             String          @id @default(cuid())
+  workspaceId    String
+  businessId     String
+  title          String
+  fileName       String
+  mimeType       String
+  storageKey     String          @unique
+  sizeBytes      Int
+  status         DocumentStatus  @default(PENDING)
+  sourceUrl      String?
+  errorMessage   String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  workspace      AiWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  chunks         DocumentChunk[]
+
+  @@index([workspaceId, status])
+  @@index([businessId, createdAt])
+}
+
+model DocumentChunk {
+  id           String                     @id @default(cuid())
+  documentId   String
+  businessId   String
+  chunkIndex   Int
+  content      String
+  metadata     Json?
+  embedding    Unsupported("vector(1024)")?
+  createdAt    DateTime                   @default(now())
+  document     BusinessDocument           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  business     Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([businessId])
+}
+
+model AiChatSession {
+  id           String          @id @default(cuid())
+  workspaceId  String
+  businessId   String
+  userId       String?
+  title        String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  workspace    AiWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user         User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages     AiChatMessage[]
+
+  @@index([businessId, createdAt])
+}
+
+model AiChatMessage {
+  id         String        @id @default(cuid())
+  sessionId  String
+  role       String
+  content    String
+  createdAt  DateTime      @default(now())
+  session    AiChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model LoyaltyTier {
+  id            String        @id @default(cuid())
+  businessId    String
+  name          String
+  minPoints     Int
+  perks         Json?
+  rank          Int
+  colorHex      String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  memberships   Membership[]
+
+  @@unique([businessId, name])
+  @@unique([businessId, rank])
+}
+
+model Reward {
+  id            String      @id @default(cuid())
+  businessId    String
+  title         String
+  description   String?
+  pointsCost    Int
+  stock         Int?
+  imageUrl      String?
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  business      Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, isActive])
+}
+
+model Promotion {
+  id            String         @id @default(cuid())
+  businessId    String
+  title         String
+  description   String?
+  type          PromotionType
+  startsAt      DateTime
+  endsAt        DateTime
+  imageUrl      String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  business      Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, startsAt, endsAt])
+}
+
+model Event {
+  id            String      @id @default(cuid())
+  businessId    String
+  title         String
+  description   String?
+  startsAt      DateTime
+  endsAt        DateTime?
+  location      String?
+  isReminderOn  Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  business      Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, startsAt])
+}
+
+model Message {
+  id             String         @id @default(cuid())
+  businessId     String
+  userId         String?
+  channel        MessageChannel
+  direction      String
+  externalId     String?
+  body           String
+  metadata       Json?
+  sentAt         DateTime?
+  createdAt      DateTime       @default(now())
+  business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, channel, createdAt])
+}
+
+model LoyaltyTransaction {
+  id             String            @id @default(cuid())
+  businessId     String
+  membershipId   String
+  userId         String?
+  type           TransactionType
+  pointsDelta    Int
+  description    String?
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+  business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  membership     Membership        @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  user           User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, createdAt])
+  @@index([membershipId, createdAt])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  userId      String
+  title       String
+  body        String
+  type        String
+  isRead      Boolean   @default(false)
+  actionUrl   String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  readAt      DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+}
+
+model PushSubscription {
+  id          String    @id @default(cuid())
+  userId      String
+  endpoint    String    @unique
+  p256dh      String
+  auth        String
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum StaffRole {
+  OWNER
+  MANAGER
+  STAFF
+  AI_TRAINER
+}
+
+enum JoinChannel {
+  QR_CODE
+  WHATSAPP_BOT
+  DIRECT_LINK
+  STAFF_INVITE
+  GOOGLE_SIGNIN
+  APPLE_SIGNIN
+}
+
+enum MessageChannel {
+  SMS
+  WHATSAPP
+  PUSH
+  EMAIL
+  IN_APP
+}
+
+enum OtpPurpose {
+  SIGN_IN
+  SIGN_UP
+  PASSWORD_RESET
+  VERIFY_PHONE
+}
+
+enum TransactionType {
+  SIGNUP_BONUS
+  EARN
+  REDEEM
+  ADJUSTMENT
+  EXPIRY
+  REFUND
+}
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum PromotionType {
+  FLASH_SALE
+  DISCOUNT
+  BONUS_POINTS
+  EVENT
+}
+
+enum Province {
+  EASTERN_CAPE
+  FREE_STATE
+  GAUTENG
+  KWAZULU_NATAL
+  LIMPOPO
+  MPUMALANGA
+  NORTH_WEST
+  NORTHERN_CAPE
+  WESTERN_CAPE
+}
+
+enum BusinessCategory {
+  GROCERY
+  RESTAURANT
+  FASHION
+  BEAUTY
+  HARDWARE
+  PHARMACY
+  SERVICES
+  ENTERTAINMENT
+  OTHER
+}
