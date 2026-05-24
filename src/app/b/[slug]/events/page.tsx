@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 type BusinessEventsPageProps = {
   params: Promise<{ slug: string }>;
 };

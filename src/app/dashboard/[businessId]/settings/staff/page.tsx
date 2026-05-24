@@ -16,6 +16,8 @@ import {
   revokeInviteAction
 } from "@/app/dashboard/[businessId]/settings/staff/actions";
 import { CsrfField } from "@/components/security/csrf-field";
+
+export const dynamic = "force-dynamic";
 import {
   listStaffInvites
 } from "@/server/services/staff-invite.service";

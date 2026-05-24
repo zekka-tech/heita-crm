@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 
 export const metadata = { title: "Notifications" };
+export const dynamic = "force-dynamic";
 
 export default async function NotificationsPage() {
   const session = await auth();

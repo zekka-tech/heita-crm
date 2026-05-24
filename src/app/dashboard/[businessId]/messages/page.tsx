@@ -16,6 +16,8 @@ import {
   listBusinessConversations
 } from "@/server/services/conversation.service";
 
+export const dynamic = "force-dynamic";
+
 type MessagesPageProps = {
   params: Promise<{ businessId: string }>;
   searchParams?: Promise<{ contactPhone?: string; sent?: string }>;

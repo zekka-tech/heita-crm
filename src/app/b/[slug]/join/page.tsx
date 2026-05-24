@@ -12,6 +12,8 @@ import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 type BusinessJoinPageProps = {
   params: Promise<{ slug: string }>;
   searchParams?: Promise<{ channel?: string }>;

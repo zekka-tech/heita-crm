@@ -20,6 +20,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getBusinessDashboardAnalytics } from "@/server/services/analytics.service";
 
+export const dynamic = "force-dynamic";
+
 type DashboardPageProps = {
   params: Promise<{ businessId: string }>;
 };

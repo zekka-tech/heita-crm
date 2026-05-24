@@ -13,6 +13,7 @@ import { resolveLocale } from "@/i18n/locale";
 import { discoverBusinesses } from "@/server/services/discovery.service";
 
 export const metadata = { title: "Home" };
+export const dynamic = "force-dynamic";
 
 type HomePageProps = {
   searchParams?: Promise<{ q?: string }>;

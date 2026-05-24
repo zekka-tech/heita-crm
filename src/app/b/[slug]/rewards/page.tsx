@@ -12,6 +12,8 @@ import { auth } from "@/lib/auth";
 import { describeTierPerks } from "@/lib/loyalty";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 type BusinessRewardsPageProps = {
   params: Promise<{ slug: string }>;
 };

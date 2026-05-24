@@ -10,6 +10,8 @@ import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { getInviteByToken } from "@/server/services/staff-invite.service";
 
+export const dynamic = "force-dynamic";
+
 type StaffAcceptPageProps = {
   params: Promise<{ token: string }>;
 };

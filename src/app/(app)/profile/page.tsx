@@ -11,6 +11,7 @@ import { resolveLocale } from "@/i18n/locale";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Profile" };
+export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
   const session = await auth();

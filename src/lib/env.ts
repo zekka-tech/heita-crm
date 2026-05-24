@@ -70,16 +70,92 @@ const envSchema = z
     }
   });
 
-const parsedEnv = {
-  ...process.env,
-  DATABASE_URL:
-    process.env.DATABASE_URL ??
-    (process.env.NODE_ENV === "test"
-      ? "postgresql://heita:heita_test@localhost:5432/heita_test"
-      : undefined)
-};
+type ParsedEnv = z.infer<typeof envSchema>;
 
-export const env = envSchema.parse(parsedEnv);
+const BUILD_PHASE_VALUES = ["phase-production-build", "phase-export"] as const;
+
+function isBuildPhase() {
+  return (
+    process.env.HEITA_BUILD_PHASE === "1" ||
+    BUILD_PHASE_VALUES.includes(process.env.NEXT_PHASE as (typeof BUILD_PHASE_VALUES)[number]) ||
+    process.env.npm_lifecycle_event === "build"
+  );
+}
+
+function buildPhaseDefaults(): ParsedEnv {
+  // Permissive defaults used only while Next.js collects page data. The
+  // runtime path always re-parses against the live environment, so missing
+  // production secrets still surface on the first real request.
+  return envSchema.parse({
+    NODE_ENV: "development",
+    DATABASE_URL:
+      process.env.DATABASE_URL ?? "postgresql://build:build@localhost:5432/build"
+  });
+}
+
+let cachedEnv: ParsedEnv | null = null;
+
+function parseEnv(): ParsedEnv {
+  // Never cache while next build is collecting page data — `next build` sets
+  // NODE_ENV=production but the deployment may not have provisioned secrets
+  // yet, so falling through to envSchema.parse() would fail the production
+  // superRefine checks. Always synthesise safe defaults during the build
+  // phase and re-validate at runtime on the first real request.
+  if (isBuildPhase()) {
+    return buildPhaseDefaults();
+  }
+
+  if (cachedEnv) return cachedEnv;
+
+  const candidate = {
+    ...process.env,
+    DATABASE_URL:
+      process.env.DATABASE_URL ??
+      (process.env.NODE_ENV === "test"
+        ? "postgresql://heita:heita_test@localhost:5432/heita_test"
+        : undefined)
+  };
+
+  cachedEnv = envSchema.parse(candidate);
+  return cachedEnv;
+}
+
+/**
+ * Lazy env proxy. The first property access triggers schema validation; until
+ * then the module is safe to import during Next.js build-time page-data
+ * collection or any other code path that may run without a live environment.
+ */
+export const env = new Proxy({} as ParsedEnv, {
+  get(_target, prop) {
+    const parsed = parseEnv();
+    return parsed[prop as keyof ParsedEnv];
+  },
+  has(_target, prop) {
+    const parsed = parseEnv();
+    return prop in parsed;
+  },
+  ownKeys() {
+    return Reflect.ownKeys(parseEnv());
+  },
+  getOwnPropertyDescriptor(_target, prop) {
+    const parsed = parseEnv();
+    if (!(prop in parsed)) return undefined;
+    return {
+      enumerable: true,
+      configurable: true,
+      writable: false,
+      value: parsed[prop as keyof ParsedEnv]
+    };
+  }
+});
+
+/**
+ * For tests and operational scripts that want to reset the cached parse —
+ * mostly relevant when the test suite mutates process.env.
+ */
+export function resetEnvForTests() {
+  cachedEnv = null;
+}
 
 export function deploymentReadOnlyEnabled() {
   return env.DEPLOYMENT_READ_ONLY === "1";

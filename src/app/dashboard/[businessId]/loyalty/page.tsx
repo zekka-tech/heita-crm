@@ -16,6 +16,8 @@ import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { auth } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
 import { describeTierPerks } from "@/lib/loyalty";
 import { prisma } from "@/lib/prisma";
 import { hasFreshStaffStepUp } from "@/lib/staff-step-up";

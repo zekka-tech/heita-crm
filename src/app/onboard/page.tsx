@@ -15,6 +15,7 @@ import {
 } from "@/lib/business";
 
 export const metadata = { title: "Onboard a business" };
+export const dynamic = "force-dynamic";
 
 export default async function OnboardPage() {
   const session = await auth();

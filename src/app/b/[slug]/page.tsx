@@ -19,6 +19,8 @@ import { auth } from "@/lib/auth";
 import { describeTierPerks } from "@/lib/loyalty";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 type BusinessLandingPageProps = {
   params: Promise<{ slug: string }>;
 };
@@ -42,7 +44,7 @@ export async function generateMetadata({ params }: BusinessLandingPageProps) {
       description:
         business.description ??
         `Join ${business.name} on Heita to earn loyalty points and special offers.`,
-      images: [`/b/${slug}/opengraph-image`]
+      images: ["/opengraph-image"]
     }
   };
 }
