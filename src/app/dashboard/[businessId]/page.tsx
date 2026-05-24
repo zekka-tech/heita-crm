@@ -17,6 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getBusinessDashboardAnalytics } from "@/server/services/analytics.service";
 
 type DashboardPageProps = {
   params: Promise<{ businessId: string }>;
@@ -63,6 +64,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const primaryQr = business.qrCodes[0] ?? null;
   const primaryLink = business.joinLinks[0] ?? null;
+  const analytics = await getBusinessDashboardAnalytics({ businessId });
 
   const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const recentMembers = business.memberships.filter(
@@ -98,6 +100,12 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
               <Link href={`/dashboard/${businessId}/ai-workspace` as Route}>
                 <Sparkles className="h-4 w-4" />
                 AI workspace
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href={`/dashboard/${businessId}/messages` as Route}>
+                <MessageSquare className="h-4 w-4" />
+                Conversations
               </Link>
             </Button>
           </div>
@@ -200,6 +208,44 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
             <strong>{business._count.loyaltyTransactions}</strong> loyalty transactions
             logged.
           </p>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-2">
+              <p className="metric-label">Weekly member growth</p>
+              <Sparkline
+                values={analytics.series.map((bucket) => bucket.memberJoins)}
+                labels={analytics.series.map((bucket) => bucket.label)}
+                colorClassName="bg-primary"
+              />
+            </div>
+            <div className="grid gap-2">
+              <p className="metric-label">Weekly conversation volume</p>
+              <Sparkline
+                values={analytics.series.map(
+                  (bucket) => bucket.messagesInbound + bucket.messagesOutbound
+                )}
+                labels={analytics.series.map((bucket) => bucket.label)}
+                colorClassName="bg-accent"
+              />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MiniMetric
+              label="Points issued (30d)"
+              value={analytics.kpis.pointsIssued30d.toLocaleString()}
+            />
+            <MiniMetric
+              label="Redeemed or expired (30d)"
+              value={analytics.kpis.pointsRedeemed30d.toLocaleString()}
+            />
+            <MiniMetric
+              label="Redemption rate"
+              value={`${Math.round(analytics.kpis.redemptionRate30d * 100)}%`}
+            />
+            <MiniMetric
+              label="Replies sent (30d)"
+              value={analytics.kpis.outbound30d.toLocaleString()}
+            />
+          </div>
         </Card>
       </section>
     </main>
@@ -223,5 +269,41 @@ function Metric({
       </div>
       <p className="metric-value">{value}</p>
     </Card>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-line bg-surface-elevated px-4 py-3">
+      <p className="metric-label">{label}</p>
+      <p className="mt-2 font-display text-xl font-semibold text-ink">{value}</p>
+    </div>
+  );
+}
+
+function Sparkline(input: {
+  values: number[];
+  labels: string[];
+  colorClassName: string;
+}) {
+  const max = Math.max(...input.values, 1);
+
+  return (
+    <div className="flex items-end gap-2 rounded-xl border border-line bg-surface-elevated px-4 py-4">
+      {input.values.map((value, index) => (
+        <div key={input.labels[index]} className="flex flex-1 flex-col items-center gap-2">
+          <div className="flex h-28 w-full items-end rounded-lg bg-surface">
+            <div
+              className={`${input.colorClassName} w-full rounded-lg`}
+              style={{ height: `${Math.max(8, (value / max) * 100)}%` }}
+              title={`${input.labels[index]}: ${value}`}
+            />
+          </div>
+          <span className="text-[10px] uppercase tracking-[0.12em] text-ink-subtle">
+            {input.labels[index]}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }

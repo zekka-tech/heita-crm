@@ -95,6 +95,7 @@ model Business {
   logoUrl               String?
   coverImageUrl         String?
   loyaltySignupBonus    Int                  @default(0)
+  pointsExpiryDays      Int                  @default(365)
   wabaPhoneId           String?              @unique
   whatsappPhoneNumber   String?
   addressLine1          String?
@@ -368,17 +369,21 @@ model Message {
   id             String         @id @default(cuid())
   businessId     String
   userId         String?
+  contactPhone   String?
   channel        MessageChannel
   direction      String
   externalId     String?
+  status         String?
   body           String
   metadata       Json?
   sentAt         DateTime?
   createdAt      DateTime       @default(now())
   business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attachments    MessageAttachment[]
 
   @@index([businessId, channel, createdAt])
+  @@index([businessId, contactPhone, createdAt])
   @@unique([channel, externalId])
 }
 
@@ -390,14 +395,39 @@ model LoyaltyTransaction {
   type           TransactionType
   pointsDelta    Int
   description    String?
+  expiresAt      DateTime?
+  refundSourceId String?           @unique
+  expirySourceId String?           @unique
   metadata       Json?
   createdAt      DateTime          @default(now())
   business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
   membership     Membership        @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   user           User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  refundSource   LoyaltyTransaction? @relation("RefundSource", fields: [refundSourceId], references: [id], onDelete: SetNull)
+  refundTarget   LoyaltyTransaction? @relation("RefundSource")
+  expirySource   LoyaltyTransaction? @relation("ExpirySource", fields: [expirySourceId], references: [id], onDelete: SetNull)
+  expiryTarget   LoyaltyTransaction? @relation("ExpirySource")
 
   @@index([businessId, createdAt])
   @@index([membershipId, createdAt])
+  @@index([expiresAt])
+}
+
+model MessageAttachment {
+  id              String   @id @default(cuid())
+  messageId       String
+  mediaType       String
+  mimeType        String?
+  fileName        String?
+  byteSize        Int?
+  externalMediaId String?
+  storageKey      String?
+  sourceUrl       String?
+  createdAt       DateTime @default(now())
+  message         Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, createdAt])
+  @@index([externalMediaId])
 }
 
 model Notification {

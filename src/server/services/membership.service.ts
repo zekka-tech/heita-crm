@@ -1,5 +1,6 @@
 import { JoinChannel, TransactionType } from "@prisma/client";
 
+import { calculatePointsExpiryDate } from "@/lib/loyalty";
 import { prisma } from "@/lib/prisma";
 
 type JoinBusinessInput = {
@@ -60,7 +61,10 @@ export async function joinBusiness(input: JoinBusinessInput) {
           userId: input.userId,
           type: TransactionType.SIGNUP_BONUS,
           pointsDelta: business.loyaltySignupBonus,
-          description: "Welcome bonus"
+          description: "Welcome bonus",
+          expiresAt: calculatePointsExpiryDate({
+            expiryDays: business.pointsExpiryDays
+          })
         }
       });
     }

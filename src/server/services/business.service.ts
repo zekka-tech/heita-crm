@@ -40,9 +40,34 @@ export async function createBusinessWithDefaults(input: CreateBusinessInput) {
       },
       loyaltyTiers: {
         create: [
-          { name: "Bronze", minPoints: 0, rank: 1, colorHex: "#B76E3B" },
-          { name: "Silver", minPoints: 500, rank: 2, colorHex: "#7C8A97" },
-          { name: "Gold", minPoints: 1500, rank: 3, colorHex: "#D99825" }
+          {
+            name: "Bronze",
+            minPoints: 0,
+            rank: 1,
+            colorHex: "#B76E3B",
+            perks: {}
+          },
+          {
+            name: "Silver",
+            minPoints: 500,
+            rank: 2,
+            colorHex: "#7C8A97",
+            perks: {
+              pointMultiplier: 1.1,
+              exclusiveAccess: true
+            }
+          },
+          {
+            name: "Gold",
+            minPoints: 1500,
+            rank: 3,
+            colorHex: "#D99825",
+            perks: {
+              pointMultiplier: 1.25,
+              exclusiveAccess: true,
+              freeDelivery: true
+            }
+          }
         ]
       },
       qrCodes: {

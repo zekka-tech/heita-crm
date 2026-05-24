@@ -128,6 +128,33 @@ export async function createPresignedUpload(input: PresignedUploadInput) {
   };
 }
 
+export async function putStoredObject(input: {
+  key: string;
+  body: Buffer | Uint8Array | string;
+  contentType?: string;
+}) {
+  const config = getStorageConfig();
+  const client = getStorageClient();
+
+  if (!config || !client) {
+    throw new Error("Object storage is not configured.");
+  }
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: input.key,
+      Body: input.body,
+      ContentType: input.contentType
+    })
+  );
+
+  return {
+    key: input.key,
+    url: getStoredObjectUrl(input.key)
+  };
+}
+
 function streamToBuffer(stream: Readable | ReadableStream<Uint8Array>) {
   if (stream instanceof Readable) {
     return new Promise<Buffer>((resolve, reject) => {

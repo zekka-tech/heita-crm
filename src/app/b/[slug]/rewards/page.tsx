@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
+import { describeTierPerks } from "@/lib/loyalty";
 import { prisma } from "@/lib/prisma";
 
 type BusinessRewardsPageProps = {
@@ -104,6 +105,7 @@ export default async function BusinessRewardsPage({
                 available={Boolean(
                   membership && membership.pointsBalance >= reward.pointsCost
                 )}
+                perkLabels={membership?.tier ? describeTierPerks(membership.tier.perks) : []}
                 action={
                   membership ? (
                     <form action={redeemRewardAction}>

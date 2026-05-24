@@ -8,7 +8,11 @@ import { prisma } from "@/lib/prisma";
 import { requestStaffStepUpOtp, requireFreshStaffStepUp, verifyStaffStepUpOtp } from "@/lib/staff-step-up";
 import { requireRole } from "@/lib/staff";
 import { sendOtpSms } from "@/lib/sms";
-import { earnPoints, redeemPoints } from "@/server/services/loyalty.service";
+import {
+  earnPoints,
+  redeemPoints,
+  refundTransaction
+} from "@/server/services/loyalty.service";
 
 export async function requestStaffStepUpAction(formData: FormData) {
   const session = await auth();
@@ -171,4 +175,75 @@ export async function createRewardAction(formData: FormData) {
   });
 
   redirect(`/dashboard/${businessId}/loyalty?updated=reward`);
+}
+
+export async function updateTierPerksAction(formData: FormData) {
+  const session = await auth();
+  const userId = session?.user?.id;
+  const businessId = String(formData.get("businessId") ?? "");
+  const tierId = String(formData.get("tierId") ?? "");
+  const pointMultiplierRaw = String(formData.get("pointMultiplier") ?? "").trim();
+  const freeDelivery = String(formData.get("freeDelivery") ?? "") === "on";
+  const exclusiveAccess = String(formData.get("exclusiveAccess") ?? "") === "on";
+
+  if (!userId) {
+    redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/loyalty`);
+  }
+
+  await requireRole({
+    businessId,
+    userId,
+    allowedRoles: [StaffRole.OWNER]
+  });
+  await requireFreshStaffStepUp({ businessId, userId });
+
+  const pointMultiplier = pointMultiplierRaw ? Number(pointMultiplierRaw) : undefined;
+
+  await prisma.loyaltyTier.updateMany({
+    where: {
+      id: tierId,
+      businessId
+    },
+    data: {
+      perks: {
+        ...(pointMultiplier && Number.isFinite(pointMultiplier) && pointMultiplier > 1
+          ? { pointMultiplier }
+          : {}),
+        ...(freeDelivery ? { freeDelivery: true } : {}),
+        ...(exclusiveAccess ? { exclusiveAccess: true } : {})
+      }
+    }
+  });
+
+  redirect(`/dashboard/${businessId}/loyalty?updated=tier-perks`);
+}
+
+export async function refundTransactionAction(formData: FormData) {
+  const session = await auth();
+  const userId = session?.user?.id;
+  const businessId = String(formData.get("businessId") ?? "");
+  const transactionId = String(formData.get("transactionId") ?? "");
+  const idempotencyKey = String(formData.get("idempotencyKey") ?? "");
+  const description = String(formData.get("description") ?? "").trim() || null;
+
+  if (!userId) {
+    redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/loyalty`);
+  }
+
+  await requireRole({
+    businessId,
+    userId,
+    allowedRoles: [StaffRole.MANAGER]
+  });
+  await requireFreshStaffStepUp({ businessId, userId });
+
+  await refundTransaction({
+    businessId,
+    transactionId,
+    actorUserId: userId,
+    idempotencyKey,
+    description
+  });
+
+  redirect(`/dashboard/${businessId}/loyalty?updated=refund`);
 }

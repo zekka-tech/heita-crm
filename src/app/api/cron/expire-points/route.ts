@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { constantTimeEqual } from "@/lib/security";
+import { expireEligiblePoints } from "@/server/services/loyalty.service";
 
 function isAuthorized(request: Request): boolean {
   const provided =
@@ -17,5 +18,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json({ ok: true, job: "expire-points" });
+  const result = await expireEligiblePoints();
+
+  return NextResponse.json({ ok: true, job: "expire-points", result });
 }

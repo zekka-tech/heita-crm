@@ -1,5 +1,10 @@
 import { Prisma, TransactionType } from "@prisma/client";
 
+import {
+  applyTierPointMultiplier,
+  calculatePointsExpiryDate,
+  getTierPerks
+} from "@/lib/loyalty";
 import { runIdempotentOperation } from "@/lib/idempotency";
 import { prisma } from "@/lib/prisma";
 
@@ -9,6 +14,13 @@ const LOYALTY_TRANSACTION_OPTIONS = {
   maxWait: 5_000,
   timeout: 20_000
 };
+
+const REFUNDABLE_TYPES = new Set<TransactionType>([
+  TransactionType.EARN,
+  TransactionType.SIGNUP_BONUS,
+  TransactionType.ADJUSTMENT,
+  TransactionType.REDEEM
+]);
 
 type EarnPointsInput = {
   businessId: string;
@@ -37,6 +49,36 @@ type RedeemPointsInput =
       description?: string | null;
     };
 
+type RefundTransactionInput = {
+  businessId: string;
+  transactionId: string;
+  actorUserId: string;
+  idempotencyKey: string;
+  description?: string | null;
+};
+
+type ExpirePointsResult = {
+  membershipsProcessed: number;
+  transactionsCreated: number;
+  pointsExpired: number;
+};
+
+type MembershipForLoyalty = Prisma.MembershipGetPayload<{
+  include: {
+    business: {
+      include: {
+        loyaltyTiers: {
+          orderBy: {
+            minPoints: "asc";
+          };
+        };
+      };
+    };
+    tier: true;
+    user: true;
+  };
+}>;
+
 async function createNotificationInTx(
   tx: LoyaltyTx,
   input: {
@@ -60,13 +102,10 @@ async function createNotificationInTx(
   });
 }
 
-export async function recalculateTier(
-  tx: LoyaltyTx,
-  input: { membershipId: string; actorUserId?: string | null }
-) {
-  const membership = await tx.membership.findUniqueOrThrow({
+async function getMembershipForLoyalty(tx: LoyaltyTx, membershipId: string) {
+  return tx.membership.findUniqueOrThrow({
     where: {
-      id: input.membershipId
+      id: membershipId
     },
     include: {
       business: {
@@ -82,6 +121,22 @@ export async function recalculateTier(
       user: true
     }
   });
+}
+
+function ensureBusinessOwnership(
+  membership: { businessId: string },
+  businessId: string
+) {
+  if (membership.businessId !== businessId) {
+    throw new Error("Membership does not belong to this business.");
+  }
+}
+
+export async function recalculateTier(
+  tx: LoyaltyTx,
+  input: { membershipId: string; actorUserId?: string | null }
+) {
+  const membership = await getMembershipForLoyalty(tx, input.membershipId);
 
   const previousTierId = membership.tierId;
   const nextTier =
@@ -123,6 +178,27 @@ export async function recalculateTier(
   return updatedMembership;
 }
 
+function createEarnTransactionData(input: {
+  membership: MembershipForLoyalty;
+  actorUserId: string;
+  basePoints: number;
+  description?: string | null;
+}) {
+  const awardedPoints = applyTierPointMultiplier({
+    basePoints: input.basePoints,
+    perks: input.membership.tier?.perks
+  });
+
+  return {
+    awardedPoints,
+    expiresAt: calculatePointsExpiryDate({
+      expiryDays: input.membership.business.pointsExpiryDays
+    }),
+    tierPerks: getTierPerks(input.membership.tier?.perks),
+    description: input.description || "Points earned"
+  };
+}
+
 export async function earnPoints(input: EarnPointsInput) {
   if (!Number.isFinite(input.points) || input.points <= 0) {
     throw new Error("Points to earn must be greater than zero.");
@@ -134,18 +210,15 @@ export async function earnPoints(input: EarnPointsInput) {
     execute: async () =>
       prisma.$transaction(
         async (tx) => {
-          const membership = await tx.membership.findUniqueOrThrow({
-            where: {
-              id: input.membershipId
-            },
-            include: {
-              business: true
-            }
-          });
+          const membership = await getMembershipForLoyalty(tx, input.membershipId);
+          ensureBusinessOwnership(membership, input.businessId);
 
-          if (membership.businessId !== input.businessId) {
-            throw new Error("Membership does not belong to this business.");
-          }
+          const earnData = createEarnTransactionData({
+            membership,
+            actorUserId: input.actorUserId,
+            basePoints: input.points,
+            description: input.description
+          });
 
           const updatedMembership = await tx.membership.update({
             where: {
@@ -153,7 +226,7 @@ export async function earnPoints(input: EarnPointsInput) {
             },
             data: {
               pointsBalance: {
-                increment: input.points
+                increment: earnData.awardedPoints
               }
             }
           });
@@ -164,8 +237,13 @@ export async function earnPoints(input: EarnPointsInput) {
               membershipId: membership.id,
               userId: input.actorUserId,
               type: TransactionType.EARN,
-              pointsDelta: input.points,
-              description: input.description || "Points earned"
+              pointsDelta: earnData.awardedPoints,
+              description: earnData.description,
+              expiresAt: earnData.expiresAt,
+              metadata: {
+                basePoints: input.points,
+                pointMultiplier: earnData.tierPerks.pointMultiplier ?? 1
+              }
             }
           });
 
@@ -194,21 +272,12 @@ export async function redeemPoints(input: RedeemPointsInput) {
     execute: async () =>
       prisma.$transaction(
         async (tx) => {
-          const membership = await tx.membership.findUniqueOrThrow({
-            where: {
-              id: input.membershipId
-            },
-            include: {
-              business: true
-            }
-          });
-
-          if (membership.businessId !== input.businessId) {
-            throw new Error("Membership does not belong to this business.");
-          }
+          const membership = await getMembershipForLoyalty(tx, input.membershipId);
+          ensureBusinessOwnership(membership, input.businessId);
 
           let pointsToRedeem = 0;
           let description = input.description || "Points redeemed";
+          let rewardMetadata: Record<string, unknown> | null = null;
 
           if ("rewardId" in input) {
             const reward = await tx.reward.findFirstOrThrow({
@@ -221,6 +290,10 @@ export async function redeemPoints(input: RedeemPointsInput) {
 
             pointsToRedeem = reward.pointsCost;
             description = input.description || `Redeemed reward: ${reward.title}`;
+            rewardMetadata = {
+              rewardId: reward.id,
+              rewardTitle: reward.title
+            };
 
             if (reward.stock !== null && reward.stock <= 0) {
               throw new Error("That reward is out of stock.");
@@ -264,7 +337,8 @@ export async function redeemPoints(input: RedeemPointsInput) {
               userId: input.actorUserId,
               type: TransactionType.REDEEM,
               pointsDelta: -pointsToRedeem,
-              description
+              description,
+              metadata: rewardMetadata as Prisma.InputJsonValue | undefined
             }
           });
 
@@ -292,4 +366,301 @@ export async function redeemPoints(input: RedeemPointsInput) {
         }
       })
   });
+}
+
+export async function refundTransaction(input: RefundTransactionInput) {
+  return runIdempotentOperation({
+    scope: `loyalty:refund:${input.businessId}:${input.transactionId}`,
+    key: input.idempotencyKey,
+    execute: async () =>
+      prisma.$transaction(
+        async (tx) => {
+          const sourceTransaction = await tx.loyaltyTransaction.findUniqueOrThrow({
+            where: {
+              id: input.transactionId
+            },
+            include: {
+              membership: {
+                include: {
+                  business: true,
+                  user: true
+                }
+              },
+              refundTarget: true
+            }
+          });
+
+          if (sourceTransaction.businessId !== input.businessId) {
+            throw new Error("Transaction does not belong to this business.");
+          }
+
+          if (!REFUNDABLE_TYPES.has(sourceTransaction.type)) {
+            throw new Error("This transaction type cannot be refunded.");
+          }
+
+          if (sourceTransaction.refundTarget) {
+            throw new Error("This transaction has already been refunded.");
+          }
+
+          const pointsDelta = -sourceTransaction.pointsDelta;
+          const nextBalance = sourceTransaction.membership.pointsBalance + pointsDelta;
+
+          if (nextBalance < 0) {
+            throw new Error(
+              "The member does not have enough remaining points to reverse this transaction."
+            );
+          }
+
+          await tx.membership.update({
+            where: {
+              id: sourceTransaction.membershipId
+            },
+            data: {
+              pointsBalance: {
+                increment: pointsDelta
+              }
+            }
+          });
+
+          const sourceMetadata =
+            sourceTransaction.metadata &&
+            typeof sourceTransaction.metadata === "object" &&
+            !Array.isArray(sourceTransaction.metadata)
+              ? (sourceTransaction.metadata as Record<string, unknown>)
+              : {};
+
+          if (
+            sourceTransaction.type === TransactionType.REDEEM &&
+            typeof sourceMetadata.rewardId === "string"
+          ) {
+            const reward = await tx.reward.findUnique({
+              where: {
+                id: sourceMetadata.rewardId
+              }
+            });
+
+            if (reward?.stock !== null && reward?.stock !== undefined) {
+              await tx.reward.update({
+                where: {
+                  id: reward.id
+                },
+                data: {
+                  stock: {
+                    increment: 1
+                  }
+                }
+              });
+            }
+          }
+
+          const refund = await tx.loyaltyTransaction.create({
+            data: {
+              businessId: sourceTransaction.businessId,
+              membershipId: sourceTransaction.membershipId,
+              userId: input.actorUserId,
+              type: TransactionType.REFUND,
+              pointsDelta,
+              description:
+                input.description ||
+                `Refund for ${sourceTransaction.description ?? sourceTransaction.type}`,
+              refundSourceId: sourceTransaction.id,
+              metadata: {
+                originalType: sourceTransaction.type,
+                originalDescription: sourceTransaction.description
+              }
+            }
+          });
+
+          await recalculateTier(tx, {
+            membershipId: sourceTransaction.membershipId,
+            actorUserId: input.actorUserId
+          });
+
+          await createNotificationInTx(tx, {
+            userId: sourceTransaction.membership.userId,
+            title: `Refund processed at ${sourceTransaction.membership.business.name}`,
+            body: `${Math.abs(pointsDelta)} points were returned to your wallet.`,
+            type: "POINTS_REFUNDED",
+            actionUrl: "/wallet",
+            metadata: {
+              sourceTransactionId: sourceTransaction.id,
+              refundTransactionId: refund.id
+            }
+          });
+
+          return refund;
+        },
+        LOYALTY_TRANSACTION_OPTIONS
+      ),
+    replay: async () =>
+      prisma.loyaltyTransaction.findFirstOrThrow({
+        where: {
+          businessId: input.businessId,
+          refundSourceId: input.transactionId
+        }
+      })
+  });
+}
+
+async function expireMembershipPoints(
+  tx: LoyaltyTx,
+  input: {
+    membershipId: string;
+    businessId: string;
+    actorUserId?: string | null;
+    now: Date;
+  }
+) {
+  const membership = await getMembershipForLoyalty(tx, input.membershipId);
+  ensureBusinessOwnership(membership, input.businessId);
+
+  if (membership.pointsBalance <= 0) {
+    return {
+      transactionsCreated: 0,
+      pointsExpired: 0
+    };
+  }
+
+  const candidates = await tx.loyaltyTransaction.findMany({
+    where: {
+      membershipId: membership.id,
+      businessId: input.businessId,
+      expiresAt: {
+        lte: input.now
+      },
+      pointsDelta: {
+        gt: 0
+      },
+      expiryTarget: null,
+      refundTarget: null
+    },
+    orderBy: [{ expiresAt: "asc" }, { createdAt: "asc" }]
+  });
+
+  let remainingBalance = membership.pointsBalance;
+  let pointsExpired = 0;
+  let transactionsCreated = 0;
+
+  for (const candidate of candidates) {
+    if (remainingBalance <= 0) {
+      break;
+    }
+
+    const amountToExpire = Math.min(candidate.pointsDelta, remainingBalance);
+    if (amountToExpire <= 0) {
+      continue;
+    }
+
+    await tx.loyaltyTransaction.create({
+      data: {
+        businessId: membership.businessId,
+        membershipId: membership.id,
+        userId: input.actorUserId ?? null,
+        type: TransactionType.EXPIRY,
+        pointsDelta: -amountToExpire,
+        description: `Expired points from ${candidate.description ?? "earn transaction"}`,
+        expirySourceId: candidate.id,
+        metadata: {
+          expiredAt: input.now.toISOString(),
+          sourceTransactionId: candidate.id
+        }
+      }
+    });
+
+    remainingBalance -= amountToExpire;
+    pointsExpired += amountToExpire;
+    transactionsCreated += 1;
+  }
+
+  if (pointsExpired <= 0) {
+    return { transactionsCreated: 0, pointsExpired: 0 };
+  }
+
+  await tx.membership.update({
+    where: {
+      id: membership.id
+    },
+    data: {
+      pointsBalance: {
+        decrement: pointsExpired
+      }
+    }
+  });
+
+  await recalculateTier(tx, {
+    membershipId: membership.id,
+    actorUserId: input.actorUserId ?? null
+  });
+
+  await createNotificationInTx(tx, {
+    userId: membership.userId,
+    title: `Points expired at ${membership.business.name}`,
+    body: `${pointsExpired} points expired from your wallet.`,
+    type: "POINTS_EXPIRED",
+    actionUrl: "/wallet"
+  });
+
+  return {
+    transactionsCreated,
+    pointsExpired
+  };
+}
+
+export async function expireEligiblePoints(now = new Date()): Promise<ExpirePointsResult> {
+  const memberships = await prisma.membership.findMany({
+    where: {
+      isActive: true,
+      pointsBalance: {
+        gt: 0
+      },
+      business: {
+        deletedAt: null,
+        isActive: true
+      },
+      transactions: {
+        some: {
+          expiresAt: {
+            lte: now
+          },
+          pointsDelta: {
+            gt: 0
+          },
+          expiryTarget: null,
+          refundTarget: null
+        }
+      }
+    },
+    select: {
+      id: true,
+      businessId: true
+    }
+  });
+
+  let membershipsProcessed = 0;
+  let transactionsCreated = 0;
+  let pointsExpired = 0;
+
+  for (const membership of memberships) {
+    const result = await prisma.$transaction(
+      (tx) =>
+        expireMembershipPoints(tx, {
+          membershipId: membership.id,
+          businessId: membership.businessId,
+          now
+        }),
+      LOYALTY_TRANSACTION_OPTIONS
+    );
+
+    if (result.transactionsCreated > 0) {
+      membershipsProcessed += 1;
+      transactionsCreated += result.transactionsCreated;
+      pointsExpired += result.pointsExpired;
+    }
+  }
+
+  return {
+    membershipsProcessed,
+    transactionsCreated,
+    pointsExpired
+  };
 }

@@ -11,10 +11,16 @@ type RewardCardProps = {
     imageUrl?: string | null;
   };
   available: boolean;
+  perkLabels?: string[];
   action?: React.ReactNode;
 };
 
-export function RewardCard({ reward, available, action }: RewardCardProps) {
+export function RewardCard({
+  reward,
+  available,
+  perkLabels,
+  action
+}: RewardCardProps) {
   return (
     <article className="group flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 shadow-md transition hover:shadow-lg">
       <div className="flex items-start justify-between gap-4">
@@ -43,6 +49,11 @@ export function RewardCard({ reward, available, action }: RewardCardProps) {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
+          {perkLabels?.map((perk) => (
+            <Chip key={perk} variant="primary" size="sm">
+              {perk}
+            </Chip>
+          ))}
           {reward.stock === null || reward.stock === undefined ? (
             <Chip variant="success" size="sm">
               <Sparkles className="h-3 w-3" />

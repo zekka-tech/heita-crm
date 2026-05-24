@@ -4,8 +4,10 @@ import { Gift, Plus, Receipt, Users } from "lucide-react";
 import {
   createRewardAction,
   earnPointsAction,
+  refundTransactionAction,
   redeemPointsAction,
   requestStaffStepUpAction,
+  updateTierPerksAction,
   verifyStaffStepUpAction
 } from "@/app/dashboard/[businessId]/loyalty/actions";
 import { Button } from "@/components/ui/button";
@@ -13,6 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { auth } from "@/lib/auth";
+import { describeTierPerks } from "@/lib/loyalty";
 import { prisma } from "@/lib/prisma";
 import { hasFreshStaffStepUp } from "@/lib/staff-step-up";
 
@@ -78,7 +81,18 @@ export default async function LoyaltyDashboardPage({
           </p>
           <div className="mt-4 flex flex-wrap gap-2 text-white/85">
             {business.loyaltyTiers.map((tier) => (
-              <TierBadge key={tier.id} tier={tier.name} />
+              <div key={tier.id} className="flex flex-wrap items-center gap-2">
+                <TierBadge tier={tier.name} />
+                {describeTierPerks(tier.perks).map((perk) => (
+                  <Chip
+                    key={`${tier.id}-${perk}`}
+                    variant="primary"
+                    className="bg-white/15 text-white border-white/20"
+                  >
+                    {perk}
+                  </Chip>
+                ))}
+              </div>
             ))}
           </div>
         </Card>
@@ -205,6 +219,77 @@ export default async function LoyaltyDashboardPage({
 
         <Card variant="surface" className="space-y-4">
           <header className="flex items-center justify-between">
+            <h2 className="section-title">Tier perks</h2>
+            <Chip variant="primary" size="sm">
+              OWNER only
+            </Chip>
+          </header>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {business.loyaltyTiers.map((tier) => {
+              const perks = describeTierPerks(tier.perks);
+              const tierPerks =
+                typeof tier.perks === "object" && tier.perks && !Array.isArray(tier.perks)
+                  ? tier.perks
+                  : {};
+
+              return (
+                <form
+                  key={tier.id}
+                  action={updateTierPerksAction}
+                  className="grid gap-3 rounded-xl border border-line bg-surface-elevated p-4"
+                >
+                  <input type="hidden" name="businessId" value={business.id} />
+                  <input type="hidden" name="tierId" value={tier.id} />
+                  <div>
+                    <p className="font-display text-lg font-semibold text-ink">{tier.name}</p>
+                    <p className="text-xs text-ink-subtle">
+                      Current: {perks.length ? perks.join(" · ") : "No perks configured"}
+                    </p>
+                  </div>
+                  <Input
+                    name="pointMultiplier"
+                    label="Point multiplier"
+                    type="number"
+                    min={1}
+                    step="0.05"
+                    defaultValue={
+                      "pointMultiplier" in tierPerks
+                        ? String(tierPerks.pointMultiplier)
+                        : ""
+                    }
+                    placeholder="1.10"
+                  />
+                  <label className="flex items-center gap-2 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      name="freeDelivery"
+                      defaultChecked={
+                        "freeDelivery" in tierPerks && Boolean(tierPerks.freeDelivery)
+                      }
+                    />
+                    Free delivery
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      name="exclusiveAccess"
+                      defaultChecked={
+                        "exclusiveAccess" in tierPerks && Boolean(tierPerks.exclusiveAccess)
+                      }
+                    />
+                    Exclusive access
+                  </label>
+                  <Button type="submit" variant="secondary">
+                    Save perks
+                  </Button>
+                </form>
+              );
+            })}
+          </div>
+        </Card>
+
+        <Card variant="surface" className="space-y-4">
+          <header className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Gift className="h-5 w-5 text-primary-action" />
               <h2 className="section-title">Reward catalogue</h2>
@@ -308,18 +393,41 @@ export default async function LoyaltyDashboardPage({
                       {membership.transactions.map((transaction) => (
                         <li
                           key={transaction.id}
-                          className="flex items-center justify-between rounded-lg bg-surface px-3 py-1.5 text-xs"
+                          className="rounded-lg bg-surface px-3 py-2 text-xs"
                         >
-                          <span className="text-ink-muted">
-                            {transaction.description ?? transaction.type}
-                          </span>
-                          <Chip
-                            variant={transaction.pointsDelta >= 0 ? "success" : "warning"}
-                            size="sm"
-                          >
-                            {transaction.pointsDelta >= 0 ? "+" : ""}
-                            {transaction.pointsDelta}
-                          </Chip>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-ink-muted">
+                              <p>{transaction.description ?? transaction.type}</p>
+                              {transaction.expiresAt ? (
+                                <p className="mt-1 text-[11px] text-ink-subtle">
+                                  Expires {transaction.expiresAt.toLocaleDateString("en-ZA")}
+                                </p>
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Chip
+                                variant={transaction.pointsDelta >= 0 ? "success" : "warning"}
+                                size="sm"
+                              >
+                                {transaction.pointsDelta >= 0 ? "+" : ""}
+                                {transaction.pointsDelta}
+                              </Chip>
+                              {!["REFUND", "EXPIRY"].includes(transaction.type) ? (
+                                <form action={refundTransactionAction}>
+                                  <input type="hidden" name="businessId" value={business.id} />
+                                  <input type="hidden" name="transactionId" value={transaction.id} />
+                                  <input
+                                    type="hidden"
+                                    name="idempotencyKey"
+                                    value={crypto.randomUUID()}
+                                  />
+                                  <Button type="submit" variant="secondary" size="sm">
+                                    Refund
+                                  </Button>
+                                </form>
+                              ) : null}
+                            </div>
+                          </div>
                         </li>
                       ))}
                     </ul>
