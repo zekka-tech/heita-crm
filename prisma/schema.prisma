@@ -15,6 +15,7 @@ model User {
   phone             String?             @unique
   phoneVerifiedAt   DateTime?
   preferredAiMode   String?             @default("auto")
+  sessionVersion    Int                 @default(0)
   deletedAt         DateTime?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
@@ -22,6 +23,7 @@ model User {
   sessions          Session[]
   memberships       Membership[]
   staffMemberships  StaffMember[]
+  staffInvitesSent  StaffInvite[]       @relation("StaffInviteIssuer")
   notifications     Notification[]
   pushSubscriptions PushSubscription[]
   otpCodes          OtpCode[]
@@ -119,6 +121,7 @@ model Business {
   messages              Message[]
   loyaltyTransactions   LoyaltyTransaction[]
   consents              UserConsent[]
+  staffInvites          StaffInvite[]
 }
 
 model QrCode {
@@ -182,6 +185,35 @@ model StaffMember {
 
   @@unique([businessId, userId])
   @@index([userId, role])
+}
+
+model StaffInvite {
+  id           String            @id @default(cuid())
+  businessId   String
+  email        String?
+  phone        String?
+  role         StaffRole
+  tokenHash    String            @unique
+  invitedById  String
+  status       StaffInviteStatus @default(PENDING)
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  acceptedById String?
+  revokedAt    DateTime?
+  createdAt    DateTime          @default(now())
+  business     Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invitedBy    User              @relation("StaffInviteIssuer", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status])
+  @@index([email])
+  @@index([phone])
+}
+
+enum StaffInviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
 }
 
 model AiWorkspace {

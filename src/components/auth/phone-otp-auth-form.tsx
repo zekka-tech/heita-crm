@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { signIn } from "next-auth/react";
 import { ArrowRight, ShieldCheck, Smartphone } from "lucide-react";
 
@@ -8,28 +8,49 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { TurnstileWidget } from "@/components/auth/turnstile-widget";
 
 type PhoneOtpAuthFormProps = {
   mode: "sign-in" | "sign-up";
   googleEnabled: boolean;
   appleEnabled: boolean;
+  turnstileSiteKey: string | null;
+  oauthError?: string | null;
+};
+
+const OAUTH_ERROR_COPY: Record<string, string> = {
+  OAuthEmailMissing:
+    "Your Google or Apple account did not share an email address. Sign in with your phone number instead.",
+  AccountDeactivated:
+    "This account has been deactivated. Contact support@heita.co.za if you believe this is a mistake.",
+  OAuthAccountLinkRequired:
+    "An account already exists with this email. Sign in with your phone first, then link Google or Apple from your profile."
 };
 
 export function PhoneOtpAuthForm({
   mode,
   googleEnabled,
-  appleEnabled
+  appleEnabled,
+  turnstileSiteKey,
+  oauthError
 }: PhoneOtpAuthFormProps) {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<{ kind: "info" | "error"; text: string } | null>(
-    null
+    oauthError && OAUTH_ERROR_COPY[oauthError]
+      ? { kind: "error", text: OAUTH_ERROR_COPY[oauthError] }
+      : null
   );
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
   const [step, setStep] = useState<"phone" | "code">("phone");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [isRequesting, startRequestTransition] = useTransition();
   const [isSubmitting, startSubmitTransition] = useTransition();
+
+  const handleTurnstileToken = useCallback((token: string) => {
+    setTurnstileToken(token || null);
+  }, []);
 
   const requestOtp = () => {
     setStatus(null);
@@ -39,7 +60,7 @@ export function PhoneOtpAuthForm({
       void fetch("/api/auth/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, mode })
+        body: JSON.stringify({ phone, mode, turnstileToken })
       })
         .then(async (response) => {
           const payload = (await response.json()) as {
@@ -87,6 +108,9 @@ export function PhoneOtpAuthForm({
       });
     });
   };
+
+  const turnstileRequired = Boolean(turnstileSiteKey);
+  const turnstileReady = turnstileRequired ? Boolean(turnstileToken) : true;
 
   return (
     <Card variant="surface" className="grid w-full max-w-md gap-6">
@@ -194,13 +218,22 @@ export function PhoneOtpAuthForm({
           </label>
         ) : null}
 
+        {step === "phone" && turnstileSiteKey ? (
+          <TurnstileWidget
+            siteKey={turnstileSiteKey}
+            action={mode}
+            onToken={handleTurnstileToken}
+            className="mx-auto"
+          />
+        ) : null}
+
         <Button
           type="submit"
           variant="primary"
           size="lg"
           disabled={
             step === "phone"
-              ? !phone || isRequesting
+              ? !phone || isRequesting || !turnstileReady
               : code.length !== 6 || isSubmitting || (mode === "sign-up" && !acceptTerms)
           }
         >
@@ -231,6 +264,7 @@ export function PhoneOtpAuthForm({
               setCode("");
               setStatus(null);
               setDevCode(null);
+              setTurnstileToken(null);
             }}
           >
             Use a different number

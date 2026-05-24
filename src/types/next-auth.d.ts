@@ -7,6 +7,7 @@ declare module "next-auth" {
       id: string;
       phone: string | null;
       phoneVerifiedAt?: string | null;
+      sessionVersion?: number;
     };
   }
 }
@@ -16,5 +17,6 @@ declare module "next-auth/jwt" {
     id?: string;
     phone?: string | null;
     phoneVerifiedAt?: string | null;
+    sessionVersion?: number;
   }
 }

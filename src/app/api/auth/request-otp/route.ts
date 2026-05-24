@@ -9,10 +9,12 @@ import { prisma } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/security";
 import { sendOtpSms } from "@/lib/sms";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 
 const RequestOtpSchema = z.object({
   phone: z.string().min(8).max(20),
-  mode: z.enum(["sign-in", "sign-up"]).default("sign-in")
+  mode: z.enum(["sign-in", "sign-up"]).default("sign-in"),
+  turnstileToken: z.string().optional()
 });
 
 const OTP_PER_PHONE_PER_HOUR = 5;
@@ -42,6 +44,18 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Enter a valid South African phone number (e.g. +27 82 000 0000)." },
       { status: 400 }
+    );
+  }
+
+  const turnstile = await verifyTurnstileToken({
+    token: parsed.data.turnstileToken,
+    remoteIp: ip,
+    action: parsed.data.mode
+  });
+  if (!turnstile.ok) {
+    return NextResponse.json(
+      { error: "Anti-abuse check failed. Refresh the page and try again." },
+      { status: 403 }
     );
   }
 

@@ -7,10 +7,11 @@ export const authBaseConfig = {
   },
   trustHost: true,
   pages: {
-    signIn: "/sign-in"
+    signIn: "/sign-in",
+    error: "/sign-in"
   },
   callbacks: {
-    jwt({ token, user }) {
+    jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.phone =
@@ -19,6 +20,19 @@ export const authBaseConfig = {
           "phoneVerifiedAt" in user && typeof user.phoneVerifiedAt === "string"
             ? user.phoneVerifiedAt
             : null;
+        token.sessionVersion =
+          "sessionVersion" in user && typeof user.sessionVersion === "number"
+            ? user.sessionVersion
+            : 0;
+      }
+
+      if (trigger === "update" && session && typeof session === "object") {
+        if (
+          "sessionVersion" in session &&
+          typeof session.sessionVersion === "number"
+        ) {
+          token.sessionVersion = session.sessionVersion;
+        }
       }
 
       return token;
@@ -29,6 +43,8 @@ export const authBaseConfig = {
         session.user.phone = typeof token.phone === "string" ? token.phone : null;
         session.user.phoneVerifiedAt =
           typeof token.phoneVerifiedAt === "string" ? token.phoneVerifiedAt : null;
+        session.user.sessionVersion =
+          typeof token.sessionVersion === "number" ? token.sessionVersion : 0;
       }
 
       return session;
