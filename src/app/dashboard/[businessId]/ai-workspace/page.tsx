@@ -1,8 +1,8 @@
 import { notFound, redirect } from "next/navigation";
-import { FileText, Sparkles, Upload } from "lucide-react";
+import { FileText, Sparkles } from "lucide-react";
 
 import { ChatInterface } from "@/components/ai/chat-interface";
-import { Button } from "@/components/ui/button";
+import { DocumentUploadCard } from "@/components/ai/document-upload-card";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
@@ -27,6 +27,19 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
     },
     include: {
       aiWorkspace: true,
+      aiChatSessions: {
+        where: {
+          userId: session.user.id
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 1,
+        include: {
+          messages: {
+            orderBy: { createdAt: "asc" },
+            take: 20
+          }
+        }
+      },
       documents: {
         orderBy: { createdAt: "desc" },
         take: 10
@@ -38,6 +51,7 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
 
   const docs = business.documents;
   const ready = docs.filter((doc) => doc.status === "READY").length;
+  const latestChatSession = business.aiChatSessions[0] ?? null;
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
@@ -66,53 +80,53 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
         </Card>
 
         <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <Card variant="surface" className="space-y-4">
-            <header className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+          <div className="grid gap-4">
+            <DocumentUploadCard businessId={business.id} />
+            <Card variant="surface" className="space-y-4">
+              <header className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary-action" />
                 <h2 className="section-title">Documents</h2>
-              </div>
-              <Button variant="secondary" size="sm" disabled>
-                <Upload className="h-3.5 w-3.5" />
-                Upload (coming soon)
-              </Button>
-            </header>
-            {docs.length ? (
-              <ul className="grid gap-2">
-                {docs.map((doc) => (
-                  <li
-                    key={doc.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-elevated px-3 py-3"
-                  >
-                    <div>
-                      <p className="font-medium text-ink">{doc.title}</p>
-                      <p className="text-xs text-ink-subtle">
-                        {(doc.sizeBytes / 1024).toFixed(1)} KB ·{" "}
-                        {doc.createdAt.toLocaleDateString("en-ZA")}
-                      </p>
-                    </div>
-                    <Chip
-                      variant={
-                        doc.status === "READY"
-                          ? "success"
-                          : doc.status === "FAILED"
-                            ? "danger"
-                            : "warning"
-                      }
-                      size="sm"
+              </header>
+              {docs.length ? (
+                <ul className="grid gap-2">
+                  {docs.map((doc) => (
+                    <li
+                      key={doc.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-elevated px-3 py-3"
                     >
-                      {doc.status}
-                    </Chip>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-ink-muted">
-                No documents uploaded yet. Adding documents lets the AI answer
-                customer questions from your real material.
-              </p>
-            )}
-          </Card>
+                      <div>
+                        <p className="font-medium text-ink">{doc.title}</p>
+                        <p className="text-xs text-ink-subtle">
+                          {(doc.sizeBytes / 1024).toFixed(1)} KB ·{" "}
+                          {doc.createdAt.toLocaleDateString("en-ZA")}
+                        </p>
+                        {doc.errorMessage ? (
+                          <p className="mt-1 text-xs text-danger">{doc.errorMessage}</p>
+                        ) : null}
+                      </div>
+                      <Chip
+                        variant={
+                          doc.status === "READY"
+                            ? "success"
+                            : doc.status === "FAILED"
+                              ? "danger"
+                              : "warning"
+                        }
+                        size="sm"
+                      >
+                        {doc.status}
+                      </Chip>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-ink-muted">
+                  No documents uploaded yet. Adding documents lets the AI answer
+                  customer questions from your real material.
+                </p>
+              )}
+            </Card>
+          </div>
 
           <Card variant="outline" className="space-y-3">
             <header className="flex items-center gap-2">
@@ -125,6 +139,27 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
             <ChatInterface
               businessSlug={business.slug}
               businessName={business.name}
+              initialSessionId={latestChatSession?.id}
+              initialMessages={latestChatSession?.messages.map((message) => ({
+                id: message.id,
+                role:
+                  message.role === "assistant" || message.role === "system"
+                    ? message.role
+                    : "user",
+                content: message.content,
+                citations:
+                  typeof message.metadata === "object" &&
+                  message.metadata &&
+                  "citations" in message.metadata &&
+                  Array.isArray(message.metadata.citations)
+                    ? (message.metadata.citations as {
+                        documentId: string;
+                        documentTitle: string;
+                        chunkIndex: number;
+                        similarity: number;
+                      }[])
+                    : undefined
+              }))}
             />
           </Card>
         </div>

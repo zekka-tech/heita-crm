@@ -255,6 +255,11 @@ model AiChatMessage {
   sessionId  String
   role       String
   content    String
+  model      String?
+  latencyMs  Int?
+  promptTokens Int?
+  completionTokens Int?
+  metadata   Json?
   createdAt  DateTime      @default(now())
   session    AiChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 

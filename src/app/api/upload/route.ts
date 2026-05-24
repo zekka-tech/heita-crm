@@ -1,12 +1,20 @@
+import { randomUUID } from "node:crypto";
+
+import { StaffRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { prisma } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/security";
+import { createPresignedUpload, getStoredObjectUrl, storageConfigured } from "@/lib/storage";
+import { requireRole } from "@/lib/staff";
 
 const UploadRequestSchema = z.object({
+  businessId: z.string().min(1),
+  title: z.string().min(1).max(160),
   filename: z.string().min(1).max(255),
   contentType: z.string().regex(/^[\w-]+\/[\w.+-]+$/),
   byteSize: z.number().int().min(1).max(50 * 1024 * 1024)
@@ -19,6 +27,11 @@ const ALLOWED_MIME = new Set([
   "text/csv",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 ]);
+
+function buildStorageKey(input: { businessId: string; filename: string }) {
+  const sanitized = input.filename.replace(/[^a-zA-Z0-9._-]+/g, "-");
+  return `businesses/${input.businessId}/documents/${Date.now()}-${randomUUID()}-${sanitized}`;
+}
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -52,17 +65,16 @@ export async function POST(request: Request) {
   }
 
   if (!ALLOWED_MIME.has(parsed.data.contentType)) {
-    return NextResponse.json(
-      { error: "File type not supported." },
-      { status: 415 }
-    );
+    return NextResponse.json({ error: "File type not supported." }, { status: 415 });
   }
 
-  const storageConfigured =
-    Boolean(process.env.R2_ACCESS_KEY_ID && process.env.R2_BUCKET_NAME) ||
-    Boolean(process.env.MINIO_ACCESS_KEY && process.env.MINIO_BUCKET);
+  await requireRole({
+    businessId: parsed.data.businessId,
+    userId: session.user.id,
+    allowedRoles: [StaffRole.AI_TRAINER, StaffRole.MANAGER]
+  });
 
-  if (!storageConfigured) {
+  if (!storageConfigured()) {
     logger.warn(
       { userId: session.user.id, filename: parsed.data.filename },
       "upload.storage_not_configured"
@@ -76,12 +88,42 @@ export async function POST(request: Request) {
     );
   }
 
-  // Stub for presigned URL generation. Production wiring expects @aws-sdk/client-s3.
-  return NextResponse.json(
-    {
-      error:
-        "Presigned upload not yet wired in this build. @aws-sdk/client-s3 integration is intentionally deferred to keep the install lean."
-    },
-    { status: 501 }
-  );
+  const workspace = await prisma.aiWorkspace.findUnique({
+    where: { businessId: parsed.data.businessId }
+  });
+
+  if (!workspace) {
+    return NextResponse.json({ error: "AI workspace not found." }, { status: 404 });
+  }
+
+  const storageKey = buildStorageKey({
+    businessId: parsed.data.businessId,
+    filename: parsed.data.filename
+  });
+
+  const upload = await createPresignedUpload({
+    key: storageKey,
+    contentType: parsed.data.contentType,
+    byteSize: parsed.data.byteSize
+  });
+
+  const document = await prisma.businessDocument.create({
+    data: {
+      workspaceId: workspace.id,
+      businessId: parsed.data.businessId,
+      title: parsed.data.title,
+      fileName: parsed.data.filename,
+      mimeType: parsed.data.contentType,
+      storageKey,
+      sizeBytes: parsed.data.byteSize,
+      sourceUrl: getStoredObjectUrl(storageKey)
+    }
+  });
+
+  return NextResponse.json({
+    documentId: document.id,
+    uploadUrl: upload.uploadUrl,
+    uploadMethod: upload.method,
+    uploadHeaders: upload.headers
+  });
 }

@@ -28,6 +28,22 @@ export default async function BusinessChatPage({ params }: BusinessChatPageProps
 
   if (!business) notFound();
 
+  const latestChatSession = session?.user?.id
+    ? await prisma.aiChatSession.findFirst({
+        where: {
+          businessId: business.id,
+          userId: session.user.id
+        },
+        orderBy: { updatedAt: "desc" },
+        include: {
+          messages: {
+            orderBy: { createdAt: "asc" },
+            take: 20
+          }
+        }
+      })
+    : null;
+
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
       <Card variant="hero" className="px-6 py-7 sm:px-10">
@@ -58,7 +74,31 @@ export default async function BusinessChatPage({ params }: BusinessChatPageProps
       </Card>
 
       <div className="mt-6">
-        <ChatInterface businessSlug={slug} businessName={business.name} />
+        <ChatInterface
+          businessSlug={slug}
+          businessName={business.name}
+          initialSessionId={latestChatSession?.id}
+          initialMessages={latestChatSession?.messages.map((message: (typeof latestChatSession.messages)[number]) => ({
+            id: message.id,
+            role:
+              message.role === "assistant" || message.role === "system"
+                ? message.role
+                : "user",
+            content: message.content,
+            citations:
+              typeof message.metadata === "object" &&
+              message.metadata &&
+              "citations" in message.metadata &&
+              Array.isArray(message.metadata.citations)
+                ? (message.metadata.citations as {
+                    documentId: string;
+                    documentTitle: string;
+                    chunkIndex: number;
+                    similarity: number;
+                  }[])
+                : undefined
+          }))}
+        />
       </div>
     </main>
   );
