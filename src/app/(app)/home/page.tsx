@@ -8,11 +8,17 @@ import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { discoverBusinesses } from "@/server/services/discovery.service";
 
 export const metadata = { title: "Home" };
 
-export default async function HomePage() {
+type HomePageProps = {
+  searchParams?: Promise<{ q?: string }>;
+};
+
+export default async function HomePage({ searchParams }: HomePageProps) {
   const session = await auth();
+  const resolvedSearchParams = searchParams ? await searchParams : {};
 
   if (!session?.user?.id) {
     redirect("/sign-in?callbackUrl=/home");
@@ -28,6 +34,9 @@ export default async function HomePage() {
     (sum, membership) => sum + membership.pointsBalance,
     0
   );
+  const discoverResults = resolvedSearchParams?.q
+    ? await discoverBusinesses({ query: resolvedSearchParams.q, limit: 6 })
+    : [];
 
   return (
     <section className="grid gap-5">
@@ -60,17 +69,57 @@ export default async function HomePage() {
         </div>
       </Card>
 
-      <Card variant="surface" className="flex flex-wrap items-center gap-3">
-        <Search className="h-4 w-4 text-ink-subtle" />
-        <input
-          type="search"
-          placeholder="Find a business by name, suburb, or category…"
-          className="input border-0 bg-transparent p-0 outline-none shadow-none"
-        />
-        <Chip variant="primary" size="sm">
-          QR scan ready
-        </Chip>
+      <Card variant="surface">
+        <form className="flex flex-wrap items-center gap-3">
+          <Search className="h-4 w-4 text-ink-subtle" />
+          <input
+            type="search"
+            name="q"
+            defaultValue={resolvedSearchParams?.q ?? ""}
+            placeholder="Find a business by name, suburb, or category…"
+            className="input min-w-[16rem] flex-1 border-0 bg-transparent p-0 outline-none shadow-none"
+          />
+          <Button type="submit" variant="secondary" size="sm">
+            Search
+          </Button>
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/discover">Advanced discovery</Link>
+          </Button>
+          <Chip variant="primary" size="sm">
+            QR scan ready
+          </Chip>
+        </form>
       </Card>
+
+      {resolvedSearchParams?.q ? (
+        <section className="grid gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-xl font-semibold text-ink">Discovery results</h2>
+            <p className="text-sm text-ink-muted">{discoverResults.length} matches</p>
+          </div>
+          {discoverResults.length ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {discoverResults.map((business) => (
+                <BusinessCard
+                  key={business.id}
+                  business={{
+                    name: business.name,
+                    slug: business.slug,
+                    category: prettyCategory(business.category),
+                    logoUrl: business.logoUrl
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <Card variant="outline">
+              <p className="text-sm text-ink-muted">
+                No public businesses matched this search. Try a category or suburb instead.
+              </p>
+            </Card>
+          )}
+        </section>
+      ) : null}
 
       {memberships.length ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

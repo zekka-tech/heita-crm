@@ -6,8 +6,10 @@ import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { observeHttpRoute } from "@/lib/metrics";
 import { prisma } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 import { getClientIp } from "@/lib/security";
 import { createPresignedUpload, getStoredObjectUrl, storageConfigured } from "@/lib/storage";
 import { requireRole } from "@/lib/staff";
@@ -34,9 +36,20 @@ function buildStorageKey(input: { businessId: string; filename: string }) {
 }
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
+  const requestId = resolveRequestId(request.headers);
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    observeHttpRoute({
+      route: "/api/upload",
+      method: "POST",
+      status: 401,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401, headers: { [requestIdHeader]: requestId } }
+    );
   }
 
   const ip = getClientIp(request.headers);
@@ -46,9 +59,21 @@ export async function POST(request: Request) {
     max: 10
   });
   if (!limit.allowed) {
+    observeHttpRoute({
+      route: "/api/upload",
+      method: "POST",
+      status: 429,
+      durationMs: Date.now() - startedAt
+    });
     return NextResponse.json(
       { error: "Too many upload requests." },
-      { status: 429, headers: rateLimitHeaders(limit) }
+      {
+        status: 429,
+        headers: {
+          ...rateLimitHeaders(limit),
+          [requestIdHeader]: requestId
+        }
+      }
     );
   }
 
@@ -56,16 +81,43 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    observeHttpRoute({
+      route: "/api/upload",
+      method: "POST",
+      status: 400,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "Invalid JSON body." },
+      { status: 400, headers: { [requestIdHeader]: requestId } }
+    );
   }
 
   const parsed = UploadRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    observeHttpRoute({
+      route: "/api/upload",
+      method: "POST",
+      status: 400,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "Invalid request" },
+      { status: 400, headers: { [requestIdHeader]: requestId } }
+    );
   }
 
   if (!ALLOWED_MIME.has(parsed.data.contentType)) {
-    return NextResponse.json({ error: "File type not supported." }, { status: 415 });
+    observeHttpRoute({
+      route: "/api/upload",
+      method: "POST",
+      status: 415,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "File type not supported." },
+      { status: 415, headers: { [requestIdHeader]: requestId } }
+    );
   }
 
   await requireRole({
@@ -84,7 +136,7 @@ export async function POST(request: Request) {
         error:
           "Object storage is not yet configured for this environment. Set R2_* or MINIO_* environment variables."
       },
-      { status: 503 }
+      { status: 503, headers: { [requestIdHeader]: requestId } }
     );
   }
 
@@ -93,7 +145,16 @@ export async function POST(request: Request) {
   });
 
   if (!workspace) {
-    return NextResponse.json({ error: "AI workspace not found." }, { status: 404 });
+    observeHttpRoute({
+      route: "/api/upload",
+      method: "POST",
+      status: 404,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "AI workspace not found." },
+      { status: 404, headers: { [requestIdHeader]: requestId } }
+    );
   }
 
   const storageKey = buildStorageKey({
@@ -120,10 +181,23 @@ export async function POST(request: Request) {
     }
   });
 
-  return NextResponse.json({
-    documentId: document.id,
-    uploadUrl: upload.uploadUrl,
-    uploadMethod: upload.method,
-    uploadHeaders: upload.headers
+  observeHttpRoute({
+    route: "/api/upload",
+    method: "POST",
+    status: 200,
+    durationMs: Date.now() - startedAt
   });
+  return NextResponse.json(
+    {
+      documentId: document.id,
+      uploadUrl: upload.uploadUrl,
+      uploadMethod: upload.method,
+      uploadHeaders: upload.headers
+    },
+    {
+      headers: {
+        [requestIdHeader]: requestId
+      }
+    }
+  );
 }

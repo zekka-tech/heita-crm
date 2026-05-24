@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
+import { describeTierPerks } from "@/lib/loyalty";
 import { prisma } from "@/lib/prisma";
 
 type BusinessLandingPageProps = {
@@ -34,7 +35,14 @@ export async function generateMetadata({ params }: BusinessLandingPageProps) {
     title: business.name,
     description:
       business.description ??
-      `Join ${business.name} on Heita to earn loyalty points and special offers.`
+      `Join ${business.name} on Heita to earn loyalty points and special offers.`,
+    openGraph: {
+      title: business.name,
+      description:
+        business.description ??
+        `Join ${business.name} on Heita to earn loyalty points and special offers.`,
+      images: [`/b/${slug}/opengraph-image`]
+    }
   };
 }
 
@@ -79,6 +87,31 @@ export default async function BusinessLandingPage({
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "LocalBusiness",
+            name: business.name,
+            description: business.description ?? undefined,
+            image: business.logoUrl ?? undefined,
+            telephone: business.phone ?? undefined,
+            email: business.email ?? undefined,
+            address: business.city
+              ? {
+                  "@type": "PostalAddress",
+                  streetAddress: business.addressLine1 ?? undefined,
+                  addressLocality: business.city,
+                  addressRegion: prettyProvince(business.province),
+                  postalCode: business.postalCode ?? undefined,
+                  addressCountry: "ZA"
+                }
+              : undefined,
+            url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/b/${business.slug}`
+          })
+        }}
+      />
       <section className="surface-hero relative overflow-hidden px-6 py-10 sm:px-12">
         <div className="grid items-center gap-8 lg:grid-cols-[1.4fr_0.6fr]">
           <div>
@@ -208,6 +241,15 @@ export default async function BusinessLandingPage({
                     {tier.name}
                   </p>
                   <p className="metric-label">{tier.minPoints}+ pts</p>
+                  {describeTierPerks(tier.perks).length ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {describeTierPerks(tier.perks).map((perk) => (
+                        <Chip key={`${tier.id}-${perk}`} variant="primary" size="sm">
+                          {perk}
+                        </Chip>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
+import { PwaInstallBanner } from "@/components/layout/pwa-install-banner";
 import { ServiceWorkerRegister } from "@/components/layout/service-worker-register";
 import "./globals.css";
 
@@ -28,7 +29,15 @@ export const metadata: Metadata = {
     title: "Heita CRM",
     description:
       "Loyalty, messaging, and AI workspaces for South African retailers.",
-    siteName: "Heita"
+    siteName: "Heita",
+    images: [{ url: "/opengraph-image" }]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Heita CRM",
+    description:
+      "Loyalty, messaging, and AI workspaces for South African retailers.",
+    images: ["/opengraph-image"]
   }
 };
 
@@ -60,6 +69,7 @@ export default function RootLayout({
       </head>
       <body>
         <ServiceWorkerRegister />
+        <PwaInstallBanner />
         <div className="app-frame">{children}</div>
       </body>
     </html>

@@ -21,6 +21,20 @@ jobs:
     name: Lint · Typecheck · Unit tests · Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: heita
+          POSTGRES_PASSWORD: heita
+          POSTGRES_DB: heita
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U heita -d heita"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     env:
       NEXT_TELEMETRY_DISABLED: "1"
       AUTH_SECRET: "ci-only-secret"
@@ -39,6 +53,12 @@ jobs:
 
       - name: Prisma generate
         run: npx prisma generate
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Migration drift check
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
 
       - name: Typecheck
         run: npm run typecheck

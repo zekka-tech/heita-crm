@@ -4,9 +4,12 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { streamRagAnswer } from "@/lib/ai/rag";
 import { logger } from "@/lib/logger";
+import { incrementAiChatMetric, observeHttpRoute } from "@/lib/metrics";
 import { prisma } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 import { getClientIp } from "@/lib/security";
+import { withSpan } from "@/lib/tracing";
 
 const ChatRequestSchema = z.object({
   businessSlug: z.string().min(1).max(80),
@@ -19,6 +22,8 @@ function buildSessionTitle(message: string) {
 }
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
+  const requestId = resolveRequestId(request.headers);
   const session = await auth();
   const userId = session?.user?.id ?? null;
   const ip = getClientIp(request.headers);
@@ -28,9 +33,21 @@ export async function POST(request: Request) {
     max: 30
   });
   if (!limit.allowed) {
+    observeHttpRoute({
+      route: "/api/ai/chat",
+      method: "POST",
+      status: 429,
+      durationMs: Date.now() - startedAt
+    });
     return NextResponse.json(
       { error: "Too many requests. Slow down." },
-      { status: 429, headers: rateLimitHeaders(limit) }
+      {
+        status: 429,
+        headers: {
+          ...rateLimitHeaders(limit),
+          [requestIdHeader]: requestId
+        }
+      }
     );
   }
 
@@ -38,12 +55,30 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    observeHttpRoute({
+      route: "/api/ai/chat",
+      method: "POST",
+      status: 400,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "Invalid JSON body." },
+      { status: 400, headers: { [requestIdHeader]: requestId } }
+    );
   }
 
   const parsed = ChatRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    observeHttpRoute({
+      route: "/api/ai/chat",
+      method: "POST",
+      status: 400,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "Invalid request" },
+      { status: 400, headers: { [requestIdHeader]: requestId } }
+    );
   }
 
   const business = await prisma.business.findFirst({
@@ -55,7 +90,16 @@ export async function POST(request: Request) {
   });
 
   if (!business || !business.isActive || !business.aiWorkspace) {
-    return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    observeHttpRoute({
+      route: "/api/ai/chat",
+      method: "POST",
+      status: 404,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "Business not found" },
+      { status: 404, headers: { [requestIdHeader]: requestId } }
+    );
   }
 
   const aiSession =
@@ -97,23 +141,31 @@ export async function POST(request: Request) {
   });
 
   const encoder = new TextEncoder();
-  const startedAt = Date.now();
+  const streamStartedAt = Date.now();
 
   const stream = new ReadableStream({
     async start(controller) {
       let assistantContent = "";
 
       try {
-        const result = await streamRagAnswer({
-          businessId: business.id,
-          messages: history.map((message) => ({
-            role:
-              message.role === "assistant" || message.role === "system"
-                ? message.role
-                : "user",
-            content: message.content
-          }))
-        });
+        const result = await withSpan(
+          "ai.chat.stream",
+          {
+            "heita.business_id": business.id,
+            "heita.session_id": activeSession.id
+          },
+          async () =>
+            streamRagAnswer({
+              businessId: business.id,
+              messages: history.map((message) => ({
+                role:
+                  message.role === "assistant" || message.role === "system"
+                    ? message.role
+                    : "user",
+                content: message.content
+              }))
+            })
+        );
 
         controller.enqueue(
           encoder.encode(
@@ -142,21 +194,24 @@ export async function POST(request: Request) {
             role: "assistant",
             content: assistantContent.trim(),
             model: result.runtime,
-            latencyMs: Date.now() - startedAt,
+            latencyMs: Date.now() - streamStartedAt,
             metadata: {
               citations: result.citations
             }
           }
         });
+        incrementAiChatMetric(result.runtime, "success");
 
         controller.enqueue(encoder.encode("event: done\ndata: complete\n\n"));
         controller.close();
       } catch (error) {
+        incrementAiChatMetric("unknown", "error");
         logger.error(
           {
             err: error,
             businessId: business.id,
-            sessionId: activeSession.id
+            sessionId: activeSession.id,
+            requestId
           },
           "ai.chat.stream_failed"
         );
@@ -168,7 +223,7 @@ export async function POST(request: Request) {
               role: "assistant",
               content: assistantContent,
               model: "partial",
-              latencyMs: Date.now() - startedAt
+              latencyMs: Date.now() - streamStartedAt
             }
           });
         }
@@ -185,11 +240,19 @@ export async function POST(request: Request) {
     }
   });
 
+  observeHttpRoute({
+    route: "/api/ai/chat",
+    method: "POST",
+    status: 200,
+    durationMs: Date.now() - startedAt
+  });
+
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive"
+      Connection: "keep-alive",
+      [requestIdHeader]: requestId
     }
   });
 }

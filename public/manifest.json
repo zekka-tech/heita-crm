@@ -4,10 +4,41 @@
   "description": "Mobile-first loyalty CRM for South African retailers and small businesses.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f9f6f1",
-  "theme_color": "#1d3c34",
+  "background_color": "#eef4ff",
+  "theme_color": "#0f1f3d",
   "orientation": "portrait",
   "lang": "en-ZA",
+  "categories": ["business", "productivity", "shopping", "communication"],
+  "shortcuts": [
+    {
+      "name": "Discover businesses",
+      "short_name": "Discover",
+      "url": "/discover",
+      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "My wallet",
+      "short_name": "Wallet",
+      "url": "/wallet",
+      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/home-mobile.svg",
+      "sizes": "540x1200",
+      "type": "image/svg+xml",
+      "form_factor": "narrow",
+      "label": "Heita customer home screen"
+    },
+    {
+      "src": "/screenshots/dashboard-desktop.svg",
+      "sizes": "1280x720",
+      "type": "image/svg+xml",
+      "form_factor": "wide",
+      "label": "Heita staff dashboard overview"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.svg",
@@ -23,4 +54,3 @@
     }
   ]
 }
-

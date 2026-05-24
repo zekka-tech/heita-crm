@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   BadgeCheck,
+  Compass,
   MessageCircle,
   QrCode,
   ShieldCheck,
@@ -12,6 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
+import { businessCategories, formatEnumLabel } from "@/lib/business";
+import { listFeaturedCategories } from "@/server/services/discovery.service";
 
 const features = [
   {
@@ -52,7 +55,11 @@ const features = [
   }
 ];
 
-export default function LandingPage() {
+export const dynamic = "force-dynamic";
+
+export default async function LandingPage() {
+  const featuredCategories = await listFeaturedCategories();
+
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
       <section className="surface-hero relative px-6 py-10 sm:px-12 sm:py-16">
@@ -78,6 +85,15 @@ export default function LandingPage() {
               </Button>
               <Button asChild variant="secondary" size="lg">
                 <Link href="/sign-in">Sign in</Link>
+              </Button>
+              <Button asChild variant="secondary" size="lg">
+                <Link href="/discover">
+                  <Compass className="h-4 w-4" />
+                  Discover businesses
+                </Link>
+              </Button>
+              <Button asChild variant="secondary" size="lg">
+                <Link href="/pricing">View pricing</Link>
               </Button>
             </div>
             <div className="mt-8 grid max-w-md grid-cols-3 gap-3 text-white/85">
@@ -157,6 +173,36 @@ export default function LandingPage() {
         ))}
       </section>
 
+      <section className="mt-10">
+        <Card variant="surface" className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-2xl font-semibold text-ink">Browse by category</h2>
+              <p className="mt-1 text-sm text-ink-muted">
+                Start with the categories already active on Heita.
+              </p>
+            </div>
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/discover">Open discovery</Link>
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(featuredCategories.length
+              ? featuredCategories.map((item) => item.category)
+              : businessCategories.slice(0, 6)
+            ).map((category) => (
+              <Link
+                key={category}
+                href={`/categories/${category.toLowerCase().replace(/_/g, "-")}`}
+                className="rounded-full border border-line bg-surface-elevated px-4 py-2 text-sm font-medium text-ink transition hover:border-primary-action hover:text-primary-action"
+              >
+                {formatEnumLabel(category)}
+              </Link>
+            ))}
+          </div>
+        </Card>
+      </section>
+
       <section className="mt-12 surface-hero p-8 sm:p-12">
         <div className="grid items-center gap-6 lg:grid-cols-[1.4fr_0.6fr]">
           <div>
@@ -175,6 +221,9 @@ export default function LandingPage() {
             </Button>
             <Button asChild variant="secondary" size="lg">
               <Link href="/sign-in">Open the app</Link>
+            </Button>
+            <Button asChild variant="secondary" size="lg">
+              <Link href="/pricing">Review plans</Link>
             </Button>
           </div>
         </div>

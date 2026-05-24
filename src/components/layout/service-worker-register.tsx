@@ -8,7 +8,9 @@ export function ServiceWorkerRegister() {
       return;
     }
 
-    void navigator.serviceWorker.register("/push-worker.js");
+    void navigator.serviceWorker.register("/service-worker.js", {
+      scope: "/"
+    });
   }, []);
 
   return null;

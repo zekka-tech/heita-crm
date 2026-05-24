@@ -1,23 +1,40 @@
 "use client";
 
+import { Download, RefreshCw } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 
 export function PwaInstallBanner() {
-  const { canInstall, install } = usePwaInstall();
+  const { canInstall, updateWaiting, install, applyUpdate } = usePwaInstall();
 
-  if (!canInstall) return null;
+  if (!canInstall && !updateWaiting) {
+    return null;
+  }
 
   return (
-    <div className="surface mx-4 mt-4 flex items-center justify-between gap-4 rounded-3xl p-4">
-      <div>
-        <p className="text-sm font-semibold text-[#143127]">Install Heita</p>
-        <p className="text-xs text-[#456356]">
-          Save the CRM to the home screen for push notifications and offline access.
-        </p>
+    <div className="sticky top-2 z-50 mx-4 mt-2 rounded-2xl border border-line bg-surface px-4 py-3 shadow-lg sm:mx-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-display text-sm font-semibold text-ink">
+            {updateWaiting ? "App update ready" : "Install Heita"}
+          </p>
+          <p className="text-xs text-ink-muted">
+            {updateWaiting
+              ? "Refresh to load the latest offline cache and app shell."
+              : "Add Heita to your home screen for a faster, app-like experience."}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          onClick={updateWaiting ? applyUpdate : install}
+        >
+          {updateWaiting ? <RefreshCw className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+          {updateWaiting ? "Refresh app" : "Install"}
+        </Button>
       </div>
-      <Button onClick={install}>Install</Button>
     </div>
   );
 }
-
