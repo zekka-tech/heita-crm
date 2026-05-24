@@ -29,6 +29,10 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     timeout: 180_000,
     reuseExistingServer: !process.env.CI,
-    env: { PORT: String(PORT) }
+    env: {
+      PORT: String(PORT),
+      POS_SHARED_SECRET: process.env.POS_SHARED_SECRET ?? "e2e-pos-shared-secret",
+      E2E_EXPOSE_DEV_OTP: "1"
+    }
   }
 });

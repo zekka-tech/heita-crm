@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
+import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { observeHttpRoute } from "@/lib/metrics";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
@@ -41,6 +42,18 @@ function buildStorageKey(input: { businessId: string; filename: string }) {
 export async function POST(request: Request) {
   const startedAt = Date.now();
   const requestId = resolveRequestId(request.headers);
+
+  const csrfFailure = await csrfFailureResponse(request);
+  if (csrfFailure) {
+    observeHttpRoute({
+      route: "/api/upload",
+      method: "POST",
+      status: 403,
+      durationMs: Date.now() - startedAt
+    });
+    return csrfFailure;
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     observeHttpRoute({

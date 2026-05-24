@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Gift, Sparkles } from "lucide-react";
 
 import { redeemRewardAction } from "@/app/b/[slug]/rewards/actions";
+import { CsrfField } from "@/components/security/csrf-field";
 import { RewardCard } from "@/components/loyalty/reward-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -109,6 +110,7 @@ export default async function BusinessRewardsPage({
                 action={
                   membership ? (
                     <form action={redeemRewardAction}>
+                      <CsrfField />
                       <input type="hidden" name="businessId" value={business.id} />
                       <input type="hidden" name="slug" value={business.slug} />
                       <input type="hidden" name="rewardId" value={reward.id} />

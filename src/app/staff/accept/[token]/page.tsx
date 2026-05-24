@@ -3,6 +3,7 @@ import Link from "next/link";
 import { StaffInviteStatus } from "@prisma/client";
 
 import { acceptInviteAction } from "@/app/staff/accept/[token]/actions";
+import { CsrfField } from "@/components/security/csrf-field";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
@@ -86,6 +87,7 @@ export default async function StaffAcceptPage({ params }: StaffAcceptPageProps) 
           </Button>
         ) : (
           <form action={acceptInviteAction} className="grid gap-3">
+            <CsrfField />
             <input type="hidden" name="token" value={token} />
             <Button type="submit" variant="primary" size="lg">
               Accept and join

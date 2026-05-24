@@ -15,6 +15,7 @@ import {
   createInviteAction,
   revokeInviteAction
 } from "@/app/dashboard/[businessId]/settings/staff/actions";
+import { CsrfField } from "@/components/security/csrf-field";
 import {
   listStaffInvites
 } from "@/server/services/staff-invite.service";
@@ -77,6 +78,7 @@ export default async function SettingsStaffPage({ params }: SettingsStaffPagePro
         <Card variant="surface" className="mt-6 space-y-4">
           <h2 className="section-title">Invite a teammate</h2>
           <form action={createInviteAction} className="grid gap-3 md:grid-cols-4">
+            <CsrfField />
             <input type="hidden" name="businessId" value={businessId} />
             <Input
               name="email"
@@ -165,6 +167,7 @@ export default async function SettingsStaffPage({ params }: SettingsStaffPagePro
                     </Chip>
                     {invite.status === StaffInviteStatus.PENDING ? (
                       <form action={revokeInviteAction}>
+                        <CsrfField />
                         <input type="hidden" name="businessId" value={businessId} />
                         <input type="hidden" name="inviteId" value={invite.id} />
                         <Button type="submit" variant="ghost" size="sm">

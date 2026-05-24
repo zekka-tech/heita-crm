@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useCsrfToken } from "@/hooks/use-csrf-token";
+import { appendCsrfHeader } from "@/lib/csrf";
 
 const SUPPORTED_TYPES = new Set([
   "application/pdf",
@@ -22,6 +24,7 @@ type DocumentUploadCardProps = {
 export function DocumentUploadCard({ businessId }: DocumentUploadCardProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const router = useRouter();
+  const csrfToken = useCsrfToken();
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -44,9 +47,12 @@ export function DocumentUploadCard({ businessId }: DocumentUploadCardProps) {
       try {
         const createResponse = await fetch("/api/upload", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: appendCsrfHeader(
+            {
+              "Content-Type": "application/json"
+            },
+            csrfToken
+          ),
           body: JSON.stringify({
             businessId,
             title: title.trim() || file.name,
@@ -83,7 +89,8 @@ export function DocumentUploadCard({ businessId }: DocumentUploadCardProps) {
         const completeResponse = await fetch(
           `/api/upload/${createPayload.documentId}/complete`,
           {
-            method: "POST"
+            method: "POST",
+            headers: appendCsrfHeader(undefined, csrfToken)
           }
         );
         const completePayload = (await completeResponse.json()) as { error?: string };
@@ -124,7 +131,12 @@ export function DocumentUploadCard({ businessId }: DocumentUploadCardProps) {
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <Button type="button" variant="secondary" onClick={onUpload} disabled={isPending}>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onUpload}
+          disabled={isPending || !csrfToken}
+        >
           {isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
@@ -132,7 +144,7 @@ export function DocumentUploadCard({ businessId }: DocumentUploadCardProps) {
           )}
           Upload document
         </Button>
-        {status ? <p className="text-xs text-ink-muted">{status}</p> : null}
+        {status ? <p className="text-xs text-ink-muted" aria-live="polite" role="status">{status}</p> : null}
       </div>
     </Card>
   );

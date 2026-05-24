@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Input, Select, Textarea } from "@/components/ui/input";
+import { CsrfField } from "@/components/security/csrf-field";
 import { auth } from "@/lib/auth";
 import {
   businessCategories,
@@ -40,6 +41,7 @@ export default async function OnboardPage() {
         </header>
 
         <form action={createBusinessAction} className="grid gap-5">
+          <CsrfField />
           <Input
             label="Business name"
             name="name"

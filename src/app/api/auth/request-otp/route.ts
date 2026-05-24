@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getOtpPurposeForMode, type AuthOtpMode } from "@/lib/auth-intent";
+import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { observeHttpRoute } from "@/lib/metrics";
 import { issueOtpCode } from "@/lib/otp";
@@ -22,11 +23,24 @@ const RequestOtpSchema = z.object({
 const OTP_PER_PHONE_PER_HOUR = 5;
 const OTP_PER_IP_PER_HOUR = 20;
 const OTP_PER_PHONE_PER_MINUTE = 1;
+const EXPOSE_DEV_OTP =
+  process.env.NODE_ENV !== "production" || process.env.E2E_EXPOSE_DEV_OTP === "1";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
   const requestId = resolveRequestId(request.headers);
   const ip = getClientIp(request.headers);
+
+  const csrfFailure = await csrfFailureResponse(request);
+  if (csrfFailure) {
+    observeHttpRoute({
+      route: "/api/auth/request-otp",
+      method: "POST",
+      status: 403,
+      durationMs: Date.now() - startedAt
+    });
+    return csrfFailure;
+  }
 
   let body: unknown;
   try {
@@ -233,7 +247,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     message: `Verification code sent. It expires at ${expiresAt.toISOString()}.`,
-    devCode: process.env.NODE_ENV !== "production" ? code : undefined
+    devCode: EXPOSE_DEV_OTP ? code : undefined
   }, {
     headers: {
       [requestIdHeader]: requestId

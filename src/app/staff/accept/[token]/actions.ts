@@ -3,9 +3,12 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { requireCsrfFormData } from "@/lib/csrf";
 import { acceptStaffInvite } from "@/server/services/staff-invite.service";
 
 export async function acceptInviteAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const token = String(formData.get("token") ?? "");
 

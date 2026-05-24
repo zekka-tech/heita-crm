@@ -4,6 +4,7 @@ import { StaffRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { requireCsrfFormData } from "@/lib/csrf";
 import { prisma } from "@/lib/prisma";
 import { requestStaffStepUpOtp, requireFreshStaffStepUp, verifyStaffStepUpOtp } from "@/lib/staff-step-up";
 import { requireRole } from "@/lib/staff";
@@ -15,6 +16,8 @@ import {
 } from "@/server/services/loyalty.service";
 
 export async function requestStaffStepUpAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const userId = session?.user?.id;
   const businessId = String(formData.get("businessId") ?? "");
@@ -49,6 +52,8 @@ export async function requestStaffStepUpAction(formData: FormData) {
 }
 
 export async function verifyStaffStepUpAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const userId = session?.user?.id;
   const businessId = String(formData.get("businessId") ?? "");
@@ -77,6 +82,8 @@ export async function verifyStaffStepUpAction(formData: FormData) {
 }
 
 export async function earnPointsAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const userId = session?.user?.id;
   const businessId = String(formData.get("businessId") ?? "");
@@ -109,6 +116,8 @@ export async function earnPointsAction(formData: FormData) {
 }
 
 export async function redeemPointsAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const userId = session?.user?.id;
   const businessId = String(formData.get("businessId") ?? "");
@@ -141,6 +150,8 @@ export async function redeemPointsAction(formData: FormData) {
 }
 
 export async function createRewardAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const userId = session?.user?.id;
   const businessId = String(formData.get("businessId") ?? "");
@@ -178,6 +189,8 @@ export async function createRewardAction(formData: FormData) {
 }
 
 export async function updateTierPerksAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const userId = session?.user?.id;
   const businessId = String(formData.get("businessId") ?? "");
@@ -219,6 +232,8 @@ export async function updateTierPerksAction(formData: FormData) {
 }
 
 export async function refundTransactionAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const userId = session?.user?.id;
   const businessId = String(formData.get("businessId") ?? "");

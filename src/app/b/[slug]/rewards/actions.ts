@@ -3,10 +3,13 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { requireCsrfFormData } from "@/lib/csrf";
 import { prisma } from "@/lib/prisma";
 import { redeemPoints } from "@/server/services/loyalty.service";
 
 export async function redeemRewardAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const userId = session?.user?.id;
   const businessId = String(formData.get("businessId") ?? "");

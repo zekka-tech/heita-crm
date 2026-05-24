@@ -4,6 +4,8 @@ import { useEffect, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useCsrfToken } from "@/hooks/use-csrf-token";
+import { appendCsrfHeader } from "@/lib/csrf";
 
 function base64UrlToUint8Array(base64Url: string) {
   const padding = "=".repeat((4 - (base64Url.length % 4)) % 4);
@@ -13,6 +15,7 @@ function base64UrlToUint8Array(base64Url: string) {
 }
 
 export function PushSubscriptionCard() {
+  const csrfToken = useCsrfToken();
   const [supported, setSupported] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -63,9 +66,12 @@ export function PushSubscriptionCard() {
 
       const response = await fetch("/api/push/subscribe", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: appendCsrfHeader(
+          {
+            "Content-Type": "application/json"
+          },
+          csrfToken
+        ),
         body: JSON.stringify(subscription)
       });
 
@@ -88,9 +94,12 @@ export function PushSubscriptionCard() {
 
       await fetch("/api/push/subscribe", {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: appendCsrfHeader(
+          {
+            "Content-Type": "application/json"
+          },
+          csrfToken
+        ),
         body: JSON.stringify({ endpoint: subscription.endpoint })
       });
 
@@ -111,7 +120,7 @@ export function PushSubscriptionCard() {
         type="button"
         variant={subscribed ? "secondary" : "primary"}
         onClick={subscribed ? disablePush : enablePush}
-        disabled={!supported || isPending}
+        disabled={!supported || isPending || !csrfToken}
       >
         {subscribed ? "Disable push notifications" : "Enable push notifications"}
       </Button>
@@ -120,7 +129,7 @@ export function PushSubscriptionCard() {
           Push is unavailable in this browser or the environment is missing a public VAPID key.
         </p>
       ) : null}
-      {status ? <p className="text-sm text-ink-muted">{status}</p> : null}
+      {status ? <p className="text-sm text-ink-muted" aria-live="polite" role="status">{status}</p> : null}
     </Card>
   );
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { hmacSha256, constantTimeEqual, getClientIp } from "@/lib/security";
 import { normalizeZaPhone } from "@/lib/phone";
 import { observeHttpRoute, incrementPosMetric } from "@/lib/metrics";
@@ -16,6 +17,13 @@ const PayloadSchema = z.object({
   points: z.number().int().min(1).max(100000),
   description: z.string().trim().max(200).optional()
 });
+
+const POS_PER_BUSINESS_PER_MINUTE = Number(
+  process.env.POS_RATE_LIMIT_PER_BUSINESS_PER_MINUTE ?? 180
+);
+const POS_PER_BUSINESS_IP_PER_MINUTE = Number(
+  process.env.POS_RATE_LIMIT_PER_BUSINESS_IP_PER_MINUTE ?? 60
+);
 
 function verifySignature(input: {
   timestamp: string | null;
@@ -43,6 +51,7 @@ function verifySignature(input: {
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
+  const clientIp = getClientIp(request.headers);
   const rawBody = await request.text();
   const signature = request.headers.get("x-heita-signature");
   const timestamp = request.headers.get("x-heita-timestamp");
@@ -112,6 +121,50 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Business not found." }, { status: 404 });
   }
 
+  const businessBurstLimit = await enforceRateLimit({
+    identifier: `pos:business:${business.id}`,
+    windowSeconds: 60,
+    max: POS_PER_BUSINESS_PER_MINUTE
+  });
+  if (!businessBurstLimit.allowed) {
+    incrementPosMetric("rate_limited", business.id);
+    observeHttpRoute({
+      route: "/api/integrations/transactions",
+      method: "POST",
+      status: 429,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "POS transaction rate limit exceeded for this business." },
+      {
+        status: 429,
+        headers: rateLimitHeaders(businessBurstLimit)
+      }
+    );
+  }
+
+  const businessIpLimit = await enforceRateLimit({
+    identifier: `pos:business-ip:${business.id}:${clientIp}`,
+    windowSeconds: 60,
+    max: POS_PER_BUSINESS_IP_PER_MINUTE
+  });
+  if (!businessIpLimit.allowed) {
+    incrementPosMetric("rate_limited", business.id);
+    observeHttpRoute({
+      route: "/api/integrations/transactions",
+      method: "POST",
+      status: 429,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "POS transaction rate limit exceeded for this source." },
+      {
+        status: 429,
+        headers: rateLimitHeaders(businessIpLimit)
+      }
+    );
+  }
+
   const user = await prisma.user.findFirst({
     where: {
       phone,
@@ -160,7 +213,7 @@ export async function POST(request: Request) {
     "integrations.pos_transaction",
     {
       "heita.business_id": business.id,
-      "heita.client_ip": getClientIp(request.headers)
+      "heita.client_ip": clientIp
     },
     async () =>
       earnPoints({

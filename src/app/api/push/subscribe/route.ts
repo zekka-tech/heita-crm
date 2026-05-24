@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
+import { csrfFailureResponse } from "@/lib/csrf";
 import { prisma } from "@/lib/prisma";
 
 const PushSubscriptionSchema = z.object({
@@ -13,6 +14,9 @@ const PushSubscriptionSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const csrfFailure = await csrfFailureResponse(request);
+  if (csrfFailure) return csrfFailure;
+
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
@@ -51,6 +55,9 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const csrfFailure = await csrfFailureResponse(request);
+  if (csrfFailure) return csrfFailure;
+
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });

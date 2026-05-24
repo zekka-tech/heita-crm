@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { csrfFailureResponse } from "@/lib/csrf";
 import { LOCALE_COOKIE, isLocale } from "@/i18n/config";
 
 const LOCALE_TTL_DAYS = 365;
@@ -11,6 +12,9 @@ const PayloadSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const csrfFailure = await csrfFailureResponse(request);
+  if (csrfFailure) return csrfFailure;
+
   let body: unknown;
   try {
     body = await request.json();

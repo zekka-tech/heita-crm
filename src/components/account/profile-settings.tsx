@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
+import { useCsrfToken } from "@/hooks/use-csrf-token";
+import { appendCsrfHeader } from "@/lib/csrf";
 
 type ProfileSettingsProps = {
   initialName: string;
@@ -19,6 +21,7 @@ export function ProfileSettings({
   initialPreferredAiMode
 }: ProfileSettingsProps) {
   const t = useTranslations("profileSettings");
+  const csrfToken = useCsrfToken();
   const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
   const [preferredAiMode, setPreferredAiMode] = useState(initialPreferredAiMode);
@@ -30,9 +33,12 @@ export function ProfileSettings({
       setStatus(null);
       const response = await fetch("/api/account", {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: appendCsrfHeader(
+          {
+            "Content-Type": "application/json"
+          },
+          csrfToken
+        ),
         body: JSON.stringify({
           name: name.trim() || null,
           email: email.trim() || null,
@@ -54,7 +60,8 @@ export function ProfileSettings({
 
     startTransition(async () => {
       const response = await fetch("/api/account", {
-        method: "DELETE"
+        method: "DELETE",
+        headers: appendCsrfHeader(undefined, csrfToken)
       });
 
       if (!response.ok) {
@@ -89,17 +96,17 @@ export function ProfileSettings({
         </Select>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="primary" onClick={submit} disabled={isPending}>
+        <Button type="button" variant="primary" onClick={submit} disabled={isPending || !csrfToken}>
           {t("saveChanges")}
         </Button>
         <Button asChild variant="secondary">
           <a href="/api/account/export">{t("downloadData")}</a>
         </Button>
-        <Button type="button" variant="danger" onClick={deleteAccount} disabled={isPending}>
+        <Button type="button" variant="danger" onClick={deleteAccount} disabled={isPending || !csrfToken}>
           {t("deleteAccount")}
         </Button>
       </div>
-      {status ? <p className="text-sm text-ink-muted">{status}</p> : null}
+      {status ? <p className="text-sm text-ink-muted" aria-live="polite" role="status">{status}</p> : null}
     </Card>
   );
 }

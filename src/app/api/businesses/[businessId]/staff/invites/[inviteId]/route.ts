@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
+import { csrfFailureResponse } from "@/lib/csrf";
 import { revokeStaffInvite } from "@/server/services/staff-invite.service";
 
 type RouteContext = {
   params: Promise<{ businessId: string; inviteId: string }>;
 };
 
-export async function DELETE(_: Request, { params }: RouteContext) {
+export async function DELETE(request: Request, { params }: RouteContext) {
+  const csrfFailure = await csrfFailureResponse(request);
+  if (csrfFailure) return csrfFailure;
+
   const { inviteId } = await params;
   const session = await auth();
   if (!session?.user?.id) {

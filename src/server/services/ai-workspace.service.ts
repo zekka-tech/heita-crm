@@ -1,6 +1,10 @@
 import { DocumentStatus, type BusinessDocument } from "@prisma/client";
 
 import { enqueueDocumentIngestion } from "@/lib/ai/document-processor";
+import {
+  MalwareScanError,
+  scanStoredObjectForMalware
+} from "@/lib/malware-scan";
 import { prisma } from "@/lib/prisma";
 
 export class AiWorkspaceServiceError extends Error {
@@ -80,7 +84,9 @@ export async function requestDocumentIngestion(
     where: { id: documentId },
     select: {
       id: true,
-      status: true
+      status: true,
+      storageKey: true,
+      fileName: true
     }
   });
 
@@ -116,6 +122,47 @@ export async function requestDocumentIngestion(
         errorMessage: null
       }
     });
+  }
+
+  try {
+    const scanResult = await scanStoredObjectForMalware({
+      storageKey: document.storageKey,
+      fileName: document.fileName
+    });
+
+    if (scanResult.verdict === "infected") {
+      await prisma.businessDocument.update({
+        where: { id: document.id },
+        data: {
+          status: DocumentStatus.FAILED,
+          errorMessage: "The document was rejected by the malware scanner."
+        }
+      });
+
+      throw new AiWorkspaceServiceError(
+        "The uploaded document was rejected by the malware scanner.",
+        422,
+        "DOCUMENT_INFECTED"
+      );
+    }
+  } catch (error) {
+    if (error instanceof AiWorkspaceServiceError) {
+      throw error;
+    }
+
+    if (error instanceof MalwareScanError) {
+      await prisma.businessDocument.update({
+        where: { id: document.id },
+        data: {
+          status: DocumentStatus.FAILED,
+          errorMessage: error.message
+        }
+      });
+
+      throw new AiWorkspaceServiceError(error.message, error.status, error.code);
+    }
+
+    throw error;
   }
 
   const ingestion = await enqueueDocumentIngestion(document.id);

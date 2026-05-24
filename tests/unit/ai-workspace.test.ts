@@ -13,6 +13,7 @@ const prisma = {
 };
 
 const enqueueDocumentIngestion = vi.fn();
+const scanStoredObjectForMalware = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma
@@ -20,6 +21,20 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/ai/document-processor", () => ({
   enqueueDocumentIngestion
+}));
+
+vi.mock("@/lib/malware-scan", () => ({
+  MalwareScanError: class MalwareScanError extends Error {
+    constructor(
+      message: string,
+      readonly status: number,
+      readonly code: string
+    ) {
+      super(message);
+      this.name = "MalwareScanError";
+    }
+  },
+  scanStoredObjectForMalware
 }));
 
 const {
@@ -30,6 +45,10 @@ const {
 describe("ai workspace service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    scanStoredObjectForMalware.mockResolvedValue({
+      verdict: "clean",
+      details: "stream: OK"
+    });
   });
 
   it("creates a pending document record for an existing workspace", async () => {
@@ -89,7 +108,9 @@ describe("ai workspace service", () => {
   it("does not requeue documents that are already processing", async () => {
     prisma.businessDocument.findUnique.mockResolvedValue({
       id: "document_123",
-      status: DocumentStatus.PROCESSING
+      status: DocumentStatus.PROCESSING,
+      storageKey: "documents/document_123.pdf",
+      fileName: "document_123.pdf"
     });
 
     const result = await requestDocumentIngestion("document_123");
@@ -100,12 +121,15 @@ describe("ai workspace service", () => {
       ingestion: null
     });
     expect(enqueueDocumentIngestion).not.toHaveBeenCalled();
+    expect(scanStoredObjectForMalware).not.toHaveBeenCalled();
   });
 
   it("clears failed status before retrying document ingestion", async () => {
     prisma.businessDocument.findUnique.mockResolvedValue({
       id: "document_123",
-      status: DocumentStatus.FAILED
+      status: DocumentStatus.FAILED,
+      storageKey: "documents/document_123.pdf",
+      fileName: "document_123.pdf"
     });
     enqueueDocumentIngestion.mockResolvedValue({
       enqueued: true,
@@ -123,6 +147,10 @@ describe("ai workspace service", () => {
         errorMessage: null
       }
     });
+    expect(scanStoredObjectForMalware).toHaveBeenCalledWith({
+      storageKey: "documents/document_123.pdf",
+      fileName: "document_123.pdf"
+    });
     expect(enqueueDocumentIngestion).toHaveBeenCalledWith("document_123");
     expect(result).toEqual({
       status: "accepted",
@@ -134,5 +162,32 @@ describe("ai workspace service", () => {
         jobId: "job_123"
       }
     });
+  });
+
+  it("rejects infected documents before queueing ingestion", async () => {
+    prisma.businessDocument.findUnique.mockResolvedValue({
+      id: "document_123",
+      status: DocumentStatus.PENDING,
+      storageKey: "documents/document_123.pdf",
+      fileName: "document_123.pdf"
+    });
+    scanStoredObjectForMalware.mockResolvedValue({
+      verdict: "infected",
+      details: "stream: Eicar-Test-Signature FOUND"
+    });
+
+    await expect(requestDocumentIngestion("document_123")).rejects.toMatchObject({
+      status: 422,
+      code: "DOCUMENT_INFECTED"
+    });
+
+    expect(prisma.businessDocument.update).toHaveBeenCalledWith({
+      where: { id: "document_123" },
+      data: {
+        status: DocumentStatus.FAILED,
+        errorMessage: "The document was rejected by the malware scanner."
+      }
+    });
+    expect(enqueueDocumentIngestion).not.toHaveBeenCalled();
   });
 });

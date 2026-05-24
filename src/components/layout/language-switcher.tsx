@@ -4,12 +4,15 @@ import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useTransition } from "react";
 
+import { useCsrfToken } from "@/hooks/use-csrf-token";
 import { localeLabels, locales, type Locale } from "@/i18n/config";
+import { appendCsrfHeader } from "@/lib/csrf";
 
 export function LanguageSwitcher({ className }: { className?: string }) {
   const locale = useLocale() as Locale;
   const router = useRouter();
   const t = useTranslations("languageSwitcher");
+  const csrfToken = useCsrfToken();
   const [isSwitching, startTransition] = useTransition();
 
   const onChange = (next: Locale) => {
@@ -18,7 +21,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
     startTransition(async () => {
       await fetch("/api/locale", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: appendCsrfHeader({ "Content-Type": "application/json" }, csrfToken),
         body: JSON.stringify({ locale: next })
       });
       router.refresh();
@@ -34,7 +37,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
       <select
         value={locale}
         onChange={(event) => onChange(event.target.value as Locale)}
-        disabled={isSwitching}
+        disabled={isSwitching || !csrfToken}
         className="rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-ink shadow-sm focus:border-primary focus:outline-none"
         aria-label={t("label")}
       >

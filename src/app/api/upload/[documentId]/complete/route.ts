@@ -2,6 +2,7 @@ import { StaffRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
+import { csrfFailureResponse } from "@/lib/csrf";
 import { observeHttpRoute } from "@/lib/metrics";
 import { prisma } from "@/lib/prisma";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
@@ -21,6 +22,18 @@ export async function POST(
 ) {
   const startedAt = Date.now();
   const requestId = resolveRequestId(request.headers);
+
+  const csrfFailure = await csrfFailureResponse(request);
+  if (csrfFailure) {
+    observeHttpRoute({
+      route: "/api/upload/[documentId]/complete",
+      method: "POST",
+      status: 403,
+      durationMs: Date.now() - startedAt
+    });
+    return csrfFailure;
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     observeHttpRoute({

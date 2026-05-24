@@ -10,6 +10,8 @@ import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { TurnstileWidget } from "@/components/auth/turnstile-widget";
+import { useCsrfToken } from "@/hooks/use-csrf-token";
+import { appendCsrfHeader } from "@/lib/csrf";
 
 type PhoneOtpAuthFormProps = {
   mode: "sign-in" | "sign-up";
@@ -42,6 +44,7 @@ export function PhoneOtpAuthForm({
   oauthError
 }: PhoneOtpAuthFormProps) {
   const t = useTranslations("auth");
+  const csrfToken = useCsrfToken();
 
   const resolveOauthError = () => {
     if (!oauthError) return null;
@@ -82,7 +85,7 @@ export function PhoneOtpAuthForm({
     startRequestTransition(() => {
       void fetch("/api/auth/request-otp", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: appendCsrfHeader({ "Content-Type": "application/json" }, csrfToken),
         body: JSON.stringify({ phone, mode, turnstileToken })
       })
         .then(async (response) => {
@@ -255,6 +258,7 @@ export function PhoneOtpAuthForm({
           disabled={
             step === "phone"
               ? !phone || isRequesting || !turnstileReady
+              || !csrfToken
               : code.length !== 6 || isSubmitting || (mode === "sign-up" && !acceptTerms)
           }
         >
@@ -295,6 +299,8 @@ export function PhoneOtpAuthForm({
 
       {status ? (
         <p
+          aria-live="polite"
+          role={status.kind === "error" ? "alert" : "status"}
           className={
             status.kind === "error"
               ? "text-sm font-medium text-danger"

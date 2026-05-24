@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
+import { csrfFailureResponse } from "@/lib/csrf";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import {
   createStaffInvite,
@@ -45,6 +46,9 @@ export async function GET(_: Request, { params }: RouteContext) {
 }
 
 export async function POST(request: Request, { params }: RouteContext) {
+  const csrfFailure = await csrfFailureResponse(request);
+  if (csrfFailure) return csrfFailure;
+
   const { businessId } = await params;
   const session = await auth();
   if (!session?.user?.id) {

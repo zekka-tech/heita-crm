@@ -4,6 +4,7 @@ import { MessageChannel, StaffRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { requireCsrfFormData } from "@/lib/csrf";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import {
@@ -12,6 +13,8 @@ import {
 } from "@/lib/whatsapp";
 
 export async function sendWhatsappReplyAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const userId = session?.user?.id;
   const businessId = String(formData.get("businessId") ?? "");

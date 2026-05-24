@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
+import { csrfFailureResponse } from "@/lib/csrf";
 import { updateAccountProfile, softDeleteAccount } from "@/server/services/account.service";
 
 const UpdateAccountSchema = z.object({
@@ -11,6 +12,9 @@ const UpdateAccountSchema = z.object({
 });
 
 export async function PATCH(request: Request) {
+  const csrfFailure = await csrfFailureResponse(request);
+  if (csrfFailure) return csrfFailure;
+
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
@@ -46,7 +50,10 @@ export async function PATCH(request: Request) {
   });
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const csrfFailure = await csrfFailureResponse(request);
+  if (csrfFailure) return csrfFailure;
+
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });

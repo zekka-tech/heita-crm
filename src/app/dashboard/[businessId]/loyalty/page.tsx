@@ -10,6 +10,7 @@ import {
   updateTierPerksAction,
   verifyStaffStepUpAction
 } from "@/app/dashboard/[businessId]/loyalty/actions";
+import { CsrfField } from "@/components/security/csrf-field";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
@@ -106,12 +107,14 @@ export default async function LoyaltyDashboardPage({
             </p>
             <div className="grid gap-3 md:grid-cols-2">
               <form action={requestStaffStepUpAction} className="grid gap-3">
+                <CsrfField />
                 <input type="hidden" name="businessId" value={business.id} />
                 <Button type="submit" variant="secondary">
                   Send staff OTP
                 </Button>
               </form>
               <form action={verifyStaffStepUpAction} className="grid gap-3">
+                <CsrfField />
                 <input type="hidden" name="businessId" value={business.id} />
                 <Input
                   name="code"
@@ -150,6 +153,7 @@ export default async function LoyaltyDashboardPage({
               <h2 className="section-title">Issue points</h2>
             </header>
             <form action={earnPointsAction} className="grid gap-3">
+              <CsrfField />
               <input type="hidden" name="businessId" value={business.id} />
               <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
               <Select name="membershipId" label="Customer" defaultValue="" required>
@@ -184,6 +188,7 @@ export default async function LoyaltyDashboardPage({
               <h2 className="section-title">Redeem manually</h2>
             </header>
             <form action={redeemPointsAction} className="grid gap-3">
+              <CsrfField />
               <input type="hidden" name="businessId" value={business.id} />
               <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
               <Select name="membershipId" label="Customer" defaultValue="" required>
@@ -238,6 +243,7 @@ export default async function LoyaltyDashboardPage({
                   action={updateTierPerksAction}
                   className="grid gap-3 rounded-xl border border-line bg-surface-elevated p-4"
                 >
+                  <CsrfField />
                   <input type="hidden" name="businessId" value={business.id} />
                   <input type="hidden" name="tierId" value={tier.id} />
                   <div>
@@ -299,6 +305,7 @@ export default async function LoyaltyDashboardPage({
             </Chip>
           </header>
           <form action={createRewardAction} className="grid gap-3 md:grid-cols-4">
+            <CsrfField />
             <input type="hidden" name="businessId" value={business.id} />
             <Input
               name="title"
@@ -414,6 +421,7 @@ export default async function LoyaltyDashboardPage({
                               </Chip>
                               {!["REFUND", "EXPIRY"].includes(transaction.type) ? (
                                 <form action={refundTransactionAction}>
+                                  <CsrfField />
                                   <input type="hidden" name="businessId" value={business.id} />
                                   <input type="hidden" name="transactionId" value={transaction.id} />
                                   <input

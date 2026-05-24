@@ -4,12 +4,15 @@ import { StaffRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { requireCsrfFormData } from "@/lib/csrf";
 import {
   createStaffInvite,
   revokeStaffInvite
 } from "@/server/services/staff-invite.service";
 
 export async function createInviteAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const businessId = String(formData.get("businessId") ?? "");
 
@@ -37,6 +40,8 @@ export async function createInviteAction(formData: FormData) {
 }
 
 export async function revokeInviteAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const businessId = String(formData.get("businessId") ?? "");
   const inviteId = String(formData.get("inviteId") ?? "");

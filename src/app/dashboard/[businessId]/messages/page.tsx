@@ -3,6 +3,7 @@ import { MessageCircle, Paperclip, Send } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 
 import { sendWhatsappReplyAction } from "@/app/dashboard/[businessId]/messages/actions";
+import { CsrfField } from "@/components/security/csrf-field";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
@@ -175,6 +176,7 @@ export default async function DashboardMessagesPage({
                 </div>
 
                 <form action={sendWhatsappReplyAction} className="grid gap-3 border-t border-line pt-4">
+                  <CsrfField />
                   <input type="hidden" name="businessId" value={businessId} />
                   <input type="hidden" name="contactPhone" value={activeContactPhone} />
                   <Textarea

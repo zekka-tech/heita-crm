@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { BadgeCheck, CheckCircle2, Gift, MessageCircle, QrCode } from "lucide-react";
 
 import { joinBusinessAction } from "@/app/b/[slug]/join/actions";
+import { CsrfField } from "@/components/security/csrf-field";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
@@ -104,6 +105,7 @@ export default async function BusinessJoinPage({
           </Card>
         ) : session?.user?.id ? (
           <form action={joinBusinessAction} className="grid gap-4">
+            <CsrfField />
             <input type="hidden" name="businessId" value={business.id} />
             <input type="hidden" name="slug" value={business.slug} />
             <input type="hidden" name="channel" value={channel} />

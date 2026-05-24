@@ -4,9 +4,12 @@ import { BusinessCategory, Province } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { requireCsrfFormData } from "@/lib/csrf";
 import { createBusinessWithDefaults } from "@/server/services/business.service";
 
 export async function createBusinessAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const userId = session?.user?.id;
 

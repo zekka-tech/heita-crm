@@ -57,5 +57,5 @@ Send vulnerability reports to **security@heita.co.za**. Please do not file publi
 ## Threat model — open items
 
 - **CSRF on server actions**: relies on Next.js App Router's same-origin enforcement. A future revision should layer a double-submit cookie for any cross-origin embed scenarios.
-- **WhatsApp media handling**: not yet implemented; when added, files must be virus-scanned before being made available to staff.
-- **Document upload**: presigned uploads are implemented for R2/MinIO, but production still requires object-storage credentials and malware scanning before staff-facing download/open flows are expanded.
+- **WhatsApp media handling**: inbound media handling exists, but production should still place attachment URLs behind malware scanning and signed-download controls before wider staff rollout.
+- **Document upload**: upload completion now runs through a malware-scan gate before AI ingestion. In production, set `MALWARE_SCAN_MODE=clamav` and `MALWARE_SCAN_REQUIRED=1` so ingestion fails closed when the scanner is unavailable.

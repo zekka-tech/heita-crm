@@ -4,10 +4,13 @@ import { ConsentType, JoinChannel } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { requireCsrfFormData } from "@/lib/csrf";
 import { recordConsent } from "@/server/services/account.service";
 import { joinBusiness } from "@/server/services/membership.service";
 
 export async function joinBusinessAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
   const session = await auth();
   const userId = session?.user?.id;
 
