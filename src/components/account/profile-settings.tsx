@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,6 +18,7 @@ export function ProfileSettings({
   initialEmail,
   initialPreferredAiMode
 }: ProfileSettingsProps) {
+  const t = useTranslations("profileSettings");
   const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
   const [preferredAiMode, setPreferredAiMode] = useState(initialPreferredAiMode);
@@ -39,14 +41,12 @@ export function ProfileSettings({
       });
 
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      setStatus(response.ok ? "Profile updated." : payload?.error ?? "Unable to update profile.");
+      setStatus(response.ok ? t("updated") : payload?.error ?? t("updateError"));
     });
   };
 
   const deleteAccount = () => {
-    const confirmed = window.confirm(
-      "Delete your Heita account? This will cancel active memberships and start the deletion process."
-    );
+    const confirmed = window.confirm(t("confirmDelete"));
 
     if (!confirmed) {
       return;
@@ -59,7 +59,7 @@ export function ProfileSettings({
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        setStatus(payload?.error ?? "Unable to delete your account.");
+        setStatus(payload?.error ?? t("deleteError"));
         return;
       }
 
@@ -69,34 +69,34 @@ export function ProfileSettings({
 
   return (
     <Card variant="surface" className="space-y-4">
-      <h2 className="section-title">Account settings</h2>
+      <h2 className="section-title">{t("title")}</h2>
       <div className="grid gap-3">
-        <Input label="Full name" value={name} onChange={(event) => setName(event.target.value)} />
+        <Input label={t("fullName")} value={name} onChange={(event) => setName(event.target.value)} />
         <Input
-          label="Email"
+          label={t("email")}
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
         />
         <Select
-          label="Preferred AI mode"
+          label={t("preferredAiMode")}
           value={preferredAiMode}
           onChange={(event) => setPreferredAiMode(event.target.value)}
         >
-          <option value="auto">Auto</option>
-          <option value="local">Local only</option>
-          <option value="cloud">Cloud fallback preferred</option>
+          <option value="auto">{t("modeAuto")}</option>
+          <option value="local">{t("modeLocal")}</option>
+          <option value="cloud">{t("modeCloud")}</option>
         </Select>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="primary" onClick={submit} disabled={isPending}>
-          Save changes
+          {t("saveChanges")}
         </Button>
         <Button asChild variant="secondary">
-          <a href="/api/account/export">Download my data</a>
+          <a href="/api/account/export">{t("downloadData")}</a>
         </Button>
         <Button type="button" variant="danger" onClick={deleteAccount} disabled={isPending}>
-          Delete account
+          {t("deleteAccount")}
         </Button>
       </div>
       {status ? <p className="text-sm text-ink-muted">{status}</p> : null}

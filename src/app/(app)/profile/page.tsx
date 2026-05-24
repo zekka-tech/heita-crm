@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Mail, Phone, Sparkles, Trash2, UserRound } from "lucide-react";
 
 import { ProfileSettings } from "@/components/account/profile-settings";
@@ -6,12 +7,15 @@ import { PushSubscriptionCard } from "@/components/account/push-subscription-car
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
+import { resolveLocale } from "@/i18n/locale";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Profile" };
 
 export default async function ProfilePage() {
   const session = await auth();
+  const locale = await resolveLocale();
+  const t = await getTranslations("profile");
 
   if (!session?.user?.id) {
     redirect("/sign-in?callbackUrl=/profile");
@@ -37,10 +41,10 @@ export default async function ProfilePage() {
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-            Profile
+            {t("eyebrow")}
           </p>
           <h1 className="mt-2 font-display text-2xl font-extrabold">
-            {user.name ?? "Heita member"}
+            {user.name ?? t("defaultName")}
           </h1>
           <div className="mt-2 flex flex-wrap gap-2 text-sm text-white/80">
             {user.phone ? (
@@ -61,9 +65,9 @@ export default async function ProfilePage() {
 
       <Card variant="surface" className="space-y-4">
         <header className="flex items-center justify-between">
-          <h2 className="section-title">Memberships</h2>
+          <h2 className="section-title">{t("memberships")}</h2>
           <Chip variant="primary" size="sm">
-            <Sparkles className="h-3 w-3" /> {memberships.length} active
+            <Sparkles className="h-3 w-3" /> {t("activeCount", { count: memberships.length })}
           </Chip>
         </header>
         {memberships.length ? (
@@ -76,8 +80,8 @@ export default async function ProfilePage() {
                 <div>
                   <p className="font-medium text-ink">{membership.business.name}</p>
                   <p className="text-xs text-ink-subtle">
-                    Joined{" "}
-                    {membership.joinedAt.toLocaleDateString("en-ZA", {
+                    {t("joined")}{" "}
+                    {membership.joinedAt.toLocaleDateString(locale, {
                       day: "2-digit",
                       month: "short",
                       year: "numeric"
@@ -94,13 +98,13 @@ export default async function ProfilePage() {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-ink-muted">No memberships yet.</p>
+          <p className="text-sm text-ink-muted">{t("noMemberships")}</p>
         )}
       </Card>
 
       {staffRoles.length ? (
         <Card variant="surface" className="space-y-4">
-          <h2 className="section-title">Staff roles</h2>
+          <h2 className="section-title">{t("staffRoles")}</h2>
           <ul className="grid gap-2">
             {staffRoles.map((role) => (
               <li
@@ -128,11 +132,10 @@ export default async function ProfilePage() {
       <Card variant="outline" className="space-y-3 border-danger/30 bg-danger/5">
         <div className="flex items-center gap-2 text-danger">
           <Trash2 className="h-4 w-4" />
-          <h2 className="font-display text-base font-semibold">Danger zone</h2>
+          <h2 className="font-display text-base font-semibold">{t("dangerZone")}</h2>
         </div>
         <p className="text-sm text-ink-muted">
-          Deleting your account now starts a 30-day deletion window, cancels active
-          memberships, and revokes active consents.
+          {t("dangerBody")}
         </p>
       </Card>
     </section>

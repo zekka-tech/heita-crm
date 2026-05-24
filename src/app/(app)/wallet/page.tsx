@@ -1,16 +1,20 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Sparkles } from "lucide-react";
 
 import { BusinessCard } from "@/components/business/business-card";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
+import { resolveLocale } from "@/i18n/locale";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Wallet" };
 
 export default async function WalletPage() {
   const session = await auth();
+  const locale = await resolveLocale();
+  const t = await getTranslations("wallet");
 
   if (!session?.user?.id) {
     redirect("/sign-in?callbackUrl=/wallet");
@@ -35,14 +39,13 @@ export default async function WalletPage() {
     <section className="grid gap-5">
       <Card variant="hero" className="px-6 py-8 sm:px-8">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-          Wallet
+          {t("eyebrow")}
         </p>
         <p className="mt-3 font-display text-5xl font-extrabold tracking-tight">
-          {totalPoints.toLocaleString()}
+          {new Intl.NumberFormat(locale).format(totalPoints)}
         </p>
         <p className="mt-1 text-white/75">
-          total points across {memberships.length}{" "}
-          {memberships.length === 1 ? "business" : "businesses"}
+          {t("totalPoints", { count: memberships.length })}
         </p>
       </Card>
 
@@ -50,7 +53,7 @@ export default async function WalletPage() {
         <Card variant="outline" className="text-center">
           <Sparkles className="mx-auto h-7 w-7 text-primary" />
           <p className="mt-3 text-ink-muted">
-            Join a business to see your points and rewards here.
+            {t("emptyBody")}
           </p>
         </Card>
       ) : null}
@@ -66,11 +69,17 @@ export default async function WalletPage() {
               }}
               tier={membership.tier ? { name: membership.tier.name } : null}
               points={membership.pointsBalance}
+              labels={{
+                points: t("pointsLabel"),
+                viewBusiness: t("viewBusiness"),
+                rewards: t("rewards"),
+                openChat: t("openChat")
+              }}
             />
             <Card variant="outline" className="space-y-3">
               <header className="flex items-center justify-between">
                 <h3 className="font-display text-sm font-semibold text-ink-muted">
-                  Recent activity
+                  {t("recentActivity")}
                 </h3>
                 <TierBadge tier={membership.tier?.name} />
               </header>
@@ -86,7 +95,7 @@ export default async function WalletPage() {
                           {transaction.description ?? transaction.type}
                         </p>
                         <p className="text-xs text-ink-subtle">
-                          {transaction.createdAt.toLocaleDateString("en-ZA", {
+                          {transaction.createdAt.toLocaleDateString(locale, {
                             day: "2-digit",
                             month: "short",
                             year: "numeric"
@@ -104,7 +113,7 @@ export default async function WalletPage() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-ink-subtle">No activity yet.</p>
+                <p className="text-sm text-ink-subtle">{t("noActivity")}</p>
               )}
             </Card>
           </div>

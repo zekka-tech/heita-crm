@@ -33,14 +33,14 @@ When adding strings:
 
 ## How we test
 
-- **Vitest + axe-core (where added)**: smoke tests assert that the Button, Input, and key page renderings produce no critical axe violations. Run with `npm test`.
+- **Vitest + axe-core**: smoke tests assert that the Button, Input, and Card primitives produce no critical axe violations. Run with `npm test`.
 - **Manual keyboard sweep**: TAB through every page after a UI change. The skip link must reach `#main-content`; bottom nav must be reachable via TAB.
 - **Screen reader check**: VoiceOver on iOS Safari for any change that introduces icon-only controls.
 - **Reduced motion**: toggle the OS setting before shipping any new transition. The global media query should already cover it.
 
 ## Outstanding items
 
-- Add axe-core CI step (`vitest-axe` or `@axe-core/playwright`) once we add a smoke test against the production build.
+- Extend axe smoke coverage from primitives into the auth and dashboard mutation flows.
 - Audit dashboard pages for ARIA-live regions around long-running mutations (loyalty earn, refund, RAG document upload).
 - Re-test colour contrast for the danger button on dark backgrounds — current `--color-danger` `#DC2626` on `--color-navy` `#0F1F3D` may sit at 4.0:1; investigate a 600-weight or a slightly lighter danger token for dark surfaces.
 - Localise OAuth error copy (`OAuthEmailMissing`, `AccountDeactivated`, `OAuthAccountLinkRequired`) — currently English-only fallbacks render even on non-English locales.

@@ -13,10 +13,22 @@ type BusinessCardProps = {
   };
   tier?: { name: string } | null;
   points?: number;
+  labels?: {
+    points?: string;
+    viewBusiness?: string;
+    rewards?: string;
+    openChat?: string;
+  };
   className?: string;
 };
 
-export function BusinessCard({ business, tier, points, className }: BusinessCardProps) {
+export function BusinessCard({
+  business,
+  tier,
+  points,
+  labels,
+  className
+}: BusinessCardProps) {
   return (
     <article
       className={cn(
@@ -56,7 +68,7 @@ export function BusinessCard({ business, tier, points, className }: BusinessCard
           {typeof points === "number" ? (
             <>
               <p className="metric-value">{points.toLocaleString()}</p>
-              <p className="metric-label">points</p>
+              <p className="metric-label">{labels?.points ?? "points"}</p>
             </>
           ) : null}
         </div>
@@ -67,20 +79,20 @@ export function BusinessCard({ business, tier, points, className }: BusinessCard
           href={`/b/${business.slug}`}
           className="btn btn--ghost btn--ghost-compact"
         >
-          View business
+          {labels?.viewBusiness ?? "View business"}
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
         <Link
           href={`/b/${business.slug}/rewards`}
           className="btn btn--secondary btn--ghost-compact"
         >
-          Rewards
+          {labels?.rewards ?? "Rewards"}
         </Link>
         <Link
           href={`/b/${business.slug}/chat`}
           className="btn btn--secondary btn--ghost-compact"
         >
-          Open chat
+          {labels?.openChat ?? "Open chat"}
         </Link>
       </div>
     </article>

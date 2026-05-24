@@ -1,6 +1,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import {
   Building2,
   Calendar,
@@ -26,6 +27,7 @@ type DashboardPageProps = {
 export default async function DashboardPage({ params }: DashboardPageProps) {
   const { businessId } = await params;
   const session = await auth();
+  const t = await getTranslations("dashboard");
 
   if (!session?.user?.id) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}`);
@@ -82,30 +84,30 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           <div>
             <Chip variant="primary" className="bg-white/15 text-white border-white/20">
               <Building2 className="h-3.5 w-3.5" />
-              Dashboard · {business.slug}
+              {t("chipPrefix")} · {business.slug}
             </Chip>
             <h1 className="mt-4 font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
               {business.name}
             </h1>
-            <p className="mt-2 text-white/85">Manage loyalty, conversations, and AI in one place.</p>
+            <p className="mt-2 text-white/85">{t("heroBlurb")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="gradient">
               <Link href={`/dashboard/${businessId}/loyalty` as Route}>
                 <Gift className="h-4 w-4" />
-                Loyalty controls
+                {t("loyaltyControls")}
               </Link>
             </Button>
             <Button asChild variant="secondary">
               <Link href={`/dashboard/${businessId}/ai-workspace` as Route}>
                 <Sparkles className="h-4 w-4" />
-                AI workspace
+                {t("aiWorkspace")}
               </Link>
             </Button>
             <Button asChild variant="secondary">
               <Link href={`/dashboard/${businessId}/messages` as Route}>
                 <MessageSquare className="h-4 w-4" />
-                Conversations
+                {t("conversations")}
               </Link>
             </Button>
           </div>
@@ -113,16 +115,16 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
       </Card>
 
       <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Metric icon={Users} label="Members" value={business._count.memberships} />
+        <Metric icon={Users} label={t("members")} value={business._count.memberships} />
         <Metric
           icon={Sparkles}
-          label="New (30d)"
+          label={t("new30d")}
           value={recentMembers}
         />
-        <Metric icon={Gift} label="Active rewards" value={business._count.rewards} />
+        <Metric icon={Gift} label={t("activeRewards")} value={business._count.rewards} />
         <Metric
           icon={LineChart}
-          label="Points outstanding"
+          label={t("pointsOutstanding")}
           value={totalPointsIssued.toLocaleString()}
         />
       </section>
@@ -130,14 +132,14 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
       <section className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card variant="surface" className="space-y-3 lg:col-span-2">
           <header className="flex items-center justify-between">
-            <h2 className="section-title">Share &amp; onboard</h2>
+            <h2 className="section-title">{t("shareAndOnboard")}</h2>
             <Chip variant="primary" size="sm">
-              <QrCode className="h-3 w-3" /> Primary channels
+              <QrCode className="h-3 w-3" /> {t("primaryChannels")}
             </Chip>
           </header>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-line bg-surface-elevated p-4">
-              <p className="metric-label">Public profile</p>
+              <p className="metric-label">{t("publicProfile")}</p>
               <Link
                 href={`/b/${business.slug}` as Route}
                 className="mt-2 block break-all text-sm font-medium text-primary-action underline"
@@ -146,23 +148,23 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
               </Link>
             </div>
             <div className="rounded-xl border border-line bg-surface-elevated p-4">
-              <p className="metric-label">Primary join link</p>
+              <p className="metric-label">{t("primaryJoinLink")}</p>
               <p className="mt-2 break-all text-sm text-ink">
                 {primaryLink
                   ? `${baseUrl}/join/${primaryLink.token}`
-                  : "Not configured"}
+                  : t("notConfigured")}
               </p>
             </div>
             <div className="rounded-xl border border-line bg-surface-elevated p-4">
-              <p className="metric-label">QR image asset</p>
+              <p className="metric-label">{t("qrAsset")}</p>
               <p className="mt-2 break-all text-sm text-ink">
-                {primaryQr ? `${baseUrl}/api/qr/${primaryQr.token}` : "Not configured"}
+                {primaryQr ? `${baseUrl}/api/qr/${primaryQr.token}` : t("notConfigured")}
               </p>
             </div>
             <div className="rounded-xl border border-line bg-surface-elevated p-4">
-              <p className="metric-label">WhatsApp number</p>
+              <p className="metric-label">{t("whatsappNumber")}</p>
               <p className="mt-2 text-sm text-ink">
-                {business.whatsappPhoneNumber ?? "Not connected"}
+                {business.whatsappPhoneNumber ?? t("notConnected")}
               </p>
             </div>
           </div>
@@ -172,7 +174,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           <header className="flex items-center gap-2">
             <Calendar className="h-5 w-5 text-primary-action" />
             <h2 className="font-display text-base font-semibold text-ink">
-              Upcoming events
+              {t("upcomingEvents")}
             </h2>
           </header>
           {business.events.length ? (
@@ -190,7 +192,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-ink-muted">No events scheduled.</p>
+            <p className="text-sm text-ink-muted">{t("noEvents")}</p>
           )}
         </Card>
       </section>
@@ -200,17 +202,18 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           <header className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-primary-action" />
             <h2 className="font-display text-base font-semibold text-ink">
-              Activity at a glance
+              {t("activityAtGlance")}
             </h2>
           </header>
           <p className="text-sm text-ink-muted">
-            <strong>{business._count.messages}</strong> total messages exchanged ·{" "}
-            <strong>{business._count.loyaltyTransactions}</strong> loyalty transactions
-            logged.
+            {t("activitySummary", {
+              messages: business._count.messages,
+              transactions: business._count.loyaltyTransactions
+            })}
           </p>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="grid gap-2">
-              <p className="metric-label">Weekly member growth</p>
+              <p className="metric-label">{t("weeklyMemberGrowth")}</p>
               <Sparkline
                 values={analytics.series.map((bucket) => bucket.memberJoins)}
                 labels={analytics.series.map((bucket) => bucket.label)}
@@ -218,7 +221,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
               />
             </div>
             <div className="grid gap-2">
-              <p className="metric-label">Weekly conversation volume</p>
+              <p className="metric-label">{t("weeklyConversationVolume")}</p>
               <Sparkline
                 values={analytics.series.map(
                   (bucket) => bucket.messagesInbound + bucket.messagesOutbound
@@ -230,19 +233,19 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MiniMetric
-              label="Points issued (30d)"
+              label={t("pointsIssued30d")}
               value={analytics.kpis.pointsIssued30d.toLocaleString()}
             />
             <MiniMetric
-              label="Redeemed or expired (30d)"
+              label={t("pointsRedeemed30d")}
               value={analytics.kpis.pointsRedeemed30d.toLocaleString()}
             />
             <MiniMetric
-              label="Redemption rate"
+              label={t("redemptionRate")}
               value={`${Math.round(analytics.kpis.redemptionRate30d * 100)}%`}
             />
             <MiniMetric
-              label="Replies sent (30d)"
+              label={t("repliesSent30d")}
               value={analytics.kpis.outbound30d.toLocaleString()}
             />
           </div>

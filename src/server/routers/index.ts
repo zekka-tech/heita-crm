@@ -5,6 +5,7 @@ import { eventsRouter } from "@/server/routers/events";
 import { loyaltyRouter } from "@/server/routers/loyalty";
 import { membershipRouter } from "@/server/routers/membership";
 import { messagingRouter } from "@/server/routers/messaging";
+import { notificationsRouter } from "@/server/routers/notifications";
 import { promotionsRouter } from "@/server/routers/promotions";
 
 export const appRouter = router({
@@ -14,8 +15,8 @@ export const appRouter = router({
   loyalty: loyaltyRouter,
   membership: membershipRouter,
   messaging: messagingRouter,
+  notifications: notificationsRouter,
   promotions: promotionsRouter
 });
 
 export type AppRouter = typeof appRouter;
-

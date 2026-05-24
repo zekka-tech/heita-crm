@@ -1,9 +1,29 @@
-import { NextResponse } from "next/server";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 
-export async function GET() {
-  return NextResponse.json({ trpc: "stubbed" }, { status: 501 });
+import { logger } from "@/lib/logger";
+import { appRouter } from "@/server/routers";
+import { createTRPCContext } from "@/server/trpc";
+
+const endpoint = "/api/trpc";
+
+function handler(req: Request) {
+  return fetchRequestHandler({
+    endpoint,
+    req,
+    router: appRouter,
+    maxBatchSize: 10,
+    createContext: ({ req }) => createTRPCContext({ req }),
+    onError({ error, path, req }) {
+      logger.error(
+        {
+          err: error,
+          path,
+          method: req.method
+        },
+        "trpc.request_failed"
+      );
+    }
+  });
 }
 
-export async function POST() {
-  return NextResponse.json({ trpc: "stubbed" }, { status: 501 });
-}
+export { handler as GET, handler as POST };

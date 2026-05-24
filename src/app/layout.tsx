@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
 
+import { HeitaTRPCProvider } from "@/components/providers/trpc-provider";
 import { PwaInstallBanner } from "@/components/layout/pwa-install-banner";
 import { ServiceWorkerRegister } from "@/components/layout/service-worker-register";
 import { resolveLocale } from "@/i18n/locale";
@@ -78,11 +79,13 @@ export default async function RootLayout({
           Skip to main content
         </a>
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <ServiceWorkerRegister />
-          <PwaInstallBanner />
-          <div id="main-content" className="app-frame">
-            {children}
-          </div>
+          <HeitaTRPCProvider>
+            <ServiceWorkerRegister />
+            <PwaInstallBanner />
+            <div id="main-content" className="app-frame">
+              {children}
+            </div>
+          </HeitaTRPCProvider>
         </NextIntlClientProvider>
       </body>
     </html>

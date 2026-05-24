@@ -1,6 +1,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import {
   Building2,
   Calendar,
@@ -49,6 +50,7 @@ export async function generateMetadata({ params }: BusinessLandingPageProps) {
 export default async function BusinessLandingPage({
   params
 }: BusinessLandingPageProps) {
+  const t = await getTranslations("businessProfile");
   const { slug } = await params;
   const business = await prisma.business.findFirst({
     where: { slug, deletedAt: null },
@@ -136,14 +138,16 @@ export default async function BusinessLandingPage({
                   }
                 >
                   {membership
-                    ? "View rewards"
-                    : `Join · ${business.loyaltySignupBonus} welcome points`}
+                    ? t("viewRewards")
+                    : t("joinWithBonus", {
+                        points: business.loyaltySignupBonus
+                      })}
                 </Link>
               </Button>
               <Button asChild variant="secondary" size="lg">
                 <Link href={`/b/${slug}/chat` as Route}>
                   <MessageSquare className="h-4 w-4" />
-                  Talk to the team
+                  {t("talkToTeam")}
                 </Link>
               </Button>
             </div>
@@ -160,27 +164,27 @@ export default async function BusinessLandingPage({
           <div className="surface-glass rounded-2xl p-6 text-ink shadow-xl">
             {membership ? (
               <>
-                <p className="eyebrow text-primary-action">Your membership</p>
+                <p className="eyebrow text-primary-action">{t("yourMembership")}</p>
                 <p className="metric-value mt-3">
                   {membership.pointsBalance.toLocaleString()}
                 </p>
-                <p className="metric-label">points</p>
+                <p className="metric-label">{t("pointsLabel")}</p>
                 <p className="mt-4 text-sm text-ink-muted">
-                  Current tier:{" "}
+                  {t("currentTier")}{" "}
                   <span className="font-semibold text-ink">
-                    {membership.tier?.name ?? "Unranked"}
+                    {membership.tier?.name ?? t("unranked")}
                   </span>
                 </p>
               </>
             ) : (
               <>
-                <p className="eyebrow text-primary-action">Free to join</p>
+                <p className="eyebrow text-primary-action">{t("freeToJoin")}</p>
                 <p className="metric-value mt-3">
                   {business.loyaltySignupBonus}
                 </p>
-                <p className="metric-label">welcome points</p>
+                <p className="metric-label">{t("welcomePoints")}</p>
                 <p className="mt-4 text-sm text-ink-muted">
-                  Sign in, join, and start collecting at every visit.
+                  {t("joinPrompt")}
                 </p>
               </>
             )}
@@ -191,8 +195,8 @@ export default async function BusinessLandingPage({
       <section className="mt-8 grid gap-4 md:grid-cols-3">
         <SummarySection
           icon={Gift}
-          title="Rewards"
-          empty="No rewards published yet."
+          title={t("rewards")}
+          empty={t("noRewards")}
           items={business.rewards.map((reward) => ({
             label: reward.title,
             meta: `${reward.pointsCost} pts`
@@ -200,8 +204,8 @@ export default async function BusinessLandingPage({
         />
         <SummarySection
           icon={Tag}
-          title="Promotions"
-          empty="No active promotions."
+          title={t("promotions")}
+          empty={t("noPromotions")}
           items={business.promotions.map((promotion) => ({
             label: promotion.title,
             meta: prettyPromo(promotion.type)
@@ -209,8 +213,8 @@ export default async function BusinessLandingPage({
         />
         <SummarySection
           icon={Calendar}
-          title="Upcoming events"
-          empty="No upcoming events."
+          title={t("upcomingEvents")}
+          empty={t("noEvents")}
           items={business.events.map((event) => ({
             label: event.title,
             meta: event.startsAt.toLocaleDateString("en-ZA", {
@@ -225,10 +229,10 @@ export default async function BusinessLandingPage({
         <section className="mt-6">
           <Card variant="outline">
             <header className="flex items-center justify-between">
-              <h2 className="section-title">Loyalty tiers</h2>
+              <h2 className="section-title">{t("loyaltyTiers")}</h2>
               <Chip variant="primary" size="sm">
                 <Sparkles className="h-3 w-3" />
-                Earn faster as you climb
+                {t("earnFaster")}
               </Chip>
             </header>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
