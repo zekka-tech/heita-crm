@@ -1,0 +1,71 @@
+{
+  "brand": {
+    "name": "Heita",
+    "tagline": "Ukunyaniseka, ukuthumela imiyalezo, kunye neendawo zomsebenzi ze-AI kwinkqubo enye eqala ngomnxeba.",
+    "region": "Heita CRM · uMzantsi Afrika"
+  },
+  "landing": {
+    "intro": "I-Heita inika abathengisi nezishishini ezincinci umgca ngqo kubathengi babo — nge-WhatsApp, i-QR, kunye nohlelo olukhawulezayo olufakwayo olusebenza kwizicwangciso zedatha abantu boMzantsi Afrika abazisebenzisa ngokwenene.",
+    "ctaOnboard": "Faka ishishini lakho",
+    "ctaSignIn": "Ngena",
+    "ctaDiscover": "Fumana amashishini",
+    "ctaPricing": "Jonga amaxabiso",
+    "metricProvinces": "Amaphondo akulungele",
+    "metricWhatsApp": "I-Cloud API yendalo",
+    "metricPwa": "Iyafakeka",
+    "features": {
+      "joinTitle": "Joyina nakanjani na",
+      "joinDescription": "Iikhowudi ze-QR evenkileni, kwiirisithi, kumathegi eemveliso, kumyalezo we-WhatsApp, okanye ikhonkco elithe ngqo — yonke imingeniso ihlala kwiphrofayile enye yeshishini.",
+      "messagingTitle": "Imiyalezo eyenzelwe i-WhatsApp",
+      "messagingDescription": "I-SMS, i-WhatsApp, i-push, kunye nezaziso ezisohlelweni ziya kunye kumgca omnye wexesha ngokwekhasimende, olawulwa liqela lakho.",
+      "aiTitle": "Umsebenzi we-AI kwishishini ngalinye",
+      "aiDescription": "Ivenkile nganye iqeqesha i-AI eyaziyo amaxwebhu kwikhathalogu yayo, imibuzo eqhelekileyo, nemigaqo-nkqubo. I-Ollama ngokwesiqhelo, ifuya yamafu xa uyifuna.",
+      "loyaltyTitle": "Unyaniseko olufumana ukuthembeka",
+      "loyaltyDescription": "Amanqanaba, imivuzo, izikhuthazi, iimali zokubhalisa, nezikhumbuzi zeziganeko, konke kudibene kwi-wallet enye onokuyithwala kuyo nayiphi na indawo.",
+      "pwaTitle": "I-PWA eqala kumnxeba",
+      "pwaDescription": "Iyafakeka, iyaqonda ngokungeyontethelo, kwaye ikhawuleza kwizicwangciso zedatha abantu boMzantsi Afrika abazisebenzisayo. Akukho ukugcinwa kwivenkile ye-app.",
+      "trustTitle": "Yakhelwe ukuthembeka",
+      "trustDescription": "Iiwebhuki ze-WhatsApp eziqinisekisiweyo, ii-OTP ezilinganiselweyo, i-CSP ivaliwe, abaqeshi bahlukene ngokomgaqo-nkqubo we-row-level."
+    }
+  },
+  "auth": {
+    "signInTitle": "Ngena kwi-Heita",
+    "signUpTitle": "Joyina i-Heita",
+    "signInBlurb": "Sikhipha kuphela iikhowudi zokungena kwiinombolo zomnxeba eziqinisekisiweyo. Abathengi abatsha kufuneka baqale benze i-akhawunti.",
+    "signUpBlurb": "Siqinisekisa inombolo yakho yomnxeba ngaphambi kokwenza i-akhawunti ukuze ii-SIM eziphindwe zithathiwe zingakwazi ukuthatha isazisi ngokufihlakeleyo.",
+    "providerSuffix": "I-Google ne-Apple sign-in zivela ngokuzenzekelayo xa zicwangcisiwe.",
+    "continueGoogle": "Qhubeka nge-Google",
+    "continueApple": "Qhubeka nge-Apple",
+    "dividerOrPhone": "okanye ngomnxeba",
+    "phoneLabel": "Inombolo yomnxeba",
+    "phonePlaceholder": "+27 82 000 0000",
+    "codeLabel": "Ikhowudi yokuqinisekisa ye-6 yamanani",
+    "sendCode": "Thumela ikhowudi yokuqinisekisa",
+    "sending": "Iyathunyelwa...",
+    "verifying": "Iyaqinisekiswa...",
+    "verifySignIn": "Qinisekisa uze ungene",
+    "verifyCreate": "Qinisekisa uze udale i-akhawunti",
+    "useDifferentNumber": "Sebenzisa enye inombolo",
+    "footerSecurity": "Inomlinganiselo · isayinwe nge-HMAC · ipheleliswa kwimizuzu eli-10",
+    "footerRegion": "SA kuphela"
+  },
+  "home": {
+    "eyebrow": "Inkqubo Yekhasimende",
+    "greetingMorning": "Molo kusasa",
+    "greetingAfternoon": "Molo emini",
+    "greetingEvening": "Molo ngokuhlwa",
+    "greetingNight": "Usaphaphile?",
+    "summarySingle": "Ulilungu leshishini elinye, unamanqaku ali-{points} kwi-wallet yakho.",
+    "summaryPlural": "Ulilungu kumashishini angu-{count}, unamanqaku ali-{points} kwi-wallet yakho.",
+    "openWallet": "Vula i-wallet",
+    "onboardBusiness": "Faka ishishini",
+    "discoveryHeading": "Iziphumo zokufumana",
+    "discoveryMatches": "{count, plural, =0 {0 ziphumo} one {1 isiphumo} other {# iziphumo}}",
+    "emptyHeading": "Akukho nto kwi-wallet yakho",
+    "emptyBody": "Skena ikhowudi ye-QR evenkileni ebandakanya, vula ikhonkco lokujoyina le-WhatsApp, okanye thepha iqhosha lokujoyina kwiphrofayile yeshishini ukuze uqalise ukufumana amanqaku."
+  },
+  "languageSwitcher": {
+    "label": "Ulwimi",
+    "shortcut": "Ulwi"
+  }
+}

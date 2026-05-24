@@ -2,6 +2,7 @@
 
 import { useCallback, useState, useTransition } from "react";
 import { signIn } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { ArrowRight, ShieldCheck, Smartphone } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,13 @@ type PhoneOtpAuthFormProps = {
   oauthError?: string | null;
 };
 
-const OAUTH_ERROR_COPY: Record<string, string> = {
+const OAUTH_ERROR_KEYS: Record<string, string> = {
+  OAuthEmailMissing: "errorOAuthEmailMissing",
+  AccountDeactivated: "errorAccountDeactivated",
+  OAuthAccountLinkRequired: "errorOAuthAccountLinkRequired"
+};
+
+const OAUTH_ERROR_FALLBACKS: Record<string, string> = {
   OAuthEmailMissing:
     "Your Google or Apple account did not share an email address. Sign in with your phone number instead.",
   AccountDeactivated:
@@ -34,12 +41,28 @@ export function PhoneOtpAuthForm({
   turnstileSiteKey,
   oauthError
 }: PhoneOtpAuthFormProps) {
+  const t = useTranslations("auth");
+
+  const resolveOauthError = () => {
+    if (!oauthError) return null;
+    const key = OAUTH_ERROR_KEYS[oauthError];
+    const fallback = OAUTH_ERROR_FALLBACKS[oauthError];
+    if (!fallback) return null;
+    // useTranslations throws on missing keys, so guard with a fallback string.
+    try {
+      return key ? t(key) : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<{ kind: "info" | "error"; text: string } | null>(
-    oauthError && OAUTH_ERROR_COPY[oauthError]
-      ? { kind: "error", text: OAUTH_ERROR_COPY[oauthError] }
-      : null
+    (() => {
+      const message = resolveOauthError();
+      return message ? { kind: "error" as const, text: message } : null;
+    })()
   );
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
@@ -119,13 +142,11 @@ export function PhoneOtpAuthForm({
           {mode === "sign-in" ? "Welcome back" : "Create your account"}
         </Chip>
         <h1 className="font-display text-3xl font-bold tracking-tight">
-          {mode === "sign-in" ? "Sign in to Heita" : "Join Heita"}
+          {mode === "sign-in" ? t("signInTitle") : t("signUpTitle")}
         </h1>
         <p className="text-sm leading-6 text-ink-muted">
-          {mode === "sign-in"
-            ? "We only issue sign-in codes to verified phone numbers. New customers should create an account first."
-            : "We verify your phone number before creating an account so recycled SIMs cannot silently take over an identity."}{" "}
-          Google and Apple sign-in appear automatically when configured.
+          {mode === "sign-in" ? t("signInBlurb") : t("signUpBlurb")}{" "}
+          {t("providerSuffix")}
         </p>
       </header>
 
@@ -136,7 +157,7 @@ export function PhoneOtpAuthForm({
             type="button"
             onClick={() => void signIn("google", { redirectTo: "/home" })}
           >
-            Continue with Google
+            {t("continueGoogle")}
           </Button>
         ) : null}
         {appleEnabled ? (
@@ -145,7 +166,7 @@ export function PhoneOtpAuthForm({
             type="button"
             onClick={() => void signIn("apple", { redirectTo: "/home" })}
           >
-            Continue with Apple
+            {t("continueApple")}
           </Button>
         ) : null}
       </div>
@@ -153,7 +174,7 @@ export function PhoneOtpAuthForm({
       {(googleEnabled || appleEnabled) && (
         <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-ink-subtle">
           <span className="h-px flex-1 bg-line" />
-          or via phone
+          {t("dividerOrPhone")}
           <span className="h-px flex-1 bg-line" />
         </div>
       )}
@@ -171,11 +192,11 @@ export function PhoneOtpAuthForm({
         }}
       >
         <Input
-          label="Phone number"
+          label={t("phoneLabel")}
           type="tel"
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
-          placeholder="+27 82 000 0000"
+          placeholder={t("phonePlaceholder")}
           autoComplete="tel"
           required
           disabled={step === "code"}
@@ -183,7 +204,7 @@ export function PhoneOtpAuthForm({
 
         {step === "code" ? (
           <Input
-            label="6-digit verification code"
+            label={t("codeLabel")}
             type="text"
             inputMode="numeric"
             pattern="\d{6}"
@@ -239,19 +260,19 @@ export function PhoneOtpAuthForm({
         >
           {step === "phone" ? (
             isRequesting ? (
-              "Sending code..."
+              t("sending")
             ) : (
               <>
-                Send verification code
+                {t("sendCode")}
                 <ArrowRight className="h-4 w-4" />
               </>
             )
           ) : isSubmitting ? (
-            "Verifying..."
+            t("verifying")
           ) : mode === "sign-in" ? (
-            "Verify and sign in"
+            t("verifySignIn")
           ) : (
-            "Verify and create account"
+            t("verifyCreate")
           )}
         </Button>
 
@@ -267,7 +288,7 @@ export function PhoneOtpAuthForm({
               setTurnstileToken(null);
             }}
           >
-            Use a different number
+            {t("useDifferentNumber")}
           </button>
         ) : null}
       </form>
@@ -292,9 +313,9 @@ export function PhoneOtpAuthForm({
 
       <footer className="flex items-center gap-2 text-xs text-ink-subtle">
         <ShieldCheck className="h-4 w-4 text-success" />
-        Rate-limited · HMAC-signed · 10-minute expiry
+        {t("footerSecurity")}
         <span className="ml-auto inline-flex items-center gap-1">
-          <Smartphone className="h-3 w-3" /> SA only
+          <Smartphone className="h-3 w-3" /> {t("footerRegion")}
         </span>
       </footer>
     </Card>

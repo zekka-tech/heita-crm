@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Shield, Sparkles, Users } from "lucide-react";
 
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
+
 export default function AuthLayout({
   children
 }: Readonly<{ children: React.ReactNode }>) {
@@ -46,7 +48,12 @@ export default function AuthLayout({
           </ul>
         </section>
 
-        <section className="flex items-center justify-center">{children}</section>
+        <section className="flex flex-col items-center justify-center gap-4">
+          <div className="self-end">
+            <LanguageSwitcher />
+          </div>
+          {children}
+        </section>
       </div>
     </main>
   );

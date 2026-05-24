@@ -1,0 +1,71 @@
+{
+  "brand": {
+    "name": "Heita",
+    "tagline": "Lojaliteit, boodskappe en KI-werkspasies in een mobielgerigte stelsel.",
+    "region": "Heita CRM · Suid-Afrika"
+  },
+  "landing": {
+    "intro": "Heita gee kleinhandelaars en klein ondernemings 'n direkte lyn na hul kliënte — deur WhatsApp, QR en 'n vinnige, installeerbare app wat werk op die datakontrakte wat Suid-Afrikaners werklik gebruik.",
+    "ctaOnboard": "Stel jou onderneming in",
+    "ctaSignIn": "Teken aan",
+    "ctaDiscover": "Ontdek ondernemings",
+    "ctaPricing": "Bekyk pryse",
+    "metricProvinces": "Provinsies gereed",
+    "metricWhatsApp": "Cloud API inheems",
+    "metricPwa": "Installeerbaar",
+    "features": {
+      "joinTitle": "Sluit van enige plek aan",
+      "joinDescription": "QR-kodes in die winkel, op kwitansies, op produketikette, op 'n WhatsApp-boodskap of 'n direkte skakel — elke ingang land op dieselfde besigheidsprofiel.",
+      "messagingTitle": "WhatsApp-inheemse boodskappe",
+      "messagingDescription": "SMS, WhatsApp, push en in-app kennisgewings vloei saam in een tydlyn per kliënt, gereguleer deur jou span.",
+      "aiTitle": "KI-mede-werker per onderneming",
+      "aiDescription": "Elke winkel oefen 'n dokument-bewuste KI op sy eie katalogus, gereelde vrae en beleid. Ollama by verstek, wolk-terugval wanneer jy dit nodig het.",
+      "loyaltyTitle": "Lojaliteit wat vertroue wen",
+      "loyaltyDescription": "Vlakke, belonings, promosies, aanmeldbonusse en gebeurtenisherinneringe — alles aan een beursie verbind wat jou kliënt oral kan saamdra.",
+      "pwaTitle": "Mobielgerigte PWA",
+      "pwaDescription": "Installeerbaar, vanlyn-bewus en vinnig op die datakontrakte wat Suid-Afrikaners werklik gebruik. Geen toepassingswinkel-hekwagter nie.",
+      "trustTitle": "Gebou vir vertroue",
+      "trustDescription": "Geverifieerde WhatsApp-webhooks, tariefbeperkte OTP's, CSP gesluit, huurders geïsoleer deur ry-vlak beleide."
+    }
+  },
+  "auth": {
+    "signInTitle": "Teken aan by Heita",
+    "signUpTitle": "Sluit by Heita aan",
+    "signInBlurb": "Ons stuur slegs aantekenkodes na geverifieerde foonnommers. Nuwe kliënte moet eers 'n rekening skep.",
+    "signUpBlurb": "Ons verifieer jou foonnommer voor ons 'n rekening skep, sodat hergebruikte SIM's nie 'n identiteit stilweg kan oorneem nie.",
+    "providerSuffix": "Google- en Apple-aantekening verskyn outomaties wanneer dit gekonfigureer is.",
+    "continueGoogle": "Gaan voort met Google",
+    "continueApple": "Gaan voort met Apple",
+    "dividerOrPhone": "of per foon",
+    "phoneLabel": "Foonnommer",
+    "phonePlaceholder": "+27 82 000 0000",
+    "codeLabel": "6-syfer verifikasiekode",
+    "sendCode": "Stuur verifikasiekode",
+    "sending": "Stuur kode...",
+    "verifying": "Verifieer...",
+    "verifySignIn": "Verifieer en teken aan",
+    "verifyCreate": "Verifieer en skep rekening",
+    "useDifferentNumber": "Gebruik 'n ander nommer",
+    "footerSecurity": "Tariefbeperk · HMAC-onderteken · vervaldatum 10 minute",
+    "footerRegion": "Net SA"
+  },
+  "home": {
+    "eyebrow": "Kliëntapp",
+    "greetingMorning": "Goeie môre",
+    "greetingAfternoon": "Goeiemiddag",
+    "greetingEvening": "Goeienaand",
+    "greetingNight": "Nog wakker?",
+    "summarySingle": "Jy is 'n lid van {count} onderneming en het {points} totale punte in jou beursie.",
+    "summaryPlural": "Jy is 'n lid van {count} ondernemings en het {points} totale punte in jou beursie.",
+    "openWallet": "Maak beursie oop",
+    "onboardBusiness": "Stel 'n onderneming in",
+    "discoveryHeading": "Ontdekkingsresultate",
+    "discoveryMatches": "{count, plural, =0 {0 passings} one {1 passing} other {# passings}}",
+    "emptyHeading": "Niks in jou beursie nie",
+    "emptyBody": "Skandeer 'n QR-kode by 'n deelnemende winkel, maak 'n WhatsApp-aansluitskakel oop, of tik die aansluitknoppie op 'n ondernemingsprofiel om punte te begin verdien."
+  },
+  "languageSwitcher": {
+    "label": "Taal",
+    "shortcut": "Taal"
+  }
+}

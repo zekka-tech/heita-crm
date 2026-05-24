@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 
+import createNextIntlPlugin from "next-intl/plugin";
 import type { NextConfig } from "next";
 
 const isProd = process.env.NODE_ENV === "production";
@@ -40,6 +41,8 @@ const securityHeaders = [
     : [])
 ];
 
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
 const nextConfig: NextConfig = {
   typedRoutes: true,
   poweredByHeader: false,
@@ -62,9 +65,7 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true
   },
   images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "**" }
-    ]
+    remotePatterns: [{ protocol: "https", hostname: "**" }]
   },
   async headers() {
     return [
@@ -76,4 +77,4 @@ const nextConfig: NextConfig = {
   }
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

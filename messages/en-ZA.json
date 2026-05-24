@@ -1,0 +1,71 @@
+{
+  "brand": {
+    "name": "Heita",
+    "tagline": "Loyalty, messaging, and AI workspaces in one mobile-first system.",
+    "region": "Heita CRM · South Africa"
+  },
+  "landing": {
+    "intro": "Heita gives retailers and small businesses a direct line to their customers — through WhatsApp, QR, and a fast, installable app that works on the data plans South Africans actually use.",
+    "ctaOnboard": "Onboard your business",
+    "ctaSignIn": "Sign in",
+    "ctaDiscover": "Discover businesses",
+    "ctaPricing": "View pricing",
+    "metricProvinces": "Provinces ready",
+    "metricWhatsApp": "Cloud API native",
+    "metricPwa": "Installable",
+    "features": {
+      "joinTitle": "Join from anywhere",
+      "joinDescription": "QR codes in store, on receipts, on product tags, on a WhatsApp message, or a direct link — every entry lands on the same business profile.",
+      "messagingTitle": "WhatsApp-native messaging",
+      "messagingDescription": "SMS, WhatsApp, push, and in-app notifications converge into one timeline per customer, governed by your team.",
+      "aiTitle": "AI co-worker per business",
+      "aiDescription": "Each shop trains a document-aware AI on its own catalog, FAQs, and policies. Ollama by default, cloud fallback when you need it.",
+      "loyaltyTitle": "Loyalty that earns trust",
+      "loyaltyDescription": "Tiers, rewards, promotions, signup bonuses and event reminders, all wired into one wallet your customer can carry anywhere.",
+      "pwaTitle": "Mobile-first PWA",
+      "pwaDescription": "Installable, offline-aware, and fast on the data plans South Africans actually use. No app store gatekeeping.",
+      "trustTitle": "Built for trust",
+      "trustDescription": "Verified WhatsApp webhooks, rate-limited OTPs, CSP locked down, tenants isolated by row-level policies."
+    }
+  },
+  "auth": {
+    "signInTitle": "Sign in to Heita",
+    "signUpTitle": "Join Heita",
+    "signInBlurb": "We only issue sign-in codes to verified phone numbers. New customers should create an account first.",
+    "signUpBlurb": "We verify your phone number before creating an account so recycled SIMs cannot silently take over an identity.",
+    "providerSuffix": "Google and Apple sign-in appear automatically when configured.",
+    "continueGoogle": "Continue with Google",
+    "continueApple": "Continue with Apple",
+    "dividerOrPhone": "or via phone",
+    "phoneLabel": "Phone number",
+    "phonePlaceholder": "+27 82 000 0000",
+    "codeLabel": "6-digit verification code",
+    "sendCode": "Send verification code",
+    "sending": "Sending code...",
+    "verifying": "Verifying...",
+    "verifySignIn": "Verify and sign in",
+    "verifyCreate": "Verify and create account",
+    "useDifferentNumber": "Use a different number",
+    "footerSecurity": "Rate-limited · HMAC-signed · 10-minute expiry",
+    "footerRegion": "SA only"
+  },
+  "home": {
+    "eyebrow": "Customer App",
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
+    "greetingNight": "Still up?",
+    "summarySingle": "You belong to {count} business and have {points} total points in your wallet.",
+    "summaryPlural": "You belong to {count} businesses and have {points} total points in your wallet.",
+    "openWallet": "Open wallet",
+    "onboardBusiness": "Onboard a business",
+    "discoveryHeading": "Discovery results",
+    "discoveryMatches": "{count, plural, =0 {0 matches} one {1 match} other {# matches}}",
+    "emptyHeading": "Nothing in your wallet yet",
+    "emptyBody": "Scan a QR code at a participating store, open a WhatsApp join link, or tap a join button on a business profile to start earning points."
+  },
+  "languageSwitcher": {
+    "label": "Language",
+    "shortcut": "Lang"
+  }
+}

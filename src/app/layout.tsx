@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { NextIntlClientProvider } from "next-intl";
+import { getMessages } from "next-intl/server";
 
 import { PwaInstallBanner } from "@/components/layout/pwa-install-banner";
 import { ServiceWorkerRegister } from "@/components/layout/service-worker-register";
+import { resolveLocale } from "@/i18n/locale";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -48,13 +51,16 @@ export const viewport: Viewport = {
   maximumScale: 5
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await resolveLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -68,9 +74,16 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <ServiceWorkerRegister />
-        <PwaInstallBanner />
-        <div className="app-frame">{children}</div>
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <ServiceWorkerRegister />
+          <PwaInstallBanner />
+          <div id="main-content" className="app-frame">
+            {children}
+          </div>
+        </NextIntlClientProvider>
       </body>
     </html>
   );
