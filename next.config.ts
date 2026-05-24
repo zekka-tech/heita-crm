@@ -45,6 +45,19 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   outputFileTracingRoot: resolve(import.meta.dirname),
+  serverExternalPackages: [
+    "ioredis",
+    "bullmq",
+    "pg",
+    "@prisma/client",
+    "@prisma/adapter-pg",
+    "@aws-sdk/client-s3",
+    "@aws-sdk/s3-request-presigner",
+    "pdf-parse",
+    "mammoth",
+    "csv-parse",
+    "web-push"
+  ],
   eslint: {
     ignoreDuringBuilds: true
   },
