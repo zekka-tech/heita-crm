@@ -75,8 +75,11 @@ export async function handleWhatsappInboundPayload(payload: unknown): Promise<vo
 
       if (!messages?.length || !metadata?.phone_number_id) continue;
 
-      const business = await prisma.business.findUnique({
-        where: { wabaPhoneId: metadata.phone_number_id }
+      const business = await prisma.business.findFirst({
+        where: {
+          wabaPhoneId: metadata.phone_number_id,
+          deletedAt: null
+        }
       });
 
       if (!business) {
@@ -146,7 +149,7 @@ type RouteInput = {
 
 async function routeInboundTextToBusiness(input: RouteInput): Promise<void> {
   const existingUser = await prisma.user.findFirst({
-    where: { phone: input.fromPhone }
+    where: { phone: input.fromPhone, deletedAt: null }
   });
 
   const existingMessage = await prisma.message.findFirst({

@@ -15,8 +15,8 @@ export default async function BusinessEventsPage({
   params
 }: BusinessEventsPageProps) {
   const { slug } = await params;
-  const business = await prisma.business.findUnique({
-    where: { slug },
+  const business = await prisma.business.findFirst({
+    where: { slug, deletedAt: null },
     include: {
       events: { orderBy: { startsAt: "asc" } }
     }

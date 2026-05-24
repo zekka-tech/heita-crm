@@ -46,8 +46,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const business = await prisma.business.findUnique({
-    where: { slug: parsed.data.businessSlug },
+  const business = await prisma.business.findFirst({
+    where: {
+      slug: parsed.data.businessSlug,
+      deletedAt: null
+    },
     include: { aiWorkspace: true }
   });
 

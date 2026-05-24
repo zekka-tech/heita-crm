@@ -20,8 +20,8 @@ export default async function BusinessRewardsPage({
   const { slug } = await params;
   const session = await auth();
 
-  const business = await prisma.business.findUnique({
-    where: { slug },
+  const business = await prisma.business.findFirst({
+    where: { slug, deletedAt: null },
     include: {
       rewards: {
         where: { isActive: true },

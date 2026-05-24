@@ -75,8 +75,8 @@ function buildContext(matches: SimilarityMatch[]) {
 }
 
 async function buildSystemPrompt(input: { businessId: string; userMessage: string }) {
-  const business = await prisma.business.findUniqueOrThrow({
-    where: { id: input.businessId },
+  const business = await prisma.business.findFirstOrThrow({
+    where: { id: input.businessId, deletedAt: null },
     include: { aiWorkspace: true }
   });
 

@@ -65,21 +65,23 @@ export async function POST(request: Request) {
     },
     select: {
       id: true,
-      phoneVerifiedAt: true
+      phoneVerifiedAt: true,
+      deletedAt: true
     }
   });
 
+  const isActiveVerified = Boolean(user?.phoneVerifiedAt && !user.deletedAt);
   const mode = parsed.data.mode as AuthOtpMode;
   const otpPurpose = getOtpPurposeForMode(mode);
 
   if (mode === "sign-in") {
-    if (!user?.phoneVerifiedAt) {
+    if (!isActiveVerified) {
       return NextResponse.json(
         { error: "No verified account exists for this number yet. Create an account first." },
         { status: 404 }
       );
     }
-  } else if (user?.phoneVerifiedAt) {
+  } else if (isActiveVerified) {
     return NextResponse.json(
       { error: "An account already exists for this number. Sign in instead." },
       { status: 409 }

@@ -23,8 +23,8 @@ type BusinessLandingPageProps = {
 
 export async function generateMetadata({ params }: BusinessLandingPageProps) {
   const { slug } = await params;
-  const business = await prisma.business.findUnique({
-    where: { slug },
+  const business = await prisma.business.findFirst({
+    where: { slug, deletedAt: null },
     select: { name: true, description: true }
   });
 
@@ -42,8 +42,8 @@ export default async function BusinessLandingPage({
   params
 }: BusinessLandingPageProps) {
   const { slug } = await params;
-  const business = await prisma.business.findUnique({
-    where: { slug },
+  const business = await prisma.business.findFirst({
+    where: { slug, deletedAt: null },
     include: {
       rewards: { where: { isActive: true }, orderBy: { pointsCost: "asc" }, take: 3 },
       promotions: {

@@ -25,8 +25,8 @@ export async function sendNotification(input: NotificationInput) {
     }
   });
 
-  const user = await prisma.user.findUnique({
-    where: { id: input.userId },
+  const user = await prisma.user.findFirst({
+    where: { id: input.userId, deletedAt: null },
     select: {
       email: true
     }
