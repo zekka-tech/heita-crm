@@ -4,11 +4,12 @@ import { StaffRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth";
+import { getBuildPhaseRouteResponse } from "@/lib/build-phase";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { observeHttpRoute } from "@/lib/metrics";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { authenticateRequestUser } from "@/lib/request-auth";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 import { getClientIp } from "@/lib/security";
 import { createPresignedUpload, getStoredObjectUrl, storageConfigured } from "@/lib/storage";
@@ -40,6 +41,9 @@ function buildStorageKey(input: { businessId: string; filename: string }) {
 }
 
 export async function POST(request: Request) {
+  const buildResponse = getBuildPhaseRouteResponse();
+  if (buildResponse) return buildResponse;
+
   const startedAt = Date.now();
   const requestId = resolveRequestId(request.headers);
 
@@ -54,8 +58,8 @@ export async function POST(request: Request) {
     return csrfFailure;
   }
 
-  const session = await auth();
-  if (!session?.user?.id) {
+  const session = await authenticateRequestUser(request.headers);
+  if (!session?.userId) {
     observeHttpRoute({
       route: "/api/upload",
       method: "POST",
@@ -70,7 +74,7 @@ export async function POST(request: Request) {
 
   const ip = getClientIp(request.headers);
   const limit = await enforceRateLimit({
-    identifier: `upload:${session.user.id}:${ip}`,
+    identifier: `upload:${session.userId}:${ip}`,
     windowSeconds: 60,
     max: 10
   });
@@ -138,13 +142,13 @@ export async function POST(request: Request) {
 
   await requireRole({
     businessId: parsed.data.businessId,
-    userId: session.user.id,
+    userId: session.userId,
     allowedRoles: [StaffRole.AI_TRAINER, StaffRole.MANAGER]
   });
 
   if (!storageConfigured()) {
     logger.warn(
-      { userId: session.user.id, filename: parsed.data.filename },
+      { userId: session.userId, filename: parsed.data.filename },
       "upload.storage_not_configured"
     );
     observeHttpRoute({
@@ -177,6 +181,7 @@ export async function POST(request: Request) {
   try {
     document = await createDocumentRecord({
       businessId: parsed.data.businessId,
+      actorUserId: session.userId,
       title: parsed.data.title,
       fileName: parsed.data.filename,
       mimeType: parsed.data.contentType,

@@ -121,6 +121,8 @@
     "deleteAccount": "Cima iakhawunti",
     "updated": "Iprofayile ihlaziyiwe.",
     "updateError": "Asikwazanga ukuhlaziya iprofayile.",
+    "downloadStarted": "Ukuhanjiswa kokukhutshelwa kwedatha yeakhawunti yakho kuqalile.",
+    "downloadError": "Asikwazanga ukulungiselela ukukhutshelwa kwedatha yeakhawunti yakho.",
     "confirmDelete": "Cima iakhawunti yakho ye-Heita? Oku kuya kurhoxisa ubulungu obusebenzayo kwaye kuqale inkqubo yokucima.",
     "deleteError": "Asikwazanga ukucima iakhawunti yakho."
   },

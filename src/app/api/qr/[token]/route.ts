@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getBuildPhaseRouteResponse } from "@/lib/build-phase";
 import { prisma } from "@/lib/prisma";
 import { generateQrSvg } from "@/lib/qr";
 
@@ -8,6 +9,9 @@ type QrRouteProps = {
 };
 
 export async function GET(_: Request, { params }: QrRouteProps) {
+  const buildResponse = getBuildPhaseRouteResponse();
+  if (buildResponse) return buildResponse;
+
   const { token } = await params;
   const origin =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "http://localhost:3000";

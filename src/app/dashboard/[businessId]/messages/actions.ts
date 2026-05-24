@@ -11,6 +11,7 @@ import {
   sendWhatsAppTemplateMessage,
   sendWhatsAppTextMessage
 } from "@/lib/whatsapp";
+import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 export async function sendWhatsappReplyAction(formData: FormData) {
   await requireCsrfFormData(formData);
@@ -69,18 +70,37 @@ export async function sendWhatsappReplyAction(formData: FormData) {
     });
   }
 
-  await prisma.message.create({
-    data: {
-      businessId,
-      contactPhone,
-      channel: MessageChannel.WHATSAPP,
-      direction: "OUTBOUND",
-      externalId: response.messageId,
-      status: "sent",
-      body: body || `Template sent: ${templateName}`,
-      metadata: templateName ? { templateName } : undefined,
-      sentAt: new Date()
-    }
+  await prisma.$transaction(async (tx) => {
+    const message = await tx.message.create({
+      data: {
+        businessId,
+        contactPhone,
+        channel: MessageChannel.WHATSAPP,
+        direction: "OUTBOUND",
+        externalId: response.messageId,
+        status: "sent",
+        body: body || `Template sent: ${templateName}`,
+        metadata: templateName ? { templateName } : undefined,
+        sentAt: new Date()
+      }
+    });
+
+    await recordStaffAuditLog(
+      {
+        businessId,
+        actorUserId: userId,
+        action: templateName ? "MESSAGE_TEMPLATE_SEND" : "MESSAGE_TEXT_SEND",
+        targetType: "Message",
+        targetId: message.id,
+        metadata: {
+          channel: "WHATSAPP",
+          contactPhone,
+          templateName: templateName || null,
+          externalId: response.messageId
+        }
+      },
+      tx
+    );
   });
 
   redirect(

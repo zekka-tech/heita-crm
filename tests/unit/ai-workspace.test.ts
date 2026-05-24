@@ -2,6 +2,7 @@ import { DocumentStatus } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const prisma = {
+  $transaction: vi.fn(),
   aiWorkspace: {
     findUnique: vi.fn()
   },
@@ -9,6 +10,9 @@ const prisma = {
     create: vi.fn(),
     findUnique: vi.fn(),
     update: vi.fn()
+  },
+  staffAuditLog: {
+    create: vi.fn()
   }
 };
 
@@ -45,6 +49,9 @@ const {
 describe("ai workspace service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => unknown) =>
+      callback(prisma)
+    );
     scanStoredObjectForMalware.mockResolvedValue({
       verdict: "clean",
       details: "stream: OK"
@@ -87,6 +94,44 @@ describe("ai workspace service", () => {
     });
   });
 
+  it("records a staff audit entry when a staff actor creates a document", async () => {
+    prisma.aiWorkspace.findUnique.mockResolvedValue({ id: "workspace_123" });
+    prisma.businessDocument.create.mockResolvedValue({
+      id: "document_123",
+      title: "Retail FAQ",
+      fileName: "faq.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 2048,
+      status: DocumentStatus.PENDING
+    });
+
+    await createDocumentRecord({
+      businessId: "business_123",
+      actorUserId: "staff_123",
+      title: "Retail FAQ",
+      fileName: "faq.pdf",
+      mimeType: "application/pdf",
+      storageKey: "businesses/business_123/documents/faq.pdf",
+      sizeBytes: 2048
+    });
+
+    expect(prisma.staffAuditLog.create).toHaveBeenCalledWith({
+      data: {
+        businessId: "business_123",
+        actorUserId: "staff_123",
+        action: "AI_DOCUMENT_CREATE",
+        targetType: "BusinessDocument",
+        targetId: "document_123",
+        metadata: {
+          title: "Retail FAQ",
+          fileName: "faq.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 2048
+        }
+      }
+    });
+  });
+
   it("rejects document creation when the AI workspace does not exist", async () => {
     prisma.aiWorkspace.findUnique.mockResolvedValue(null);
 
@@ -108,6 +153,7 @@ describe("ai workspace service", () => {
   it("does not requeue documents that are already processing", async () => {
     prisma.businessDocument.findUnique.mockResolvedValue({
       id: "document_123",
+      businessId: "business_123",
       status: DocumentStatus.PROCESSING,
       storageKey: "documents/document_123.pdf",
       fileName: "document_123.pdf"
@@ -127,6 +173,7 @@ describe("ai workspace service", () => {
   it("clears failed status before retrying document ingestion", async () => {
     prisma.businessDocument.findUnique.mockResolvedValue({
       id: "document_123",
+      businessId: "business_123",
       status: DocumentStatus.FAILED,
       storageKey: "documents/document_123.pdf",
       fileName: "document_123.pdf"
@@ -164,9 +211,42 @@ describe("ai workspace service", () => {
     });
   });
 
+  it("records a staff audit entry when ingestion is requested by staff", async () => {
+    prisma.businessDocument.findUnique.mockResolvedValue({
+      id: "document_123",
+      businessId: "business_123",
+      status: DocumentStatus.PENDING,
+      storageKey: "documents/document_123.pdf",
+      fileName: "document_123.pdf"
+    });
+    enqueueDocumentIngestion.mockResolvedValue({
+      enqueued: true,
+      mode: "queue",
+      documentId: "document_123",
+      jobId: "job_123"
+    });
+
+    await requestDocumentIngestion("document_123", "staff_123");
+
+    expect(prisma.staffAuditLog.create).toHaveBeenCalledWith({
+      data: {
+        businessId: "business_123",
+        actorUserId: "staff_123",
+        action: "AI_DOCUMENT_INGEST_REQUEST",
+        targetType: "BusinessDocument",
+        targetId: "document_123",
+        metadata: {
+          jobId: "job_123",
+          previousStatus: DocumentStatus.PENDING
+        }
+      }
+    });
+  });
+
   it("rejects infected documents before queueing ingestion", async () => {
     prisma.businessDocument.findUnique.mockResolvedValue({
       id: "document_123",
+      businessId: "business_123",
       status: DocumentStatus.PENDING,
       storageKey: "documents/document_123.pdf",
       fileName: "document_123.pdf"

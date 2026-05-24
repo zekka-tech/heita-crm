@@ -1,3 +1,5 @@
+import { runWithCircuitBreaker } from "@/lib/circuit-breaker";
+
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -25,23 +27,25 @@ export async function* streamAnthropicChat(
   const model =
     options.model ?? process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: options.maxTokens ?? 512,
-      temperature: options.temperature ?? 0.4,
-      system: options.system,
-      messages: options.messages,
-      stream: true
-    }),
-    signal: options.signal
-  });
+  const response = await runWithCircuitBreaker("anthropic.chat", () =>
+    fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: options.maxTokens ?? 512,
+        temperature: options.temperature ?? 0.4,
+        system: options.system,
+        messages: options.messages,
+        stream: true
+      }),
+      signal: options.signal
+    })
+  );
 
   if (!response.ok || !response.body) {
     const text = await response.text().catch(() => "");

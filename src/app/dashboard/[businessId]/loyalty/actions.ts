@@ -14,6 +14,7 @@ import {
   redeemPoints,
   refundTransaction
 } from "@/server/services/loyalty.service";
+import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 export async function requestStaffStepUpAction(formData: FormData) {
   await requireCsrfFormData(formData);
@@ -109,7 +110,8 @@ export async function earnPointsAction(formData: FormData) {
     points,
     actorUserId: userId,
     idempotencyKey,
-    description
+    description,
+    staffAudit: true
   });
 
   redirect(`/dashboard/${businessId}/loyalty?updated=earn`);
@@ -143,7 +145,8 @@ export async function redeemPointsAction(formData: FormData) {
     points,
     actorUserId: userId,
     idempotencyKey,
-    description
+    description,
+    staffAudit: true
   });
 
   redirect(`/dashboard/${businessId}/loyalty?updated=redeem`);
@@ -175,14 +178,32 @@ export async function createRewardAction(formData: FormData) {
     throw new Error("Reward title and points cost are required.");
   }
 
-  await prisma.reward.create({
-    data: {
-      businessId,
-      title,
-      description,
-      pointsCost,
-      stock: stockValue ? Number(stockValue) : null
-    }
+  await prisma.$transaction(async (tx) => {
+    const reward = await tx.reward.create({
+      data: {
+        businessId,
+        title,
+        description,
+        pointsCost,
+        stock: stockValue ? Number(stockValue) : null
+      }
+    });
+
+    await recordStaffAuditLog(
+      {
+        businessId,
+        actorUserId: userId,
+        action: "LOYALTY_REWARD_CREATE",
+        targetType: "Reward",
+        targetId: reward.id,
+        metadata: {
+          title,
+          pointsCost,
+          stock: reward.stock
+        }
+      },
+      tx
+    );
   });
 
   redirect(`/dashboard/${businessId}/loyalty?updated=reward`);
@@ -212,20 +233,36 @@ export async function updateTierPerksAction(formData: FormData) {
 
   const pointMultiplier = pointMultiplierRaw ? Number(pointMultiplierRaw) : undefined;
 
-  await prisma.loyaltyTier.updateMany({
-    where: {
-      id: tierId,
-      businessId
-    },
-    data: {
-      perks: {
-        ...(pointMultiplier && Number.isFinite(pointMultiplier) && pointMultiplier > 1
-          ? { pointMultiplier }
-          : {}),
-        ...(freeDelivery ? { freeDelivery: true } : {}),
-        ...(exclusiveAccess ? { exclusiveAccess: true } : {})
+  const perks = {
+    ...(pointMultiplier && Number.isFinite(pointMultiplier) && pointMultiplier > 1
+      ? { pointMultiplier }
+      : {}),
+    ...(freeDelivery ? { freeDelivery: true } : {}),
+    ...(exclusiveAccess ? { exclusiveAccess: true } : {})
+  };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.loyaltyTier.updateMany({
+      where: {
+        id: tierId,
+        businessId
+      },
+      data: {
+        perks
       }
-    }
+    });
+
+    await recordStaffAuditLog(
+      {
+        businessId,
+        actorUserId: userId,
+        action: "LOYALTY_TIER_PERKS_UPDATE",
+        targetType: "LoyaltyTier",
+        targetId: tierId,
+        metadata: perks
+      },
+      tx
+    );
   });
 
   redirect(`/dashboard/${businessId}/loyalty?updated=tier-perks`);
@@ -257,7 +294,8 @@ export async function refundTransactionAction(formData: FormData) {
     transactionId,
     actorUserId: userId,
     idempotencyKey,
-    description
+    description,
+    staffAudit: true
   });
 
   redirect(`/dashboard/${businessId}/loyalty?updated=refund`);

@@ -1,10 +1,11 @@
 import { StaffRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 
-import { auth } from "@/lib/auth";
+import { getBuildPhaseRouteResponse } from "@/lib/build-phase";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { observeHttpRoute } from "@/lib/metrics";
 import { prisma } from "@/lib/prisma";
+import { authenticateRequestUser } from "@/lib/request-auth";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 import { requireRole } from "@/lib/staff";
 import {
@@ -20,6 +21,9 @@ export async function POST(
   request: Request,
   { params }: CompleteUploadRouteProps
 ) {
+  const buildResponse = getBuildPhaseRouteResponse();
+  if (buildResponse) return buildResponse;
+
   const startedAt = Date.now();
   const requestId = resolveRequestId(request.headers);
 
@@ -34,8 +38,8 @@ export async function POST(
     return csrfFailure;
   }
 
-  const session = await auth();
-  if (!session?.user?.id) {
+  const session = await authenticateRequestUser(request.headers);
+  if (!session?.userId) {
     observeHttpRoute({
       route: "/api/upload/[documentId]/complete",
       method: "POST",
@@ -68,13 +72,13 @@ export async function POST(
 
   await requireRole({
     businessId: document.businessId,
-    userId: session.user.id,
+    userId: session.userId,
     allowedRoles: [StaffRole.AI_TRAINER, StaffRole.MANAGER]
   });
 
   let result;
   try {
-    result = await requestDocumentIngestion(documentId);
+    result = await requestDocumentIngestion(documentId, session.userId);
   } catch (error) {
     if (isAiWorkspaceServiceError(error)) {
       observeHttpRoute({

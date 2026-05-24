@@ -121,6 +121,8 @@
     "deleteAccount": "Delete account",
     "updated": "Profile updated.",
     "updateError": "Unable to update profile.",
+    "downloadStarted": "Your account export download has started.",
+    "downloadError": "Unable to prepare your account export.",
     "confirmDelete": "Delete your Heita account? This will cancel active memberships and start the deletion process.",
     "deleteError": "Unable to delete your account."
   },

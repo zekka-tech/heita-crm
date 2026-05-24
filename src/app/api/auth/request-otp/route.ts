@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getBuildPhaseRouteResponse } from "@/lib/build-phase";
 import { getOtpPurposeForMode, type AuthOtpMode } from "@/lib/auth-intent";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
@@ -27,6 +28,9 @@ const EXPOSE_DEV_OTP =
   process.env.NODE_ENV !== "production" || process.env.E2E_EXPOSE_DEV_OTP === "1";
 
 export async function POST(request: Request) {
+  const buildResponse = getBuildPhaseRouteResponse();
+  if (buildResponse) return buildResponse;
+
   const startedAt = Date.now();
   const requestId = resolveRequestId(request.headers);
   const ip = getClientIp(request.headers);

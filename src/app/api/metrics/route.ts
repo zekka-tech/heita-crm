@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 
+import { getBuildPhaseRouteResponse } from "@/lib/build-phase";
 import { metricsContentType, renderMetrics } from "@/lib/metrics";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 
 export async function GET(request: Request) {
+  const buildResponse = getBuildPhaseRouteResponse();
+  if (buildResponse) return buildResponse;
+
   const requestId = resolveRequestId(request.headers);
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   const expected = process.env.METRICS_BEARER_TOKEN;

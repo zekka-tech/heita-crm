@@ -1,0 +1,14 @@
+import { NextResponse } from "next/server";
+
+export function getBuildPhaseRouteResponse() {
+  const isBuildPhase =
+    process.env.HEITA_BUILD_PHASE === "1" ||
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.npm_lifecycle_event === "build";
+
+  if (!isBuildPhase) {
+    return null;
+  }
+
+  return new NextResponse(null, { status: 204 });
+}

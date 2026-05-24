@@ -52,6 +52,23 @@ export function generateCsrfToken(): string {
   return randomToken();
 }
 
+export function verifyCsrfTokenPair(
+  cookieValue: string | null | undefined,
+  providedValue: string | null | undefined
+): { ok: true } | CsrfFailure {
+  if (!isValidCsrfToken(cookieValue)) {
+    return { ok: false, reason: "missing-cookie" };
+  }
+
+  if (!isValidCsrfToken(providedValue)) {
+    return { ok: false, reason: "missing-token" };
+  }
+
+  return constantTimeTokenEqual(cookieValue, providedValue)
+    ? { ok: true }
+    : { ok: false, reason: "mismatch" };
+}
+
 export function appendCsrfHeader(
   headers: HeadersInit | undefined,
   token: string | null | undefined
@@ -68,10 +85,31 @@ export type CsrfFailure =
   | { ok: false; reason: "missing-token" }
   | { ok: false; reason: "mismatch" };
 
+function getCookieValue(cookieHeader: string | null, name: string): string | null {
+  if (!cookieHeader) {
+    return null;
+  }
+
+  const entries = cookieHeader.split(/;\s*/);
+  for (const entry of entries) {
+    const [key, ...rest] = entry.split("=");
+    if (key === name) {
+      return rest.join("=") || null;
+    }
+  }
+
+  return null;
+}
+
 export async function readCsrfCookie(): Promise<string | null> {
   const { cookies } = await import("next/headers");
   const store = await cookies();
   const value = store.get(CSRF_COOKIE)?.value ?? null;
+  return isValidCsrfToken(value) ? value : null;
+}
+
+export function readCsrfCookieFromRequest(request: Request): string | null {
+  const value = getCookieValue(request.headers.get("cookie"), CSRF_COOKIE);
   return isValidCsrfToken(value) ? value : null;
 }
 
@@ -84,22 +122,9 @@ export async function readCsrfCookie(): Promise<string | null> {
 export async function verifyCsrfRequest(
   request: Request
 ): Promise<{ ok: true } | CsrfFailure> {
-  const cookieValue = await readCsrfCookie();
-  if (!cookieValue) {
-    return { ok: false, reason: "missing-cookie" };
-  }
-
+  const cookieValue = readCsrfCookieFromRequest(request);
   const headerValue = request.headers.get(CSRF_HEADER);
-  if (headerValue) {
-    if (!isValidCsrfToken(headerValue)) {
-      return { ok: false, reason: "missing-token" };
-    }
-    return constantTimeTokenEqual(cookieValue, headerValue)
-      ? { ok: true }
-      : { ok: false, reason: "mismatch" };
-  }
-
-  return { ok: false, reason: "missing-token" };
+  return verifyCsrfTokenPair(cookieValue, headerValue);
 }
 
 /**
@@ -109,18 +134,8 @@ export async function verifyCsrfFormData(
   formData: FormData
 ): Promise<{ ok: true } | CsrfFailure> {
   const cookieValue = await readCsrfCookie();
-  if (!cookieValue) {
-    return { ok: false, reason: "missing-cookie" };
-  }
-
   const provided = formData.get(CSRF_FORM_FIELD);
-  if (typeof provided !== "string" || !isValidCsrfToken(provided)) {
-    return { ok: false, reason: "missing-token" };
-  }
-
-  return constantTimeTokenEqual(cookieValue, provided)
-    ? { ok: true }
-    : { ok: false, reason: "mismatch" };
+  return verifyCsrfTokenPair(cookieValue, typeof provided === "string" ? provided : null);
 }
 
 export async function requireCsrfRequest(request: Request): Promise<void> {

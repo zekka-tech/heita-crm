@@ -45,7 +45,6 @@ describe("isValidCsrfToken", () => {
 
 describe("verifyCsrfRequest", () => {
   it("fails when the cookie is missing", async () => {
-    stubCookies(null);
     const request = new Request("https://heita.test/api/x", {
       method: "POST",
       headers: { [CSRF_HEADER]: generateCsrfToken() }
@@ -58,8 +57,10 @@ describe("verifyCsrfRequest", () => {
 
   it("fails when the header is missing", async () => {
     const token = generateCsrfToken();
-    stubCookies(token);
-    const request = new Request("https://heita.test/api/x", { method: "POST" });
+    const request = new Request("https://heita.test/api/x", {
+      method: "POST",
+      headers: { cookie: `${CSRF_COOKIE}=${token}` }
+    });
     await expect(verifyCsrfRequest(request)).resolves.toEqual({
       ok: false,
       reason: "missing-token"
@@ -67,10 +68,13 @@ describe("verifyCsrfRequest", () => {
   });
 
   it("fails when header does not match cookie", async () => {
-    stubCookies(generateCsrfToken());
+    const cookieToken = generateCsrfToken();
     const request = new Request("https://heita.test/api/x", {
       method: "POST",
-      headers: { [CSRF_HEADER]: generateCsrfToken() }
+      headers: {
+        [CSRF_HEADER]: generateCsrfToken(),
+        cookie: `${CSRF_COOKIE}=${cookieToken}`
+      }
     });
     await expect(verifyCsrfRequest(request)).resolves.toEqual({
       ok: false,
@@ -80,10 +84,12 @@ describe("verifyCsrfRequest", () => {
 
   it("passes when header matches cookie", async () => {
     const token = generateCsrfToken();
-    stubCookies(token);
     const request = new Request("https://heita.test/api/x", {
       method: "POST",
-      headers: { [CSRF_HEADER]: token }
+      headers: {
+        [CSRF_HEADER]: token,
+        cookie: `${CSRF_COOKIE}=${token}`
+      }
     });
     await expect(verifyCsrfRequest(request)).resolves.toEqual({ ok: true });
   });

@@ -1,5 +1,8 @@
+import { runWithCircuitBreaker } from "@/lib/circuit-breaker";
+
 export async function sendOtpSms(input: { to: string; code: string }) {
-  if (!process.env.AT_API_KEY) {
+  const apiKey = process.env.AT_API_KEY;
+  if (!apiKey) {
     return {
       provider: "development",
       to: input.to,
@@ -23,16 +26,18 @@ export async function sendOtpSms(input: { to: string; code: string }) {
     form.set("from", process.env.AT_SENDER_ID);
   }
 
-  const response = await fetch("https://api.africastalking.com/version1/messaging", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      apiKey: process.env.AT_API_KEY,
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: form.toString(),
-    signal: AbortSignal.timeout(30_000)
-  });
+  const response = await runWithCircuitBreaker("africas-talking.sms", () =>
+    fetch("https://api.africastalking.com/version1/messaging", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        apiKey,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: form.toString(),
+      signal: AbortSignal.timeout(30_000)
+    })
+  );
 
   const payload = (await response.json().catch(() => null)) as
     | {

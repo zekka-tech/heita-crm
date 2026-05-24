@@ -2,9 +2,10 @@ import { StaffRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth";
+import { getBuildPhaseRouteResponse } from "@/lib/build-phase";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { authenticateRequestUser } from "@/lib/request-auth";
 import {
   createStaffInvite,
   listStaffInvites
@@ -25,16 +26,19 @@ type RouteContext = {
 };
 
 export async function GET(_: Request, { params }: RouteContext) {
+  const buildResponse = getBuildPhaseRouteResponse();
+  if (buildResponse) return buildResponse;
+
   const { businessId } = await params;
-  const session = await auth();
-  if (!session?.user?.id) {
+  const session = await authenticateRequestUser(_.headers);
+  if (!session?.userId) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
   try {
     const invites = await listStaffInvites({
       businessId,
-      actorUserId: session.user.id
+      actorUserId: session.userId
     });
     return NextResponse.json({ invites });
   } catch (error) {
@@ -46,17 +50,20 @@ export async function GET(_: Request, { params }: RouteContext) {
 }
 
 export async function POST(request: Request, { params }: RouteContext) {
+  const buildResponse = getBuildPhaseRouteResponse();
+  if (buildResponse) return buildResponse;
+
   const csrfFailure = await csrfFailureResponse(request);
   if (csrfFailure) return csrfFailure;
 
   const { businessId } = await params;
-  const session = await auth();
-  if (!session?.user?.id) {
+  const session = await authenticateRequestUser(request.headers);
+  if (!session?.userId) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
   const limit = await enforceRateLimit({
-    identifier: `staff-invite:${session.user.id}:${businessId}`,
+    identifier: `staff-invite:${session.userId}:${businessId}`,
     windowSeconds: 60,
     max: 5
   });
@@ -85,7 +92,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   try {
     const { invite, acceptUrl } = await createStaffInvite({
       businessId,
-      actorUserId: session.user.id,
+      actorUserId: session.userId,
       role: parsed.data.role,
       email: parsed.data.email ?? null,
       phone: parsed.data.phone ?? null

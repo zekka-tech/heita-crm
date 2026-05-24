@@ -1,15 +1,24 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth";
 import { streamRagAnswer } from "@/lib/ai/rag";
+import { getBuildPhaseRouteResponse } from "@/lib/build-phase";
 import { logger } from "@/lib/logger";
 import { incrementAiChatMetric, observeHttpRoute } from "@/lib/metrics";
 import { prisma } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { authenticateRequestUser } from "@/lib/request-auth";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 import { getClientIp } from "@/lib/security";
 import { withSpan } from "@/lib/tracing";
+import {
+  AiUsageQuotaExceededError,
+  buildAiQuotaExceededResponse,
+  estimateTokenCount,
+  finalizeAiTokenUsage,
+  releaseAiTokenUsage,
+  reserveAiMessageQuota
+} from "@/server/services/ai-usage.service";
 
 const ChatRequestSchema = z.object({
   businessSlug: z.string().min(1).max(80),
@@ -22,10 +31,13 @@ function buildSessionTitle(message: string) {
 }
 
 export async function POST(request: Request) {
+  const buildResponse = getBuildPhaseRouteResponse();
+  if (buildResponse) return buildResponse;
+
   const startedAt = Date.now();
   const requestId = resolveRequestId(request.headers);
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
+  const session = await authenticateRequestUser(request.headers);
+  const userId = session?.userId ?? null;
   const ip = getClientIp(request.headers);
   const limit = await enforceRateLimit({
     identifier: `ai-chat:${userId ?? ip}`,
@@ -142,6 +154,31 @@ export async function POST(request: Request) {
 
   const encoder = new TextEncoder();
   const streamStartedAt = Date.now();
+  let usageReservationId: string | null = null;
+
+  try {
+    const reservation = await reserveAiMessageQuota({
+      businessId: business.id,
+      sessionId: activeSession.id,
+      userId
+    });
+    usageReservationId = reservation.usageId;
+  } catch (error) {
+    if (error instanceof AiUsageQuotaExceededError) {
+      observeHttpRoute({
+        route: "/api/ai/chat",
+        method: "POST",
+        status: 402,
+        durationMs: Date.now() - startedAt
+      });
+      return NextResponse.json(buildAiQuotaExceededResponse(error), {
+        status: 402,
+        headers: { [requestIdHeader]: requestId }
+      });
+    }
+
+    throw error;
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -165,6 +202,10 @@ export async function POST(request: Request) {
                 content: message.content
               }))
             })
+        );
+        const promptTokens = estimateTokenCount(
+          result.prompt,
+          ...history.map((message) => message.content)
         );
 
         controller.enqueue(
@@ -193,19 +234,41 @@ export async function POST(request: Request) {
             sessionId: activeSession.id,
             role: "assistant",
             content: assistantContent.trim(),
-            model: result.runtime,
+            model: result.model ?? result.runtime,
             latencyMs: Date.now() - streamStartedAt,
             metadata: {
               citations: result.citations
             }
           }
         });
+
+        if (usageReservationId && result.runtime !== "fallback") {
+          const completionTokens = estimateTokenCount(assistantContent);
+          await finalizeAiTokenUsage({
+            usageId: usageReservationId,
+            sessionId: activeSession.id,
+            userId,
+            runtime: result.runtime,
+            model: result.model,
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+          });
+          usageReservationId = null;
+        } else if (usageReservationId) {
+          await releaseAiTokenUsage(usageReservationId).catch(() => undefined);
+          usageReservationId = null;
+        }
         incrementAiChatMetric(result.runtime, "success");
 
         controller.enqueue(encoder.encode("event: done\ndata: complete\n\n"));
         controller.close();
       } catch (error) {
         incrementAiChatMetric("unknown", "error");
+        if (usageReservationId) {
+          await releaseAiTokenUsage(usageReservationId).catch(() => undefined);
+          usageReservationId = null;
+        }
         logger.error(
           {
             err: error,

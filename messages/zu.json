@@ -121,6 +121,8 @@
     "deleteAccount": "Susa i-akhawunti",
     "updated": "Iphrofayela ibuyekeziwe.",
     "updateError": "Asikwazanga ukuvuselela iphrofayela.",
+    "downloadStarted": "Ukulandwa kokukhishwa kwedatha ye-akhawunti yakho sekuqalile.",
+    "downloadError": "Asikwazanga ukulungiselela ukukhishwa kwedatha ye-akhawunti yakho.",
     "confirmDelete": "Susa i-akhawunti yakho ye-Heita? Lokhu kuzokhanisela ubulungu obusebenzayo futhi kuqale inqubo yokususa.",
     "deleteError": "Asikwazanga ukususa i-akhawunti yakho."
   },

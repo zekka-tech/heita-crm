@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { anthropicConfigured } from "@/lib/ai/anthropic";
+import { getBuildPhaseRouteResponse } from "@/lib/build-phase";
 import { ollamaConfigured } from "@/lib/ai/ollama";
 import { prisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
@@ -107,6 +108,9 @@ async function checkStorage(): Promise<CheckResult> {
 }
 
 export async function GET(request: Request) {
+  const buildResponse = getBuildPhaseRouteResponse();
+  if (buildResponse) return buildResponse;
+
   const requestId = resolveRequestId(request.headers);
   const url = new URL(request.url);
   const deep = url.searchParams.get("deep") === "1";

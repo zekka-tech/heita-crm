@@ -1,3 +1,5 @@
+import { runWithCircuitBreaker } from "@/lib/circuit-breaker";
+
 const baseUrl = "https://graph.facebook.com";
 
 type WhatsAppTemplateComponent = {
@@ -57,15 +59,17 @@ async function requestWhatsApp<T>(path: string, options: RequestOptions = {}) {
     const signal = options.signal ?? AbortSignal.timeout(30_000);
 
     try {
-      const response = await fetch(url, {
-        method: options.method ?? "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          ...(options.body ? { "Content-Type": "application/json" } : {})
-        },
-        body: options.body ? JSON.stringify(options.body) : undefined,
-        signal
-      });
+      const response = await runWithCircuitBreaker("whatsapp.graph", () =>
+        fetch(url, {
+          method: options.method ?? "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...(options.body ? { "Content-Type": "application/json" } : {})
+          },
+          body: options.body ? JSON.stringify(options.body) : undefined,
+          signal
+        })
+      );
 
       if (!response.ok) {
         const text = await response.text().catch(() => "");

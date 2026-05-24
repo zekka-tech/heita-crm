@@ -6,6 +6,7 @@ import {
   scanStoredObjectForMalware
 } from "@/lib/malware-scan";
 import { prisma } from "@/lib/prisma";
+import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 export class AiWorkspaceServiceError extends Error {
   constructor(
@@ -26,6 +27,7 @@ export function isAiWorkspaceServiceError(
 
 type CreateDocumentRecordInput = {
   businessId: string;
+  actorUserId?: string | null;
   title: string;
   fileName: string;
   mimeType: string;
@@ -62,28 +64,53 @@ export async function createDocumentRecord(
     );
   }
 
-  return prisma.businessDocument.create({
-    data: {
-      workspaceId: workspace.id,
-      businessId: input.businessId,
-      title: input.title,
-      fileName: input.fileName,
-      mimeType: input.mimeType,
-      storageKey: input.storageKey,
-      sizeBytes: input.sizeBytes,
-      sourceUrl: input.sourceUrl ?? null,
-      status: DocumentStatus.PENDING
+  return prisma.$transaction(async (tx) => {
+    const document = await tx.businessDocument.create({
+      data: {
+        workspaceId: workspace.id,
+        businessId: input.businessId,
+        title: input.title,
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        storageKey: input.storageKey,
+        sizeBytes: input.sizeBytes,
+        sourceUrl: input.sourceUrl ?? null,
+        status: DocumentStatus.PENDING
+      }
+    });
+
+    if (input.actorUserId) {
+      await recordStaffAuditLog(
+        {
+          businessId: input.businessId,
+          actorUserId: input.actorUserId,
+          action: "AI_DOCUMENT_CREATE",
+          targetType: "BusinessDocument",
+          targetId: document.id,
+          metadata: {
+            title: document.title,
+            fileName: document.fileName,
+            mimeType: document.mimeType,
+            sizeBytes: document.sizeBytes
+          }
+        },
+        tx
+      );
     }
+
+    return document;
   });
 }
 
 export async function requestDocumentIngestion(
-  documentId: string
+  documentId: string,
+  actorUserId?: string | null
 ): Promise<RequestDocumentIngestionResult> {
   const document = await prisma.businessDocument.findUnique({
     where: { id: documentId },
     select: {
       id: true,
+      businessId: true,
       status: true,
       storageKey: true,
       fileName: true
@@ -166,6 +193,20 @@ export async function requestDocumentIngestion(
   }
 
   const ingestion = await enqueueDocumentIngestion(document.id);
+
+  if (actorUserId) {
+    await recordStaffAuditLog({
+      businessId: document.businessId,
+      actorUserId,
+      action: "AI_DOCUMENT_INGEST_REQUEST",
+      targetType: "BusinessDocument",
+      targetId: document.id,
+      metadata: {
+        jobId: ingestion.jobId,
+        previousStatus: document.status
+      }
+    });
+  }
 
   return {
     status: "accepted",

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth";
+import { getBuildPhaseRouteResponse } from "@/lib/build-phase";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { prisma } from "@/lib/prisma";
+import { authenticateRequestUser } from "@/lib/request-auth";
 
 const PushSubscriptionSchema = z.object({
   endpoint: z.string().url(),
@@ -14,11 +15,14 @@ const PushSubscriptionSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const buildResponse = getBuildPhaseRouteResponse();
+  if (buildResponse) return buildResponse;
+
   const csrfFailure = await csrfFailureResponse(request);
   if (csrfFailure) return csrfFailure;
 
-  const session = await auth();
-  if (!session?.user?.id) {
+  const session = await authenticateRequestUser(request.headers);
+  if (!session?.userId) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -39,12 +43,12 @@ export async function POST(request: Request) {
       endpoint: parsed.data.endpoint
     },
     update: {
-      userId: session.user.id,
+      userId: session.userId,
       p256dh: parsed.data.keys.p256dh,
       auth: parsed.data.keys.auth
     },
     create: {
-      userId: session.user.id,
+      userId: session.userId,
       endpoint: parsed.data.endpoint,
       p256dh: parsed.data.keys.p256dh,
       auth: parsed.data.keys.auth
@@ -55,11 +59,14 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const buildResponse = getBuildPhaseRouteResponse();
+  if (buildResponse) return buildResponse;
+
   const csrfFailure = await csrfFailureResponse(request);
   if (csrfFailure) return csrfFailure;
 
-  const session = await auth();
-  if (!session?.user?.id) {
+  const session = await authenticateRequestUser(request.headers);
+  if (!session?.userId) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -78,7 +85,7 @@ export async function DELETE(request: Request) {
   await prisma.pushSubscription.deleteMany({
     where: {
       endpoint: parsed.data.endpoint,
-      userId: session.user.id
+      userId: session.userId
     }
   });
 

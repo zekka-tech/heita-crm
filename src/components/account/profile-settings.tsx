@@ -74,6 +74,34 @@ export function ProfileSettings({
     });
   };
 
+  const downloadAccountData = () => {
+    startTransition(async () => {
+      setStatus(null);
+
+      const response = await fetch("/api/account/export", {
+        method: "POST",
+        headers: appendCsrfHeader(undefined, csrfToken)
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        setStatus(payload?.error ?? t("downloadError"));
+        return;
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = "heita-account-export.json";
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+      setStatus(t("downloadStarted"));
+    });
+  };
+
   return (
     <Card variant="surface" className="space-y-4">
       <h2 className="section-title">{t("title")}</h2>
@@ -99,8 +127,13 @@ export function ProfileSettings({
         <Button type="button" variant="primary" onClick={submit} disabled={isPending || !csrfToken}>
           {t("saveChanges")}
         </Button>
-        <Button asChild variant="secondary">
-          <a href="/api/account/export">{t("downloadData")}</a>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={downloadAccountData}
+          disabled={isPending || !csrfToken}
+        >
+          {t("downloadData")}
         </Button>
         <Button type="button" variant="danger" onClick={deleteAccount} disabled={isPending || !csrfToken}>
           {t("deleteAccount")}

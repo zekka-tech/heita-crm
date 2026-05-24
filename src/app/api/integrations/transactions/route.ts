@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getBuildPhaseRouteResponse } from "@/lib/build-phase";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { hmacSha256, constantTimeEqual, getClientIp } from "@/lib/security";
 import { normalizeZaPhone } from "@/lib/phone";
@@ -50,6 +51,9 @@ function verifySignature(input: {
 }
 
 export async function POST(request: Request) {
+  const buildResponse = getBuildPhaseRouteResponse();
+  if (buildResponse) return buildResponse;
+
   const startedAt = Date.now();
   const clientIp = getClientIp(request.headers);
   const rawBody = await request.text();

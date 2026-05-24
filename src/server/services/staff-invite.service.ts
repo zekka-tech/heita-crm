@@ -8,6 +8,7 @@ import { normalizeZaPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { sendOtpSms } from "@/lib/sms";
+import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 const INVITE_TTL_HOURS = 72;
 
@@ -60,20 +61,41 @@ export async function createStaffInvite(input: CreateStaffInviteInput) {
   const tokenHash = hashInviteToken(token);
   const expiresAt = new Date(Date.now() + INVITE_TTL_HOURS * 60 * 60 * 1000);
 
-  const invite = await prisma.staffInvite.create({
-    data: {
-      businessId: input.businessId,
-      email: input.email?.toLowerCase() ?? null,
-      phone: normalizedPhone,
-      role: input.role,
-      tokenHash,
-      invitedById: input.actorUserId,
-      status: StaffInviteStatus.PENDING,
-      expiresAt
-    },
-    include: {
-      business: { select: { name: true, slug: true } }
-    }
+  const invite = await prisma.$transaction(async (tx) => {
+    const createdInvite = await tx.staffInvite.create({
+      data: {
+        businessId: input.businessId,
+        email: input.email?.toLowerCase() ?? null,
+        phone: normalizedPhone,
+        role: input.role,
+        tokenHash,
+        invitedById: input.actorUserId,
+        status: StaffInviteStatus.PENDING,
+        expiresAt
+      },
+      include: {
+        business: { select: { name: true, slug: true } }
+      }
+    });
+
+    await recordStaffAuditLog(
+      {
+        businessId: input.businessId,
+        actorUserId: input.actorUserId,
+        action: "STAFF_INVITE_CREATE",
+        targetType: "StaffInvite",
+        targetId: createdInvite.id,
+        metadata: {
+          role: input.role,
+          email: createdInvite.email,
+          phone: createdInvite.phone,
+          expiresAt: createdInvite.expiresAt.toISOString()
+        }
+      },
+      tx
+    );
+
+    return createdInvite;
   });
 
   const acceptUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/staff/accept/${token}`;
@@ -155,12 +177,32 @@ export async function revokeStaffInvite(input: {
     return invite;
   }
 
-  return prisma.staffInvite.update({
-    where: { id: invite.id },
-    data: {
-      status: StaffInviteStatus.REVOKED,
-      revokedAt: new Date()
-    }
+  return prisma.$transaction(async (tx) => {
+    const revokedInvite = await tx.staffInvite.update({
+      where: { id: invite.id },
+      data: {
+        status: StaffInviteStatus.REVOKED,
+        revokedAt: new Date()
+      }
+    });
+
+    await recordStaffAuditLog(
+      {
+        businessId: invite.businessId,
+        actorUserId: input.actorUserId,
+        action: "STAFF_INVITE_REVOKE",
+        targetType: "StaffInvite",
+        targetId: invite.id,
+        metadata: {
+          email: invite.email,
+          phone: invite.phone,
+          role: invite.role
+        }
+      },
+      tx
+    );
+
+    return revokedInvite;
   });
 }
 

@@ -121,6 +121,8 @@
     "deleteAccount": "Skrap rekening",
     "updated": "Profiel opgedateer.",
     "updateError": "Kon nie profiel opdateer nie.",
+    "downloadStarted": "Jou rekeninguitvoer se aflaai het begin.",
+    "downloadError": "Kon nie jou rekeninguitvoer voorberei nie.",
     "confirmDelete": "Skrap jou Heita-rekening? Dit sal aktiewe lidmaatskappe kanselleer en die verwyderingsproses begin.",
     "deleteError": "Kon nie jou rekening skrap nie."
   },

@@ -7,6 +7,7 @@ import {
 } from "@/lib/loyalty";
 import { runIdempotentOperation } from "@/lib/idempotency";
 import { prisma } from "@/lib/prisma";
+import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 type LoyaltyTx = Prisma.TransactionClient;
 
@@ -29,6 +30,7 @@ type EarnPointsInput = {
   actorUserId: string;
   idempotencyKey: string;
   description?: string | null;
+  staffAudit?: boolean;
 };
 
 type RedeemPointsInput =
@@ -39,6 +41,7 @@ type RedeemPointsInput =
       idempotencyKey: string;
       rewardId: string;
       description?: string | null;
+      staffAudit?: boolean;
     }
   | {
       businessId: string;
@@ -47,6 +50,7 @@ type RedeemPointsInput =
       idempotencyKey: string;
       points: number;
       description?: string | null;
+      staffAudit?: boolean;
     };
 
 type RefundTransactionInput = {
@@ -55,6 +59,7 @@ type RefundTransactionInput = {
   actorUserId: string;
   idempotencyKey: string;
   description?: string | null;
+  staffAudit?: boolean;
 };
 
 type ExpirePointsResult = {
@@ -231,7 +236,7 @@ export async function earnPoints(input: EarnPointsInput) {
             }
           });
 
-          await tx.loyaltyTransaction.create({
+          const transaction = await tx.loyaltyTransaction.create({
             data: {
               businessId: membership.businessId,
               membershipId: membership.id,
@@ -246,6 +251,25 @@ export async function earnPoints(input: EarnPointsInput) {
               }
             }
           });
+
+          if (input.staffAudit) {
+            await recordStaffAuditLog(
+              {
+                businessId: membership.businessId,
+                actorUserId: input.actorUserId,
+                action: "LOYALTY_EARN",
+                targetType: "Membership",
+                targetId: membership.id,
+                metadata: {
+                  loyaltyTransactionId: transaction.id,
+                  awardedPoints: earnData.awardedPoints,
+                  basePoints: input.points,
+                  pointMultiplier: earnData.tierPerks.pointMultiplier ?? 1
+                }
+              },
+              tx
+            );
+          }
 
           await recalculateTier(tx, {
             membershipId: membership.id,
@@ -330,7 +354,7 @@ export async function redeemPoints(input: RedeemPointsInput) {
             }
           });
 
-          await tx.loyaltyTransaction.create({
+          const transaction = await tx.loyaltyTransaction.create({
             data: {
               businessId: membership.businessId,
               membershipId: membership.id,
@@ -341,6 +365,27 @@ export async function redeemPoints(input: RedeemPointsInput) {
               metadata: rewardMetadata as Prisma.InputJsonValue | undefined
             }
           });
+
+          if (input.staffAudit) {
+            await recordStaffAuditLog(
+              {
+                businessId: membership.businessId,
+                actorUserId: input.actorUserId,
+                action: "LOYALTY_REDEEM",
+                targetType: "Membership",
+                targetId: membership.id,
+                metadata: {
+                  loyaltyTransactionId: transaction.id,
+                  pointsRedeemed: pointsToRedeem,
+                  rewardId:
+                    rewardMetadata && typeof rewardMetadata.rewardId === "string"
+                      ? rewardMetadata.rewardId
+                      : null
+                }
+              },
+              tx
+            );
+          }
 
           await recalculateTier(tx, {
             membershipId: membership.id,
@@ -470,6 +515,24 @@ export async function refundTransaction(input: RefundTransactionInput) {
               }
             }
           });
+
+          if (input.staffAudit) {
+            await recordStaffAuditLog(
+              {
+                businessId: sourceTransaction.businessId,
+                actorUserId: input.actorUserId,
+                action: "LOYALTY_REFUND",
+                targetType: "LoyaltyTransaction",
+                targetId: sourceTransaction.id,
+                metadata: {
+                  refundTransactionId: refund.id,
+                  pointsReturned: pointsDelta,
+                  membershipId: sourceTransaction.membershipId
+                }
+              },
+              tx
+            );
+          }
 
           await recalculateTier(tx, {
             membershipId: sourceTransaction.membershipId,

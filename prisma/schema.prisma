@@ -31,6 +31,8 @@ model User {
   loyaltyEvents     LoyaltyTransaction[]
   messages          Message[]
   consents          UserConsent[]
+  aiTokenUsages     AiTokenUsage[]
+  staffAuditLogs    StaffAuditLog[]      @relation("StaffAuditActor")
 }
 
 model Account {
@@ -84,6 +86,7 @@ model OtpCode {
 
 model Business {
   id                    String               @id @default(cuid())
+  planId                BusinessPlanId       @default(FREE)
   slug                  String               @unique
   name                  String
   legalName             String?
@@ -123,6 +126,8 @@ model Business {
   loyaltyTransactions   LoyaltyTransaction[]
   consents              UserConsent[]
   staffInvites          StaffInvite[]
+  aiTokenUsages         AiTokenUsage[]
+  staffAuditLogs        StaffAuditLog[]
 }
 
 model QrCode {
@@ -279,6 +284,7 @@ model AiChatSession {
   business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   user         User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   messages     AiChatMessage[]
+  tokenUsage   AiTokenUsage[]
 
   @@index([businessId, createdAt])
 }
@@ -476,6 +482,43 @@ model UserConsent {
   @@index([businessId, type])
 }
 
+model AiTokenUsage {
+  id               String         @id @default(cuid())
+  businessId       String
+  sessionId        String?
+  userId           String?
+  runtime          String
+  model            String?
+  messageUnits     Int            @default(1)
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  createdAt        DateTime       @default(now())
+  business         Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  session          AiChatSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  user             User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, createdAt])
+  @@index([sessionId, createdAt])
+}
+
+model StaffAuditLog {
+  id          String   @id @default(cuid())
+  businessId  String
+  actorUserId String
+  action      String
+  targetType  String
+  targetId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actorUser   User      @relation("StaffAuditActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([targetType, targetId])
+}
+
 enum StaffRole {
   OWNER
   MANAGER
@@ -567,4 +610,10 @@ enum BusinessCategory {
   SERVICES
   ENTERTAINMENT
   OTHER
+}
+
+enum BusinessPlanId {
+  FREE
+  GROWTH
+  SCALE
 }

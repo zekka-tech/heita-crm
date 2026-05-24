@@ -19,6 +19,8 @@ export type RagCitation = {
 
 export type RagAnswerStream = {
   runtime: "ollama" | "anthropic" | "fallback";
+  model: string | null;
+  prompt: string;
   citations: RagCitation[];
   stream: AsyncGenerator<string>;
 };
@@ -104,6 +106,8 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
   if (!question) {
     return {
       runtime: "fallback",
+      model: null,
+      prompt: "",
       citations: [],
       stream: (async function* () {
         yield "Please send a question to start the conversation.";
@@ -118,8 +122,11 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
 
   if (ollamaConfigured()) {
     try {
+      const model = process.env.OLLAMA_CHAT_MODEL ?? "llama3.2";
       return {
         runtime: "ollama",
+        model,
+        prompt,
         citations,
         stream: streamOllamaChat({
           messages: [
@@ -137,8 +144,11 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
   }
 
   if (anthropicConfigured()) {
+    const model = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
     return {
       runtime: "anthropic",
+      model,
+      prompt,
       citations,
       stream: streamAnthropicChat({
         system: prompt,
@@ -147,13 +157,16 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
           .map((turn) => ({
             role: turn.role === "assistant" ? "assistant" : "user",
             content: turn.content
-          }))
+          })),
+        model
       })
     };
   }
 
   return {
     runtime: "fallback",
+    model: null,
+    prompt,
     citations,
     stream: (async function* () {
       yield "AI co-worker is not configured for this environment. Add OLLAMA_BASE_URL or ANTHROPIC_API_KEY to enable replies.";
