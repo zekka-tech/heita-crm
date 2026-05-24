@@ -11,7 +11,27 @@ type ConversationParticipant = {
   lastDirection: string;
   unreadCount: number;
   status: string | null;
+  customerServiceWindowOpen: boolean;
+  customerServiceWindowExpiresAt: Date | null;
 };
+
+const WHATSAPP_CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function computeCustomerServiceWindow(lastInboundAt: Date | null) {
+  if (!lastInboundAt) {
+    return {
+      open: false,
+      expiresAt: null
+    };
+  }
+
+  const expiresAt = new Date(lastInboundAt.getTime() + WHATSAPP_CUSTOMER_SERVICE_WINDOW_MS);
+
+  return {
+    open: expiresAt.getTime() > Date.now(),
+    expiresAt
+  };
+}
 
 export async function listBusinessConversations(input: { businessId: string }) {
   const messages = await prisma.message.findMany({
@@ -47,6 +67,10 @@ export async function listBusinessConversations(input: { businessId: string }) {
 
     const existing = conversations.get(contactPhone);
     if (!existing) {
+      const lastInboundAt =
+        message.direction === "INBOUND" ? message.createdAt : null;
+      const serviceWindow = computeCustomerServiceWindow(lastInboundAt);
+
       conversations.set(contactPhone, {
         userId: message.userId,
         contactPhone,
@@ -55,13 +79,20 @@ export async function listBusinessConversations(input: { businessId: string }) {
         lastMessageBody: message.body,
         lastDirection: message.direction,
         unreadCount: message.direction === "INBOUND" ? 1 : 0,
-        status: message.status
+        status: message.status,
+        customerServiceWindowOpen: serviceWindow.open,
+        customerServiceWindowExpiresAt: serviceWindow.expiresAt
       });
       continue;
     }
 
     if (message.direction === "INBOUND") {
       existing.unreadCount += 1;
+      if (!existing.customerServiceWindowOpen) {
+        const serviceWindow = computeCustomerServiceWindow(message.createdAt);
+        existing.customerServiceWindowOpen = serviceWindow.open;
+        existing.customerServiceWindowExpiresAt = serviceWindow.expiresAt;
+      }
     }
   }
 
@@ -99,4 +130,26 @@ export async function getBusinessConversationThread(input: {
     },
     take: 200
   });
+}
+
+export async function getWhatsappCustomerServiceWindowStatus(input: {
+  businessId: string;
+  contactPhone: string;
+}) {
+  const lastInboundMessage = await prisma.message.findFirst({
+    where: {
+      businessId: input.businessId,
+      channel: MessageChannel.WHATSAPP,
+      contactPhone: input.contactPhone,
+      direction: "INBOUND"
+    },
+    orderBy: {
+      createdAt: "desc"
+    },
+    select: {
+      createdAt: true
+    }
+  });
+
+  return computeCustomerServiceWindow(lastInboundMessage?.createdAt ?? null);
 }

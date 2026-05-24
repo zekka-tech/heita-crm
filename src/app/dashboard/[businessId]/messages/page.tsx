@@ -12,6 +12,7 @@ import { requireRole } from "@/lib/staff";
 import { prisma } from "@/lib/prisma";
 import {
   getBusinessConversationThread,
+  getWhatsappCustomerServiceWindowStatus,
   listBusinessConversations
 } from "@/server/services/conversation.service";
 
@@ -62,6 +63,12 @@ export default async function DashboardMessagesPage({
         contactPhone: activeContactPhone
       })
     : [];
+  const serviceWindow = activeContactPhone
+    ? await getWhatsappCustomerServiceWindowStatus({
+        businessId,
+        contactPhone: activeContactPhone
+      })
+    : null;
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
@@ -179,6 +186,18 @@ export default async function DashboardMessagesPage({
                   <CsrfField />
                   <input type="hidden" name="businessId" value={businessId} />
                   <input type="hidden" name="contactPhone" value={activeContactPhone} />
+                  <div
+                    className={[
+                      "rounded-xl border px-4 py-3 text-sm",
+                      serviceWindow?.open
+                        ? "border-success/30 bg-success/10 text-ink"
+                        : "border-warning/30 bg-warning/10 text-ink"
+                    ].join(" ")}
+                  >
+                    {serviceWindow?.open
+                      ? `Free-text replies are allowed until ${serviceWindow.expiresAt?.toLocaleString("en-ZA")}.`
+                      : "The 24-hour customer-service window is closed. Send an approved WhatsApp template unless the customer messages again."}
+                  </div>
                   <Textarea
                     name="body"
                     label="Reply text"

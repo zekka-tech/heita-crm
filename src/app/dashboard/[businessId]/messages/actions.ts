@@ -11,6 +11,7 @@ import {
   sendWhatsAppTemplateMessage,
   sendWhatsAppTextMessage
 } from "@/lib/whatsapp";
+import { getWhatsappCustomerServiceWindowStatus } from "@/server/services/conversation.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 export async function sendWhatsappReplyAction(formData: FormData) {
@@ -41,6 +42,17 @@ export async function sendWhatsappReplyAction(formData: FormData) {
 
   if (!business.wabaPhoneId) {
     throw new Error("This business does not have a connected WhatsApp number.");
+  }
+
+  const serviceWindow = await getWhatsappCustomerServiceWindowStatus({
+    businessId,
+    contactPhone
+  });
+
+  if (!templateName && !serviceWindow.open) {
+    throw new Error(
+      "Free-text WhatsApp replies are only allowed within 24 hours of the customer's last inbound message. Use an approved template instead."
+    );
   }
 
   let response: { messageId: string | null };
