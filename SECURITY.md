@@ -58,4 +58,4 @@ Send vulnerability reports to **security@heita.co.za**. Please do not file publi
 
 - **CSRF on server actions**: relies on Next.js App Router's same-origin enforcement. A future revision should layer a double-submit cookie for any cross-origin embed scenarios.
 - **WhatsApp media handling**: not yet implemented; when added, files must be virus-scanned before being made available to staff.
-- **Document upload**: presigned URL flow is intentionally deferred until storage credentials are configured. The route currently returns a clear 501/503 rather than silently accepting uploads.
+- **Document upload**: presigned uploads are implemented for R2/MinIO, but production still requires object-storage credentials and malware scanning before staff-facing download/open flows are expanded.

@@ -7,12 +7,15 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { observeHttpRoute } from "@/lib/metrics";
-import { prisma } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 import { getClientIp } from "@/lib/security";
 import { createPresignedUpload, getStoredObjectUrl, storageConfigured } from "@/lib/storage";
 import { requireRole } from "@/lib/staff";
+import {
+  createDocumentRecord,
+  isAiWorkspaceServiceError
+} from "@/server/services/ai-workspace.service";
 
 const UploadRequestSchema = z.object({
   businessId: z.string().min(1),
@@ -131,29 +134,18 @@ export async function POST(request: Request) {
       { userId: session.user.id, filename: parsed.data.filename },
       "upload.storage_not_configured"
     );
+    observeHttpRoute({
+      route: "/api/upload",
+      method: "POST",
+      status: 503,
+      durationMs: Date.now() - startedAt
+    });
     return NextResponse.json(
       {
         error:
           "Object storage is not yet configured for this environment. Set R2_* or MINIO_* environment variables."
       },
       { status: 503, headers: { [requestIdHeader]: requestId } }
-    );
-  }
-
-  const workspace = await prisma.aiWorkspace.findUnique({
-    where: { businessId: parsed.data.businessId }
-  });
-
-  if (!workspace) {
-    observeHttpRoute({
-      route: "/api/upload",
-      method: "POST",
-      status: 404,
-      durationMs: Date.now() - startedAt
-    });
-    return NextResponse.json(
-      { error: "AI workspace not found." },
-      { status: 404, headers: { [requestIdHeader]: requestId } }
     );
   }
 
@@ -168,9 +160,9 @@ export async function POST(request: Request) {
     byteSize: parsed.data.byteSize
   });
 
-  const document = await prisma.businessDocument.create({
-    data: {
-      workspaceId: workspace.id,
+  let document;
+  try {
+    document = await createDocumentRecord({
       businessId: parsed.data.businessId,
       title: parsed.data.title,
       fileName: parsed.data.filename,
@@ -178,8 +170,23 @@ export async function POST(request: Request) {
       storageKey,
       sizeBytes: parsed.data.byteSize,
       sourceUrl: getStoredObjectUrl(storageKey)
+    });
+  } catch (error) {
+    if (isAiWorkspaceServiceError(error)) {
+      observeHttpRoute({
+        route: "/api/upload",
+        method: "POST",
+        status: error.status,
+        durationMs: Date.now() - startedAt
+      });
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status, headers: { [requestIdHeader]: requestId } }
+      );
     }
-  });
+
+    throw error;
+  }
 
   observeHttpRoute({
     route: "/api/upload",

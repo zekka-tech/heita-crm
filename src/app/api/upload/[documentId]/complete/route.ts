@@ -3,10 +3,13 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { observeHttpRoute } from "@/lib/metrics";
-import { enqueueDocumentIngestion } from "@/lib/ai/document-processor";
 import { prisma } from "@/lib/prisma";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 import { requireRole } from "@/lib/staff";
+import {
+  isAiWorkspaceServiceError,
+  requestDocumentIngestion
+} from "@/server/services/ai-workspace.service";
 
 type CompleteUploadRouteProps = {
   params: Promise<{ documentId: string }>;
@@ -56,21 +59,36 @@ export async function POST(
     allowedRoles: [StaffRole.AI_TRAINER, StaffRole.MANAGER]
   });
 
-  const result = await enqueueDocumentIngestion(documentId);
+  let result;
+  try {
+    result = await requestDocumentIngestion(documentId);
+  } catch (error) {
+    if (isAiWorkspaceServiceError(error)) {
+      observeHttpRoute({
+        route: "/api/upload/[documentId]/complete",
+        method: "POST",
+        status: error.status,
+        durationMs: Date.now() - startedAt
+      });
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status, headers: { [requestIdHeader]: requestId } }
+      );
+    }
+
+    throw error;
+  }
 
   observeHttpRoute({
     route: "/api/upload/[documentId]/complete",
     method: "POST",
-    status: 200,
+    status: result.status === "processing" ? 202 : 200,
     durationMs: Date.now() - startedAt
   });
   return NextResponse.json(
+    result,
     {
-      status: "accepted",
-      documentId,
-      ingestion: result
-    },
-    {
+      status: result.status === "processing" ? 202 : 200,
       headers: {
         [requestIdHeader]: requestId
       }
