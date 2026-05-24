@@ -1,7 +1,7 @@
 import { Job, Queue } from "bullmq";
 
 import { logger } from "@/lib/logger";
-import { getRedis } from "@/lib/redis";
+import { getQueueRedis } from "@/lib/redis";
 import { processBusinessDocument } from "@/lib/ai/document-processor";
 
 export const DOCUMENT_INGESTION_QUEUE = "document-ingestion";
@@ -15,7 +15,7 @@ declare global {
 }
 
 export function getDocumentIngestionQueue() {
-  const redis = getRedis();
+  const redis = getQueueRedis();
   if (!redis) {
     return null;
   }

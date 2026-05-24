@@ -5,10 +5,10 @@ import {
   handleDocumentIngestionJob
 } from "@/lib/ai/ingestion-queue";
 import { logger } from "@/lib/logger";
-import { getRedis } from "@/lib/redis";
+import { getQueueRedis } from "@/lib/redis";
 
 export function startDocumentIngestionWorker() {
-  const redis = getRedis();
+  const redis = getQueueRedis();
   if (!redis) {
     logger.warn("ai.document.worker_disabled_no_redis");
     return null;
