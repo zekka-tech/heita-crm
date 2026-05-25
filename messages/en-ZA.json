@@ -126,6 +126,26 @@
     "confirmDelete": "Delete your Heita account? This will cancel active memberships and start the deletion process.",
     "deleteError": "Unable to delete your account."
   },
+  "notificationPreferences": {
+    "title": "Notification preferences",
+    "description": "Choose which channels each business may use when they send you updates. Quiet hours pause push and email, but your in-app feed stays available.",
+    "businessHint": "Applies to this business only.",
+    "emptyState": "Join a business to manage per-business notification preferences.",
+    "saveChanges": "Save notification preferences",
+    "updated": "Notification preferences updated.",
+    "updateError": "Unable to update notification preferences.",
+    "channels": {
+      "inApp": "In-app feed",
+      "push": "Browser push",
+      "email": "Email"
+    },
+    "quietHours": {
+      "enabled": "Pause push and email during quiet hours",
+      "start": "Quiet hours start",
+      "end": "Quiet hours end",
+      "timezone": "Quiet hours use {timezone}."
+    }
+  },
   "bottomNav": {
     "home": "Home",
     "wallet": "Wallet",

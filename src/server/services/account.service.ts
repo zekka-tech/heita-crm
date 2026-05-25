@@ -1,6 +1,10 @@
-import { ConsentChannel, ConsentType } from "@prisma/client";
+import { ConsentChannel, ConsentType, Prisma } from "@prisma/client";
 
 import { sendEmail } from "@/lib/email";
+import {
+  normalizeNotificationPreferences,
+  type NotificationPreferences
+} from "@/lib/notification-preferences";
 import { prisma } from "@/lib/prisma";
 
 export async function recordConsent(input: {
@@ -95,13 +99,23 @@ export async function updateAccountProfile(input: {
   name?: string | null;
   email?: string | null;
   preferredAiMode?: string | null;
+  notificationPreferences?: NotificationPreferences | null;
 }) {
+  const normalizedPreferences =
+    input.notificationPreferences !== undefined
+      ? normalizeNotificationPreferences(input.notificationPreferences)
+      : undefined;
+
   return prisma.user.update({
     where: { id: input.userId },
     data: {
       name: input.name ?? undefined,
       email: input.email ?? undefined,
-      preferredAiMode: input.preferredAiMode ?? undefined
+      preferredAiMode: input.preferredAiMode ?? undefined,
+      notificationPreferences:
+        normalizedPreferences !== undefined
+          ? (normalizedPreferences as Prisma.InputJsonValue)
+          : undefined
     }
   });
 }
@@ -123,7 +137,8 @@ export async function softDeleteAccount(userId: string) {
         email: null,
         phone: null,
         image: null,
-        preferredAiMode: null
+        preferredAiMode: null,
+        notificationPreferences: Prisma.JsonNull
       }
     });
 

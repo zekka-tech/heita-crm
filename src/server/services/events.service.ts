@@ -306,6 +306,7 @@ export async function sendDueEventReminders(
       memberships.map((membership) =>
         sendNotification({
           userId: membership.userId,
+          businessId: event.businessId,
           title: `Reminder: ${event.title}`,
           body: event.location
             ? `${event.business.name} — ${event.location}`

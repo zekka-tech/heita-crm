@@ -241,6 +241,7 @@ describe("sendDueEventReminders", () => {
     expect(sendNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user_a",
+        businessId: "biz_1",
         type: "EVENT_REMINDER",
         actionUrl: "/b/acme/events"
       })

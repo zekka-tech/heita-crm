@@ -15,6 +15,7 @@ model User {
   phone             String?             @unique
   phoneVerifiedAt   DateTime?
   preferredAiMode   String?             @default("auto")
+  notificationPreferences Json?
   sessionVersion    Int                 @default(0)
   deletedAt         DateTime?
   createdAt         DateTime            @default(now())

@@ -2,13 +2,15 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
 import { CSRF_COOKIE, CSRF_HEADER, verifyCsrfTokenPair } from "@/lib/csrf";
+import { NotificationPreferencesSchema } from "@/lib/notification-preferences";
 import { authenticateRequestUser } from "@/lib/request-auth";
 import { softDeleteAccount, updateAccountProfile } from "@/server/services/account.service";
 
 const UpdateAccountSchema = z.object({
   name: z.string().trim().min(1).max(100).nullable().optional(),
   email: z.string().trim().email().nullable().optional(),
-  preferredAiMode: z.string().trim().min(1).max(50).nullable().optional()
+  preferredAiMode: z.string().trim().min(1).max(50).nullable().optional(),
+  notificationPreferences: NotificationPreferencesSchema.nullable().optional()
 });
 
 function verifyCsrf(req: NextApiRequest, res: NextApiResponse) {
@@ -56,7 +58,8 @@ export default async function handler(
       userId: session.userId,
       name: parsed.data.name ?? undefined,
       email: parsed.data.email ?? undefined,
-      preferredAiMode: parsed.data.preferredAiMode ?? undefined
+      preferredAiMode: parsed.data.preferredAiMode ?? undefined,
+      notificationPreferences: parsed.data.notificationPreferences ?? undefined
     });
 
     return res.status(200).json({
@@ -65,7 +68,8 @@ export default async function handler(
         id: user.id,
         name: user.name,
         email: user.email,
-        preferredAiMode: user.preferredAiMode
+        preferredAiMode: user.preferredAiMode,
+        notificationPreferences: user.notificationPreferences
       }
     });
   }

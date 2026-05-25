@@ -126,6 +126,26 @@
     "confirmDelete": "Skrap jou Heita-rekening? Dit sal aktiewe lidmaatskappe kanselleer en die verwyderingsproses begin.",
     "deleteError": "Kon nie jou rekening skrap nie."
   },
+  "notificationPreferences": {
+    "title": "Kennisgewingvoorkeure",
+    "description": "Kies watter kanale elke besigheid mag gebruik wanneer hulle vir jou opdaterings stuur. Stil ure onderbreek drukkennisgewings en e-pos, maar jou in-app voer bly beskikbaar.",
+    "businessHint": "Geld net vir hierdie besigheid.",
+    "emptyState": "Sluit by 'n besigheid aan om kennisgewingvoorkeure per besigheid te bestuur.",
+    "saveChanges": "Stoor kennisgewingvoorkeure",
+    "updated": "Kennisgewingvoorkeure opgedateer.",
+    "updateError": "Kon nie kennisgewingvoorkeure opdateer nie.",
+    "channels": {
+      "inApp": "In-app voer",
+      "push": "Blaaier-drukkennisgewings",
+      "email": "E-pos"
+    },
+    "quietHours": {
+      "enabled": "Pouseer drukkennisgewings en e-pos tydens stil ure",
+      "start": "Stil ure begin",
+      "end": "Stil ure eindig",
+      "timezone": "Stil ure gebruik {timezone}."
+    }
+  },
   "bottomNav": {
     "home": "Tuis",
     "wallet": "Beursie",

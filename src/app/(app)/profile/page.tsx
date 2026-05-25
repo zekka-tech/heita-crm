@@ -2,12 +2,14 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Mail, Phone, Sparkles, Trash2, UserRound } from "lucide-react";
 
+import { NotificationPreferencesCard } from "@/components/account/notification-preferences-card";
 import { ProfileSettings } from "@/components/account/profile-settings";
 import { PushSubscriptionCard } from "@/components/account/push-subscription-card";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { resolveLocale } from "@/i18n/locale";
+import { normalizeNotificationPreferences } from "@/lib/notification-preferences";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Profile" };
@@ -126,6 +128,14 @@ export default async function ProfilePage() {
         initialName={user.name ?? ""}
         initialEmail={user.email ?? ""}
         initialPreferredAiMode={user.preferredAiMode ?? "auto"}
+      />
+
+      <NotificationPreferencesCard
+        businesses={memberships.map((membership) => ({
+          id: membership.business.id,
+          name: membership.business.name
+        }))}
+        initialPreferences={normalizeNotificationPreferences(user.notificationPreferences)}
       />
 
       <PushSubscriptionCard />

@@ -126,6 +126,26 @@
     "confirmDelete": "Susa i-akhawunti yakho ye-Heita? Lokhu kuzokhanisela ubulungu obusebenzayo futhi kuqale inqubo yokususa.",
     "deleteError": "Asikwazanga ukususa i-akhawunti yakho."
   },
+  "notificationPreferences": {
+    "title": "Izintandokazi zezaziso",
+    "description": "Khetha ukuthi yiluphi uhlelo lokuxhumana ibhizinisi ngalinye elingalusebenzisa uma lithumela izibuyekezo kuwe. Amahora athule amisa i-push ne-imeyili, kodwa okusesiphakelini sangaphakathi kuhlala kutholakala.",
+    "businessHint": "Kusebenza kuleli bhizinisi kuphela.",
+    "emptyState": "Joyina ibhizinisi ukuze uphathe izintandokazi zezaziso zebhizinisi ngalinye.",
+    "saveChanges": "Londoloza izintandokazi zezaziso",
+    "updated": "Izintandokazi zezaziso zibuyekeziwe.",
+    "updateError": "Asikwazanga ukuvuselela izintandokazi zezaziso.",
+    "channels": {
+      "inApp": "Okuphakelayo kwangaphakathi kuhlelo",
+      "push": "I-push yesiphequluli",
+      "email": "I-imeyili"
+    },
+    "quietHours": {
+      "enabled": "Misa i-push ne-imeyili phakathi kwamahora athule",
+      "start": "Amahora athule aqala",
+      "end": "Amahora athule ayaphela",
+      "timezone": "Amahora athule asebenzisa i-{timezone}."
+    }
+  },
   "bottomNav": {
     "home": "Ikhaya",
     "wallet": "Iwallethi",

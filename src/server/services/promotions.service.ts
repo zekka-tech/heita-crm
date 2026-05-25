@@ -324,6 +324,7 @@ export async function broadcastPromotion(
     memberships.map((membership) =>
       sendNotification({
         userId: membership.userId,
+        businessId: promotion.businessId,
         title: promotion.title,
         body: promotion.description ?? "",
         type: "PROMOTION",

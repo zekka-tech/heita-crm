@@ -151,6 +151,7 @@ describe("promotions service", () => {
       expect(sendNotification).toHaveBeenCalledTimes(2);
       expect(sendNotification).toHaveBeenCalledWith({
         userId: "u1",
+        businessId: "biz_1",
         title: "Gold-only sale",
         body: "Exclusive perk",
         type: "PROMOTION",

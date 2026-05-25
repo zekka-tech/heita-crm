@@ -126,6 +126,26 @@
     "confirmDelete": "Cima iakhawunti yakho ye-Heita? Oku kuya kurhoxisa ubulungu obusebenzayo kwaye kuqale inkqubo yokucima.",
     "deleteError": "Asikwazanga ukucima iakhawunti yakho."
   },
+  "notificationPreferences": {
+    "title": "Izicwangciso zezaziso",
+    "description": "Khetha ukuba leliphi ishishini elinokusebenzisa amajelo athile xa lithumela uhlaziyo kuwe. Iiyure zoxolo zimisa i-push ne-imeyili, kodwa umjelo wangaphakathi kwi-app usahlala ukhoyo.",
+    "businessHint": "Kusebenza kweli shishini kuphela.",
+    "emptyState": "Joyina ishishini ukuze ulawule izicwangciso zezaziso zeshishini ngalinye.",
+    "saveChanges": "Gcina izicwangciso zezaziso",
+    "updated": "Izicwangciso zezaziso zihlaziyiwe.",
+    "updateError": "Asikwazanga ukuhlaziya izicwangciso zezaziso.",
+    "channels": {
+      "inApp": "Umjelo wangaphakathi kwi-app",
+      "push": "I-browser push",
+      "email": "I-imeyili"
+    },
+    "quietHours": {
+      "enabled": "Misa i-push ne-imeyili ngexesha leeyure zoxolo",
+      "start": "Iiyure zoxolo ziqala",
+      "end": "Iiyure zoxolo ziphela",
+      "timezone": "Iiyure zoxolo zisebenzisa i-{timezone}."
+    }
+  },
   "bottomNav": {
     "home": "Ekhaya",
     "wallet": "I-wallet",
