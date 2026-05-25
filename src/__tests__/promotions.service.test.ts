@@ -121,6 +121,10 @@ describe("promotions service", () => {
         businessId: "biz_1",
         title: "Gold-only sale",
         description: "Exclusive perk",
+        isActive: true,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60_000),
+        broadcastAt: null,
         targetTierIds: ["tier_gold"],
         business: { id: "biz_1", slug: "acme", name: "Acme" }
       });
@@ -163,6 +167,10 @@ describe("promotions service", () => {
         businessId: "biz_1",
         title: "Storewide sale",
         description: null,
+        isActive: true,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60_000),
+        broadcastAt: null,
         targetTierIds: [],
         business: { id: "biz_1", slug: "acme", name: "Acme" }
       });
@@ -197,6 +205,10 @@ describe("promotions service", () => {
         businessId: "biz_1",
         title: "Storewide",
         description: "Body",
+        isActive: true,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60_000),
+        broadcastAt: null,
         targetTierIds: [],
         business: { id: "biz_1", slug: "acme", name: "Acme" }
       });
@@ -237,6 +249,74 @@ describe("promotions service", () => {
         recipientCount: 2,
         failedCount: 1
       });
+    });
+
+    it("rejects archived, future, ended, or already-broadcast promotions", async () => {
+      mockManagerRole();
+
+      prisma.promotion.findUniqueOrThrow.mockResolvedValueOnce({
+        id: "promo_archived",
+        businessId: "biz_1",
+        title: "Archived",
+        description: null,
+        isActive: false,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60_000),
+        broadcastAt: null,
+        targetTierIds: [],
+        business: { id: "biz_1", slug: "acme", name: "Acme" }
+      });
+      await expect(
+        broadcastPromotion({ promotionId: "promo_archived", actorUserId: "user_1" })
+      ).rejects.toThrow(/archived promotions cannot be broadcast/i);
+
+      prisma.promotion.findUniqueOrThrow.mockResolvedValueOnce({
+        id: "promo_future",
+        businessId: "biz_1",
+        title: "Future",
+        description: null,
+        isActive: true,
+        startsAt: new Date(Date.now() + 60_000),
+        endsAt: new Date(Date.now() + 120_000),
+        broadcastAt: null,
+        targetTierIds: [],
+        business: { id: "biz_1", slug: "acme", name: "Acme" }
+      });
+      await expect(
+        broadcastPromotion({ promotionId: "promo_future", actorUserId: "user_1" })
+      ).rejects.toThrow(/has not started yet/i);
+
+      prisma.promotion.findUniqueOrThrow.mockResolvedValueOnce({
+        id: "promo_ended",
+        businessId: "biz_1",
+        title: "Ended",
+        description: null,
+        isActive: true,
+        startsAt: new Date(Date.now() - 120_000),
+        endsAt: new Date(Date.now() - 60_000),
+        broadcastAt: null,
+        targetTierIds: [],
+        business: { id: "biz_1", slug: "acme", name: "Acme" }
+      });
+      await expect(
+        broadcastPromotion({ promotionId: "promo_ended", actorUserId: "user_1" })
+      ).rejects.toThrow(/already ended/i);
+
+      prisma.promotion.findUniqueOrThrow.mockResolvedValueOnce({
+        id: "promo_sent",
+        businessId: "biz_1",
+        title: "Sent",
+        description: null,
+        isActive: true,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60_000),
+        broadcastAt: new Date(),
+        targetTierIds: [],
+        business: { id: "biz_1", slug: "acme", name: "Acme" }
+      });
+      await expect(
+        broadcastPromotion({ promotionId: "promo_sent", actorUserId: "user_1" })
+      ).rejects.toThrow(/already been broadcast/i);
     });
   });
 });

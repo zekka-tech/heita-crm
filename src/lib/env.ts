@@ -2,15 +2,6 @@ import { z } from "zod";
 
 const NODE_ENV_VALUES = ["development", "test", "production"] as const;
 
-for (const path of [".env.local", ".env"]) {
-  try {
-    process.loadEnvFile?.(path);
-  } catch {
-    // Ignore missing files; the schema below decides whether the current
-    // environment is sufficiently configured for the active runtime.
-  }
-}
-
 const envSchema = z
   .object({
     NODE_ENV: z.enum(NODE_ENV_VALUES).default("development"),

@@ -206,6 +206,11 @@ export default async function PromotionsDashboardPage({
           {business.promotions.length ? (
             <div className="grid gap-3">
               {business.promotions.map((promotion) => {
+                const canBroadcast =
+                  promotion.isActive &&
+                  promotion.startsAt.getTime() <= now.getTime() &&
+                  promotion.endsAt.getTime() > now.getTime() &&
+                  !promotion.broadcastAt;
                 const targetTierNames = promotion.targetTierIds
                   .map(
                     (tierId) =>
@@ -339,15 +344,17 @@ export default async function PromotionsDashboardPage({
                       </Button>
                     </form>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <form action={broadcastPromotionAction}>
-                        <CsrfField />
-                        <input type="hidden" name="businessId" value={business.id} />
-                        <input type="hidden" name="promotionId" value={promotion.id} />
-                        <Button type="submit" variant="primary" size="sm">
-                          <Megaphone className="h-3.5 w-3.5" />
-                          {t("broadcastCta")}
-                        </Button>
-                      </form>
+                      {canBroadcast ? (
+                        <form action={broadcastPromotionAction}>
+                          <CsrfField />
+                          <input type="hidden" name="businessId" value={business.id} />
+                          <input type="hidden" name="promotionId" value={promotion.id} />
+                          <Button type="submit" variant="primary" size="sm">
+                            <Megaphone className="h-3.5 w-3.5" />
+                            {t("broadcastCta")}
+                          </Button>
+                        </form>
+                      ) : null}
                       <form action={deletePromotionAction}>
                         <CsrfField />
                         <input type="hidden" name="businessId" value={business.id} />

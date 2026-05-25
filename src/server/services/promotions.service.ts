@@ -267,6 +267,30 @@ export type BroadcastPromotionResult = {
   broadcastAt: Date;
 };
 
+function assertPromotionBroadcastable(promotion: {
+  isActive: boolean;
+  startsAt: Date;
+  endsAt: Date;
+  broadcastAt: Date | null;
+}) {
+  if (!promotion.isActive) {
+    throw new Error("Archived promotions cannot be broadcast.");
+  }
+
+  const now = Date.now();
+  if (promotion.startsAt.getTime() > now) {
+    throw new Error("This promotion has not started yet.");
+  }
+
+  if (promotion.endsAt.getTime() <= now) {
+    throw new Error("This promotion has already ended.");
+  }
+
+  if (promotion.broadcastAt) {
+    throw new Error("This promotion has already been broadcast.");
+  }
+}
+
 export async function broadcastPromotion(
   input: BroadcastPromotionInput
 ): Promise<BroadcastPromotionResult> {
@@ -282,6 +306,8 @@ export async function broadcastPromotion(
     userId: input.actorUserId,
     allowedRoles: MANAGER_ROLES
   });
+
+  assertPromotionBroadcastable(promotion);
 
   const memberships = await prisma.membership.findMany({
     where: {
