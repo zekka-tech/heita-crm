@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { constantTimeEqual } from "@/lib/security";
+import { sendDueEventReminders } from "@/server/services/events.service";
 import { expireEligiblePoints } from "@/server/services/loyalty.service";
 
 const STALE_OTP_HOURS = 24;
@@ -69,5 +70,7 @@ export async function handleSendRemindersCron(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json({ ok: true, job: "send-reminders" });
+  const result = await sendDueEventReminders();
+  logger.info(result, "cron.send_reminders.completed");
+  return NextResponse.json({ ok: true, job: "send-reminders", result });
 }

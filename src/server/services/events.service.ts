@@ -1,7 +1,9 @@
 import { Prisma, StaffRole } from "@prisma/client";
 
+import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
+import { sendNotification } from "@/server/services/notification.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 const EVENT_TRANSACTION_OPTIONS = {
@@ -255,4 +257,103 @@ export async function deleteEvent(input: DeleteEventInput) {
 
     return event;
   }, EVENT_TRANSACTION_OPTIONS);
+}
+
+const DEFAULT_REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
+const REMINDER_BATCH_SIZE = 50;
+
+export type SendDueEventRemindersInput = {
+  windowMs?: number;
+  now?: Date;
+};
+
+export type SendDueEventRemindersResult = {
+  processedEvents: number;
+  totalRecipients: number;
+  totalFailures: number;
+};
+
+export async function sendDueEventReminders(
+  input: SendDueEventRemindersInput = {}
+): Promise<SendDueEventRemindersResult> {
+  const now = input.now ?? new Date();
+  const windowMs = input.windowMs ?? DEFAULT_REMINDER_WINDOW_MS;
+  const windowEnd = new Date(now.getTime() + windowMs);
+
+  const dueEvents = await prisma.event.findMany({
+    where: {
+      isReminderOn: true,
+      reminderSentAt: null,
+      startsAt: { gt: now, lte: windowEnd }
+    },
+    include: {
+      business: { select: { id: true, slug: true, name: true } }
+    },
+    orderBy: { startsAt: "asc" },
+    take: REMINDER_BATCH_SIZE
+  });
+
+  let totalRecipients = 0;
+  let totalFailures = 0;
+
+  for (const event of dueEvents) {
+    const memberships = await prisma.membership.findMany({
+      where: { businessId: event.businessId, isActive: true },
+      select: { userId: true }
+    });
+
+    const results = await Promise.allSettled(
+      memberships.map((membership) =>
+        sendNotification({
+          userId: membership.userId,
+          title: `Reminder: ${event.title}`,
+          body: event.location
+            ? `${event.business.name} — ${event.location}`
+            : event.business.name,
+          type: "EVENT_REMINDER",
+          actionUrl: `/b/${event.business.slug}/events`,
+          metadata: {
+            eventId: event.id,
+            startsAt: event.startsAt.toISOString()
+          }
+        })
+      )
+    );
+
+    const failures = results.filter((result) => result.status === "rejected").length;
+    totalRecipients += memberships.length;
+    totalFailures += failures;
+
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { reminderSentAt: now }
+    });
+
+    if (failures > 0) {
+      logger.warn(
+        {
+          eventId: event.id,
+          businessId: event.businessId,
+          recipients: memberships.length,
+          failures
+        },
+        "event.reminder.partial_failure"
+      );
+    } else {
+      logger.info(
+        {
+          eventId: event.id,
+          businessId: event.businessId,
+          recipients: memberships.length
+        },
+        "event.reminder.sent"
+      );
+    }
+  }
+
+  return {
+    processedEvents: dueEvents.length,
+    totalRecipients,
+    totalFailures
+  };
 }

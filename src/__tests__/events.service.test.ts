@@ -13,18 +13,31 @@ const prisma = {
     update: vi.fn(),
     delete: vi.fn()
   },
+  membership: {
+    findMany: vi.fn()
+  },
   staffAuditLog: {
     create: vi.fn()
   }
 };
 
+const sendNotification = vi.fn();
+
 vi.mock("@/lib/prisma", () => ({
   prisma
 }));
 
-const { createEvent, deleteEvent, listEventsForStaff, updateEvent } = await import(
-  "@/server/services/events.service"
-);
+vi.mock("@/server/services/notification.service", () => ({
+  sendNotification
+}));
+
+const {
+  createEvent,
+  deleteEvent,
+  listEventsForStaff,
+  sendDueEventReminders,
+  updateEvent
+} = await import("@/server/services/events.service");
 
 function mockManagerRole(businessId = "biz_1") {
   prisma.staffMember.findUnique.mockResolvedValue({
@@ -189,5 +202,101 @@ describe("listEventsForStaff", () => {
 
     expect(events.find((event) => event.id === "evt_past")?.isPast).toBe(true);
     expect(events.find((event) => event.id === "evt_future")?.isPast).toBe(false);
+  });
+});
+
+describe("sendDueEventReminders", () => {
+  it("fans out one notification per active member and stamps reminderSentAt", async () => {
+    const now = new Date("2026-06-01T08:00:00Z");
+    const eventStart = new Date("2026-06-01T18:00:00Z");
+
+    prisma.event.findMany.mockResolvedValue([
+      {
+        id: "evt_due",
+        businessId: "biz_1",
+        title: "Launch night",
+        description: null,
+        startsAt: eventStart,
+        endsAt: null,
+        location: "Sandton",
+        isReminderOn: true,
+        reminderSentAt: null,
+        business: { id: "biz_1", slug: "acme", name: "Acme" }
+      }
+    ]);
+    prisma.membership.findMany.mockResolvedValue([
+      { userId: "user_a" },
+      { userId: "user_b" }
+    ]);
+    sendNotification.mockResolvedValue({ id: "notif_1" });
+
+    const result = await sendDueEventReminders({ now });
+
+    expect(result).toEqual({
+      processedEvents: 1,
+      totalRecipients: 2,
+      totalFailures: 0
+    });
+    expect(sendNotification).toHaveBeenCalledTimes(2);
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user_a",
+        type: "EVENT_REMINDER",
+        actionUrl: "/b/acme/events"
+      })
+    );
+    expect(prisma.event.update).toHaveBeenCalledWith({
+      where: { id: "evt_due" },
+      data: { reminderSentAt: now }
+    });
+  });
+
+  it("still stamps reminderSentAt when some notifications fail", async () => {
+    const now = new Date("2026-06-01T08:00:00Z");
+
+    prisma.event.findMany.mockResolvedValue([
+      {
+        id: "evt_partial",
+        businessId: "biz_1",
+        title: "Mixer",
+        description: null,
+        startsAt: new Date("2026-06-01T20:00:00Z"),
+        endsAt: null,
+        location: null,
+        isReminderOn: true,
+        reminderSentAt: null,
+        business: { id: "biz_1", slug: "acme", name: "Acme" }
+      }
+    ]);
+    prisma.membership.findMany.mockResolvedValue([
+      { userId: "user_a" },
+      { userId: "user_b" }
+    ]);
+    sendNotification
+      .mockResolvedValueOnce({ id: "notif_1" })
+      .mockRejectedValueOnce(new Error("push offline"));
+
+    const result = await sendDueEventReminders({ now });
+
+    expect(result.totalRecipients).toBe(2);
+    expect(result.totalFailures).toBe(1);
+    expect(prisma.event.update).toHaveBeenCalledWith({
+      where: { id: "evt_partial" },
+      data: { reminderSentAt: now }
+    });
+  });
+
+  it("returns zero work when no events are due", async () => {
+    prisma.event.findMany.mockResolvedValue([]);
+
+    const result = await sendDueEventReminders();
+
+    expect(result).toEqual({
+      processedEvents: 0,
+      totalRecipients: 0,
+      totalFailures: 0
+    });
+    expect(sendNotification).not.toHaveBeenCalled();
+    expect(prisma.event.update).not.toHaveBeenCalled();
   });
 });
