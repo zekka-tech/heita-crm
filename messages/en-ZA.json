@@ -146,6 +146,13 @@
       "timezone": "Quiet hours use {timezone}."
     }
   },
+  "cookieConsent": {
+    "title": "Cookie choices",
+    "body": "Heita uses essential cookies for sign-in, security, and session continuity. You can choose whether we may use non-essential cookies for future analytics and product improvements.",
+    "learnMore": "Learn more about cookies",
+    "reject": "Reject non-essential",
+    "accept": "Accept non-essential"
+  },
   "bottomNav": {
     "home": "Home",
     "wallet": "Wallet",
@@ -255,6 +262,15 @@
       "locationPlaceholder": "Shop floor or address",
       "reminder": "Send a reminder the day before"
     }
+  },
+  "publicEvents": {
+    "eyebrow": "Events",
+    "title": "What's coming up",
+    "subtitle": "Reminders fire across WhatsApp, push, and the app feed the day before.",
+    "reminderOn": "Reminder on",
+    "addToCalendar": "Add to calendar",
+    "empty": "No upcoming events.",
+    "backToBusiness": "Back to business profile"
   },
   "languageSwitcher": {
     "label": "Language",

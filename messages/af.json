@@ -146,6 +146,13 @@
       "timezone": "Stil ure gebruik {timezone}."
     }
   },
+  "cookieConsent": {
+    "title": "Koekiekeuses",
+    "body": "Heita gebruik noodsaaklike koekies vir aanmelding, sekuriteit en sessiekontinuiteit. Jy kan kies of ons nie-noodsaaklike koekies vir toekomstige analise en produkverbeterings mag gebruik.",
+    "learnMore": "Lees meer oor koekies",
+    "reject": "Verwerp nie-noodsaaklik",
+    "accept": "Aanvaar nie-noodsaaklik"
+  },
   "bottomNav": {
     "home": "Tuis",
     "wallet": "Beursie",
@@ -255,6 +262,15 @@
       "locationPlaceholder": "Winkelvloer of adres",
       "reminder": "Stuur 'n herinnering die dag voor"
     }
+  },
+  "publicEvents": {
+    "eyebrow": "Geleenthede",
+    "title": "Wat kom volgende",
+    "subtitle": "Herinnerings gaan die vorige dag uit via WhatsApp, push en die app-voer.",
+    "reminderOn": "Herinnering aan",
+    "addToCalendar": "Voeg by kalender",
+    "empty": "Geen komende geleenthede nie.",
+    "backToBusiness": "Terug na besigheidsprofiel"
   },
   "languageSwitcher": {
     "label": "Taal",

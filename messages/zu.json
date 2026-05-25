@@ -146,6 +146,13 @@
       "timezone": "Amahora athule asebenzisa i-{timezone}."
     }
   },
+  "cookieConsent": {
+    "title": "Izinketho zamakhukhi",
+    "body": "I-Heita isebenzisa amakhukhi abalulekile ukuze ungene, kuvikelwe ukuphepha, futhi kuqhubeke iseshini. Ungakhetha ukuthi singawasebenzisa yini amakhukhi angewona abalulekile ezibuyekezweni zesikhathi esizayo nasekuthuthukiseni umkhiqizo.",
+    "learnMore": "Funda kabanzi ngamakhukhi",
+    "reject": "Yenqaba okungewona abalulekile",
+    "accept": "Yamukela okungewona abalulekile"
+  },
   "bottomNav": {
     "home": "Ikhaya",
     "wallet": "Iwallethi",
@@ -255,6 +262,15 @@
       "locationPlaceholder": "Indawo yesitolo noma ikheli",
       "reminder": "Thumela isikhumbuzi ngosuku ngaphambili"
     }
+  },
+  "publicEvents": {
+    "eyebrow": "Imicimbi",
+    "title": "Okuzayo",
+    "subtitle": "Izikhumbuzi zithunyelwa ngosuku olungaphambi komcimbi nge-WhatsApp, push, nangaphakathi kuhlelo.",
+    "reminderOn": "Isikhumbuzi sivuliwe",
+    "addToCalendar": "Engeza ekhalendeni",
+    "empty": "Ayikho imicimbi ezayo.",
+    "backToBusiness": "Buyela kuphrofayela yebhizinisi"
   },
   "languageSwitcher": {
     "label": "Ulimi",

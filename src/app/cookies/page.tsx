@@ -10,7 +10,8 @@ export default function CookiesPage() {
         <p className="text-sm leading-6 text-ink-muted">
           Heita uses essential cookies for authentication, session continuity, and security
           controls such as rate limiting and anti-abuse checks. Non-essential analytics are
-          not enabled in this build.
+          controlled by the in-app cookie banner and stay disabled unless you explicitly
+          accept them on this device.
         </p>
       </Card>
     </main>

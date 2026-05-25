@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
 
 import { HeitaTRPCProvider } from "@/components/providers/trpc-provider";
+import { CookieConsentBanner } from "@/components/layout/cookie-consent-banner";
 import { PwaInstallBanner } from "@/components/layout/pwa-install-banner";
 import { ServiceWorkerRegister } from "@/components/layout/service-worker-register";
 import { resolveLocale } from "@/i18n/locale";
@@ -82,6 +83,7 @@ export default async function RootLayout({
           <HeitaTRPCProvider>
             <ServiceWorkerRegister />
             <PwaInstallBanner />
+            <CookieConsentBanner />
             <div id="main-content" className="app-frame">
               {children}
             </div>

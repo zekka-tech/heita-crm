@@ -1,10 +1,12 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Calendar, MapPin } from "lucide-react";
+import { getTranslations } from "next-intl/server";
+import { Calendar, Download, MapPin } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
+import { resolveLocale } from "@/i18n/locale";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +19,8 @@ export default async function BusinessEventsPage({
   params
 }: BusinessEventsPageProps) {
   const { slug } = await params;
+  const locale = await resolveLocale();
+  const t = await getTranslations("publicEvents");
   const business = await prisma.business.findFirst({
     where: { slug, deletedAt: null },
     include: {
@@ -34,13 +38,13 @@ export default async function BusinessEventsPage({
     <main className="px-4 pb-24 pt-6 sm:px-8">
       <Card variant="hero" className="px-6 py-7 sm:px-10">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-          {business.name} · Events
+          {business.name} · {t("eyebrow")}
         </p>
         <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight">
-          What&apos;s coming up
+          {t("title")}
         </h1>
         <p className="mt-3 max-w-xl text-white/85">
-          Reminders fire across WhatsApp, push, and the app feed the day before.
+          {t("subtitle")}
         </p>
       </Card>
 
@@ -53,14 +57,14 @@ export default async function BusinessEventsPage({
               </div>
               <div className="flex-1">
                 <p className="metric-label">
-                  {event.startsAt.toLocaleDateString("en-ZA", {
+                  {event.startsAt.toLocaleDateString(locale, {
                     weekday: "short",
                     day: "2-digit",
                     month: "short",
                     year: "numeric"
                   })}
                   {event.endsAt
-                    ? ` · ${event.endsAt.toLocaleDateString("en-ZA", {
+                    ? ` · ${event.endsAt.toLocaleDateString(locale, {
                         day: "2-digit",
                         month: "short"
                       })}`
@@ -83,22 +87,30 @@ export default async function BusinessEventsPage({
                   ) : null}
                   {event.isReminderOn ? (
                     <Chip variant="success" size="sm">
-                      Reminder on
+                      {t("reminderOn")}
                     </Chip>
                   ) : null}
                 </div>
+                <a
+                  href={`/api/events/${event.id}.ics`}
+                  download
+                  className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-primary-action underline"
+                >
+                  <Download className="h-4 w-4" />
+                  {t("addToCalendar")}
+                </a>
               </div>
             </Card>
           ))
         ) : (
           <Card variant="outline" className="text-center">
             <Calendar className="mx-auto h-7 w-7 text-ink-subtle" />
-            <p className="mt-3 text-ink-muted">No upcoming events.</p>
+            <p className="mt-3 text-ink-muted">{t("empty")}</p>
             <Link
               href={`/b/${slug}` as Route}
               className="mt-2 inline-flex text-sm text-primary-action underline"
             >
-              Back to business profile
+              {t("backToBusiness")}
             </Link>
           </Card>
         )}

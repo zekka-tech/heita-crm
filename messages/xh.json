@@ -146,6 +146,13 @@
       "timezone": "Iiyure zoxolo zisebenzisa i-{timezone}."
     }
   },
+  "cookieConsent": {
+    "title": "Ukhetho lweekuki",
+    "body": "I-Heita isebenzisa iikuki eziyimfuneko ukuze ungene, kukhuselwe ukhuseleko, kwaye kuqhubeke iseshoni. Ungakhetha ukuba sivunyelwe na ukusebenzisa iikuki ezingeyomfuneko kuhlalutyo lwexesha elizayo nasekuphuculeni imveliso.",
+    "learnMore": "Funda ngakumbi ngeekuki",
+    "reject": "Yala ezingeyomfuneko",
+    "accept": "Yamkela ezingeyomfuneko"
+  },
   "bottomNav": {
     "home": "Ekhaya",
     "wallet": "I-wallet",
@@ -255,6 +262,15 @@
       "locationPlaceholder": "Indawo yevenkile okanye idilesi",
       "reminder": "Thumela isikhumbuzi usuku ngaphambili"
     }
+  },
+  "publicEvents": {
+    "eyebrow": "Iziganeko",
+    "title": "Okuzayo",
+    "subtitle": "Izikhumbuzi zithunyelwa ngosuku olungaphambili nge-WhatsApp, push, kunye nomjelo we-app.",
+    "reminderOn": "Isikhumbuzi sivuliwe",
+    "addToCalendar": "Yongeza kwikhalenda",
+    "empty": "Akukho ziganeko zizayo.",
+    "backToBusiness": "Buyela kwiprofayile yeshishini"
   },
   "languageSwitcher": {
     "label": "Ulwimi",
