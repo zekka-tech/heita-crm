@@ -339,20 +339,26 @@ model Reward {
 }
 
 model Promotion {
-  id            String         @id @default(cuid())
-  businessId    String
-  title         String
-  description   String?
-  type          PromotionType
-  startsAt      DateTime
-  endsAt        DateTime
-  imageUrl      String?
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  business      Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id              String         @id @default(cuid())
+  businessId      String
+  title           String
+  description     String?
+  type            PromotionType
+  startsAt        DateTime
+  endsAt          DateTime
+  imageUrl        String?
+  code            String?
+  targetTierIds   String[]       @default([])
+  broadcastAt     DateTime?
+  broadcastSentBy String?
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  @@unique([businessId, code], name: "Promotion_businessId_code_key")
   @@index([businessId, startsAt, endsAt])
+  @@index([businessId, isActive, endsAt])
 }
 
 model Event {

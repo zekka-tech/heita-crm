@@ -7,6 +7,7 @@ import {
   Calendar,
   Gift,
   LineChart,
+  Megaphone,
   MessageSquare,
   QrCode,
   Sparkles,
@@ -110,6 +111,18 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
               <Link href={`/dashboard/${businessId}/messages` as Route}>
                 <MessageSquare className="h-4 w-4" />
                 {t("conversations")}
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href={`/dashboard/${businessId}/promotions` as Route}>
+                <Megaphone className="h-4 w-4" />
+                {t("promotions")}
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href={`/dashboard/${businessId}/events` as Route}>
+                <Calendar className="h-4 w-4" />
+                {t("events")}
               </Link>
             </Button>
           </div>

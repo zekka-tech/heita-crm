@@ -179,7 +179,62 @@
     "pointsIssued30d": "Punte uitgereik (30d)",
     "pointsRedeemed30d": "Afgelos of verval (30d)",
     "redemptionRate": "Afloskoers",
-    "repliesSent30d": "Antwoorde gestuur (30d)"
+    "repliesSent30d": "Antwoorde gestuur (30d)",
+    "promotions": "Promosies",
+    "events": "Geleenthede"
+  },
+  "promotions": {
+    "title": "Promosies",
+    "subtitle": "Skeduleer tydsbeperkte veldtogte, kodes en vlak-geteikende uitsendings wat in jou kliënte se kennisgewings opduik.",
+    "listTitle": "Aktiewe en vorige promosies",
+    "createCta": "Skep 'n promosie",
+    "saveCta": "Stoor promosie",
+    "broadcastCta": "Saai uit",
+    "deleteCta": "Argiveer",
+    "broadcastSuccess": "Uitsending na kwalifiserende lede gestuur.",
+    "broadcastDescription": "Uitsaai stuur hierdie promosie as 'n kennisgewing aan elke kwalifiserende lid. Bevestig die gehoor voor jy stuur — daar is geen ongedaan-maak nie.",
+    "createdSuccess": "Promosie geskep.",
+    "updatedSuccess": "Promosie opgedateer.",
+    "deletedSuccess": "Promosie geargiveer.",
+    "emptyState": "Nog geen promosies nie. Skep jou eerste veldtog hierbo.",
+    "noTiers": "Geen lojaliteitsvlakke opgestel vir hierdie besigheid nie.",
+    "tierTargetsHint": "Los leeg om aan alle aktiewe lede te stuur. Kies vlakke om die gehoor te beperk.",
+    "formLabels": {
+      "title": "Titel",
+      "description": "Beskrywing",
+      "type": "Tipe",
+      "startsAt": "Begin om",
+      "endsAt": "Eindig om",
+      "code": "Aflossingkode",
+      "tierTargets": "Vlak-teikens",
+      "imageUrl": "Beeld URL"
+    }
+  },
+  "events": {
+    "title": "Geleenthede",
+    "subtitle": "Skeduleer winkelgeleenthede, bekendstellings en byeenkomste. Herinneringe gaan oor WhatsApp, push en die programstroom uit.",
+    "createCta": "Skep 'n geleentheid",
+    "saveCta": "Stoor geleentheid",
+    "deleteCta": "Verwyder geleentheid",
+    "createdSuccess": "Geleentheid geskep.",
+    "updatedSuccess": "Geleentheid bygewerk.",
+    "deletedSuccess": "Geleentheid verwyder.",
+    "upcomingHeading": "Komende geleenthede",
+    "pastHeading": "Vorige geleenthede",
+    "emptyUpcoming": "Geen komende geleenthede nie. Skeduleer jou eerste een hierbo.",
+    "emptyPast": "Geen vorige geleenthede nie.",
+    "reminderOn": "Herinnering aan",
+    "formLabels": {
+      "title": "Titel",
+      "titlePlaceholder": "Saterdagmark",
+      "description": "Beskrywing",
+      "descriptionPlaceholder": "Sê vir lede wat aan die gang is.",
+      "startsAt": "Begin om",
+      "endsAt": "Eindig om (opsioneel)",
+      "location": "Ligging",
+      "locationPlaceholder": "Winkelvloer of adres",
+      "reminder": "Stuur 'n herinnering die dag voor"
+    }
   },
   "languageSwitcher": {
     "label": "Taal",

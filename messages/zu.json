@@ -179,7 +179,62 @@
     "pointsIssued30d": "Amaphuzu akhishiwe (30d)",
     "pointsRedeemed30d": "Ahlengiwe noma aphelelwe (30d)",
     "redemptionRate": "Izinga lokuhlenga",
-    "repliesSent30d": "Izimpendulo ezithunyelwe (30d)"
+    "repliesSent30d": "Izimpendulo ezithunyelwe (30d)",
+    "promotions": "Izikhuthazi",
+    "events": "Imicimbi"
+  },
+  "promotions": {
+    "title": "Izikhuthazi",
+    "subtitle": "Hlela imikhankaso enesikhathi esinqunyiwe, amakhodi, nokusakaza okuqondiswe emazingeni — kuyobonakala ezazisweni zamakhasimende akho.",
+    "listTitle": "Izikhuthazi ezisebenzayo nezedlule",
+    "createCta": "Dala isikhuthazi",
+    "saveCta": "Gcina isikhuthazi",
+    "broadcastCta": "Sakaza",
+    "deleteCta": "Faka emakhabetheni",
+    "broadcastSuccess": "Ukusakaza kuthunyelwe kumalungu afanele.",
+    "broadcastDescription": "Ukusakaza kuthumela lesi sikhuthazi njengesaziso kuwo wonke amalungu afanele. Hlola izethameli kuqala — akukho ukubuyela emuva.",
+    "createdSuccess": "Isikhuthazi sidaliwe.",
+    "updatedSuccess": "Isikhuthazi sibuyekeziwe.",
+    "deletedSuccess": "Isikhuthazi sifakwe emakhabetheni.",
+    "emptyState": "Akukho zikhuthazi okwamanje. Dala umkhankaso wakho wokuqala ngenhla.",
+    "noTiers": "Awekho amazinga okwethembeka amisiwe kuleli bhizinisi.",
+    "tierTargetsHint": "Shiya kungenalutho ukuze kuthunyelwe kuwo wonke amalungu asebenzayo. Khetha amazinga ukuze ukhawulele izethameli.",
+    "formLabels": {
+      "title": "Isihloko",
+      "description": "Incazelo",
+      "type": "Uhlobo",
+      "startsAt": "Kuqala ngo-",
+      "endsAt": "Kuphela ngo-",
+      "code": "Ikhodi yokuhlenga",
+      "tierTargets": "Amazinga okukhomba",
+      "imageUrl": "I-URL yesithombe"
+    }
+  },
+  "events": {
+    "title": "Imicimbi",
+    "subtitle": "Hlela imicimbi esitolo, ukwethulwa, nokuhlangana. Izikhumbuzi zikhishwa nge-WhatsApp, push, nohlelo.",
+    "createCta": "Dala umcimbi",
+    "saveCta": "Londoloza umcimbi",
+    "deleteCta": "Susa umcimbi",
+    "createdSuccess": "Umcimbi udaliwe.",
+    "updatedSuccess": "Umcimbi ubuyekeziwe.",
+    "deletedSuccess": "Umcimbi ususiwe.",
+    "upcomingHeading": "Imicimbi ezayo",
+    "pastHeading": "Imicimbi edlulile",
+    "emptyUpcoming": "Akukho micimbi ezayo. Hlela owakho wokuqala ngenhla.",
+    "emptyPast": "Akukho micimbi edlulile.",
+    "reminderOn": "Isikhumbuzi sivuliwe",
+    "formLabels": {
+      "title": "Isihloko",
+      "titlePlaceholder": "Imakethe yangoMgqibelo",
+      "description": "Incazelo",
+      "descriptionPlaceholder": "Tshela amalungu ukuthi kwenzakalani.",
+      "startsAt": "Iqala ngo",
+      "endsAt": "Iphela ngo (okukhethwa kukho)",
+      "location": "Indawo",
+      "locationPlaceholder": "Indawo yesitolo noma ikheli",
+      "reminder": "Thumela isikhumbuzi ngosuku ngaphambili"
+    }
   },
   "languageSwitcher": {
     "label": "Ulimi",

@@ -179,7 +179,62 @@
     "pointsIssued30d": "Amanqaku akhutshiweyo (30d)",
     "pointsRedeemed30d": "Ahlengiwe okanye aphelelwe (30d)",
     "redemptionRate": "Izinga lokuhlangula",
-    "repliesSent30d": "Iimpendulo ezithunyelweyo (30d)"
+    "repliesSent30d": "Iimpendulo ezithunyelweyo (30d)",
+    "promotions": "Izikhuthazi",
+    "events": "Iziganeko"
+  },
+  "promotions": {
+    "title": "Izikhuthazi",
+    "subtitle": "Cwangcisa amaphulo asenexesha elinqunyiweyo, iikhowudi, kunye nokusasazwa okujolise emanqanabeni — kuya kubonakala kwizaziso zabathengi bakho.",
+    "listTitle": "Izikhuthazi ezisebenzayo nezidlulileyo",
+    "createCta": "Dala isikhuthazi",
+    "saveCta": "Gcina isikhuthazi",
+    "broadcastCta": "Sasaza",
+    "deleteCta": "Faka kuvimba",
+    "broadcastSuccess": "Ukusasazwa kuthunyelwe kumalungu afanelekayo.",
+    "broadcastDescription": "Ukusasaza kuthumela esi sikhuthazi njengesaziso kuwo wonke amalungu afanelekayo. Khangela abaphulaphuli phambi kokuthumela — akukho kubuyela emva.",
+    "createdSuccess": "Isikhuthazi senziwe.",
+    "updatedSuccess": "Isikhuthazi sihlaziyiwe.",
+    "deletedSuccess": "Isikhuthazi sifakwe kuvimba.",
+    "emptyState": "Akukho zikhuthazi okwangoku. Dala iphulo lakho lokuqala ngentla.",
+    "noTiers": "Akukho manqanaba okunyaniseka asekiweyo kweli shishini.",
+    "tierTargetsHint": "Yishiye ingenanto ukuze ithunyelwe kuwo onke amalungu asebenzayo. Khetha amanqanaba ukunciphisa abaphulaphuli.",
+    "formLabels": {
+      "title": "Isihloko",
+      "description": "Inkcazelo",
+      "type": "Uhlobo",
+      "startsAt": "Kuqala nge-",
+      "endsAt": "Kuphela nge-",
+      "code": "Ikhowudi yokuhlangula",
+      "tierTargets": "Amanqanaba ekujoliswe kuwo",
+      "imageUrl": "I-URL yomfanekiso"
+    }
+  },
+  "events": {
+    "title": "Iziganeko",
+    "subtitle": "Cwangcisa iziganeko zevenkile, ukubhengezwa, kunye neentlanganiso. Izikhumbuzi zihamba nge-WhatsApp, push, kunye nohlelo.",
+    "createCta": "Yenza isiganeko",
+    "saveCta": "Gcina isiganeko",
+    "deleteCta": "Cima isiganeko",
+    "createdSuccess": "Isiganeko senziwe.",
+    "updatedSuccess": "Isiganeko sihlaziyiwe.",
+    "deletedSuccess": "Isiganeko sicinyiwe.",
+    "upcomingHeading": "Iziganeko ezizayo",
+    "pastHeading": "Iziganeko ezidlulileyo",
+    "emptyUpcoming": "Akukho ziganeko zizayo. Cwangcisa eyokuqala apha ngentla.",
+    "emptyPast": "Akukho ziganeko zidlulileyo.",
+    "reminderOn": "Isikhumbuzi sivuliwe",
+    "formLabels": {
+      "title": "Isihloko",
+      "titlePlaceholder": "Imarike yangoMgqibelo",
+      "description": "Inkcazelo",
+      "descriptionPlaceholder": "Xelela amalungu okwenzekayo.",
+      "startsAt": "Iqala nge-",
+      "endsAt": "Iphela nge- (kuyazikhethelwa)",
+      "location": "Indawo",
+      "locationPlaceholder": "Indawo yevenkile okanye idilesi",
+      "reminder": "Thumela isikhumbuzi usuku ngaphambili"
+    }
   },
   "languageSwitcher": {
     "label": "Ulwimi",

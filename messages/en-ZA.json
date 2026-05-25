@@ -179,7 +179,62 @@
     "pointsIssued30d": "Points issued (30d)",
     "pointsRedeemed30d": "Redeemed or expired (30d)",
     "redemptionRate": "Redemption rate",
-    "repliesSent30d": "Replies sent (30d)"
+    "repliesSent30d": "Replies sent (30d)",
+    "promotions": "Promotions",
+    "events": "Events"
+  },
+  "promotions": {
+    "title": "Promotions",
+    "subtitle": "Schedule limited-time campaigns, codes, and tier-targeted broadcasts that show up in your customers' notifications.",
+    "listTitle": "Active and past promotions",
+    "createCta": "Create a promotion",
+    "saveCta": "Save promotion",
+    "broadcastCta": "Broadcast",
+    "deleteCta": "Archive",
+    "broadcastSuccess": "Broadcast sent to eligible members.",
+    "broadcastDescription": "Broadcasting fans this promotion out as a notification to every eligible member. Double-check the audience before sending — there is no undo.",
+    "createdSuccess": "Promotion created.",
+    "updatedSuccess": "Promotion updated.",
+    "deletedSuccess": "Promotion archived.",
+    "emptyState": "No promotions yet. Create your first campaign above.",
+    "noTiers": "No loyalty tiers configured for this business.",
+    "tierTargetsHint": "Leave empty to send to all active members. Select tiers to limit the broadcast audience.",
+    "formLabels": {
+      "title": "Title",
+      "description": "Description",
+      "type": "Type",
+      "startsAt": "Starts at",
+      "endsAt": "Ends at",
+      "code": "Redemption code",
+      "tierTargets": "Tier targets",
+      "imageUrl": "Image URL"
+    }
+  },
+  "events": {
+    "title": "Events",
+    "subtitle": "Schedule in-store events, launches, and gatherings. Reminders fan out across WhatsApp, push, and the app feed.",
+    "createCta": "Create an event",
+    "saveCta": "Save event",
+    "deleteCta": "Delete event",
+    "createdSuccess": "Event created.",
+    "updatedSuccess": "Event updated.",
+    "deletedSuccess": "Event deleted.",
+    "upcomingHeading": "Upcoming events",
+    "pastHeading": "Past events",
+    "emptyUpcoming": "No upcoming events. Schedule your first one above.",
+    "emptyPast": "No past events yet.",
+    "reminderOn": "Reminder on",
+    "formLabels": {
+      "title": "Title",
+      "titlePlaceholder": "Saturday market",
+      "description": "Description",
+      "descriptionPlaceholder": "Tell members what's happening.",
+      "startsAt": "Starts at",
+      "endsAt": "Ends at (optional)",
+      "location": "Location",
+      "locationPlaceholder": "Shop floor or address",
+      "reminder": "Send a reminder the day before"
+    }
   },
   "languageSwitcher": {
     "label": "Language",
