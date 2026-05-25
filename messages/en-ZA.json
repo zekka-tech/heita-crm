@@ -153,6 +153,9 @@
     "reject": "Reject non-essential",
     "accept": "Accept non-essential"
   },
+  "businessSwitcher": {
+    "label": "Switch business"
+  },
   "bottomNav": {
     "home": "Home",
     "wallet": "Wallet",

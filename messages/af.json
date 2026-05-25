@@ -153,6 +153,9 @@
     "reject": "Verwerp nie-noodsaaklik",
     "accept": "Aanvaar nie-noodsaaklik"
   },
+  "businessSwitcher": {
+    "label": "Wissel besigheid"
+  },
   "bottomNav": {
     "home": "Tuis",
     "wallet": "Beursie",

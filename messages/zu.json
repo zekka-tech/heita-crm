@@ -153,6 +153,9 @@
     "reject": "Yenqaba okungewona abalulekile",
     "accept": "Yamukela okungewona abalulekile"
   },
+  "businessSwitcher": {
+    "label": "Shintsha ibhizinisi"
+  },
   "bottomNav": {
     "home": "Ikhaya",
     "wallet": "Iwallethi",

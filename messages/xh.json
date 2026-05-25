@@ -153,6 +153,9 @@
     "reject": "Yala ezingeyomfuneko",
     "accept": "Yamkela ezingeyomfuneko"
   },
+  "businessSwitcher": {
+    "label": "Tshintsha ishishini"
+  },
   "bottomNav": {
     "home": "Ekhaya",
     "wallet": "I-wallet",
