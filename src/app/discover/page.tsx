@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BusinessCategory, Province } from "@prisma/client";
 
 import { BusinessCard } from "@/components/business/business-card";
+import { GeoDiscoveryButton } from "@/components/discover/geo-discovery-button";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -73,6 +74,9 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
             </Button>
           </div>
         </form>
+        <div className="mt-3 border-t border-line pt-3">
+          <GeoDiscoveryButton currentPath="/discover" />
+        </div>
       </Card>
 
       <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">

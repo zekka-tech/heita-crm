@@ -1,18 +1,20 @@
-import { BusinessCategory } from "@prisma/client";
+import type { Metadata } from "next";
+import { BusinessCategory, Province } from "@prisma/client";
 import { notFound } from "next/navigation";
 
 import { BusinessCard } from "@/components/business/business-card";
 import { Card } from "@/components/ui/card";
-import { formatEnumLabel } from "@/lib/business";
+import { Input, Select } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { formatEnumLabel, provinces } from "@/lib/business";
 import { discoverBusinesses } from "@/server/services/discovery.service";
 
 type CategoryPageProps = {
   params: Promise<{ category: string }>;
+  searchParams?: Promise<{ province?: string; city?: string }>;
 };
 
-export const dynamic = "force-dynamic";
-
-export async function generateMetadata({ params }: CategoryPageProps) {
+export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const { category } = await params;
   const normalized = category.toUpperCase().replace(/-/g, "_");
 
@@ -20,34 +22,107 @@ export async function generateMetadata({ params }: CategoryPageProps) {
     return { title: "Category" };
   }
 
+  const label = formatEnumLabel(normalized);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://heita.co.za";
+
   return {
-    title: `${formatEnumLabel(normalized)} businesses`,
-    description: `Browse ${formatEnumLabel(normalized)} businesses on Heita.`
+    title: `${label} businesses in South Africa`,
+    description: `Browse ${label} businesses on Heita — earn loyalty points, redeem rewards, and chat via WhatsApp.`,
+    alternates: {
+      languages: {
+        "en-ZA": `${appUrl}/categories/${category}`,
+        zu: `${appUrl}/categories/${category}`,
+        xh: `${appUrl}/categories/${category}`,
+        af: `${appUrl}/categories/${category}`
+      }
+    }
   };
 }
 
-export default async function CategoryPage({ params }: CategoryPageProps) {
+export const dynamic = "force-dynamic";
+
+export default async function CategoryPage({
+  params,
+  searchParams
+}: CategoryPageProps) {
   const { category } = await params;
+  const sp = searchParams ? await searchParams : {};
   const normalized = category.toUpperCase().replace(/-/g, "_");
 
   if (!Object.values(BusinessCategory).includes(normalized as BusinessCategory)) {
     notFound();
   }
 
+  const province = Object.values(Province).includes(sp.province as Province)
+    ? (sp.province as Province)
+    : null;
+
   const businesses = await discoverBusinesses({
-    category: normalized as BusinessCategory
+    category: normalized as BusinessCategory,
+    province,
+    city: sp.city ?? null
   });
+
+  const label = formatEnumLabel(normalized);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://heita.co.za";
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "ItemList",
+            name: `${label} businesses on Heita`,
+            description: `Browse ${label} businesses in South Africa`,
+            url: `${appUrl}/categories/${category}`,
+            numberOfItems: businesses.length,
+            itemListElement: businesses.slice(0, 20).map((b, i) => ({
+              "@type": "ListItem",
+              position: i + 1,
+              item: {
+                "@type": "LocalBusiness",
+                name: b.name,
+                url: `${appUrl}/b/${b.slug}`
+              }
+            }))
+          })
+        }}
+      />
+
       <Card variant="hero" className="px-6 py-8 sm:px-10">
         <h1 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
-          {formatEnumLabel(normalized)} businesses
+          {label} businesses
         </h1>
         <p className="mt-3 max-w-2xl text-white/85">
           Explore loyalty programmes, promotions, and AI-assisted support from
-          businesses in this category.
+          {label.toLowerCase()} businesses across South Africa.
         </p>
+      </Card>
+
+      <Card variant="surface" className="mt-6">
+        <form className="grid gap-3 sm:grid-cols-3">
+          <Select name="province" label="Province" defaultValue={sp.province ?? ""}>
+            <option value="">All provinces</option>
+            {provinces.map((p) => (
+              <option key={p} value={p}>
+                {formatEnumLabel(p)}
+              </option>
+            ))}
+          </Select>
+          <Input
+            name="city"
+            label="City or suburb"
+            defaultValue={sp.city ?? ""}
+            placeholder="e.g. Sandton"
+          />
+          <div className="flex items-end">
+            <Button type="submit" variant="primary" className="w-full">
+              Filter
+            </Button>
+          </div>
+        </form>
       </Card>
 
       <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -65,7 +140,9 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
           ))
         ) : (
           <Card variant="outline" className="md:col-span-2 xl:col-span-3">
-            <p className="text-sm text-ink-muted">No businesses are live in this category yet.</p>
+            <p className="text-sm text-ink-muted">
+              No businesses matched these filters. Try removing the province or city filter.
+            </p>
           </Card>
         )}
       </section>
