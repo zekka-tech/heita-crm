@@ -1,4 +1,4 @@
-const VERSION = "heita-v3";
+const VERSION = "heita-v4";
 const APP_SHELL_CACHE = `${VERSION}-shell`;
 const DATA_CACHE = `${VERSION}-data`;
 const IMAGE_CACHE = `${VERSION}-images`;
@@ -148,3 +148,57 @@ self.addEventListener("notificationclick", (event) => {
     })
   );
 });
+
+// Background-sync: replay queued loyalty earn/redeem POSTs that failed offline
+const SYNC_QUEUE_KEY = "heita-loyalty-queue";
+
+self.addEventListener("sync", (event) => {
+  if (event.tag === "loyalty-sync") {
+    event.waitUntil(flushLoyaltyQueue());
+  }
+});
+
+async function flushLoyaltyQueue() {
+  const db = await openSyncDb();
+  const tx = db.transaction(SYNC_QUEUE_KEY, "readwrite");
+  const store = tx.objectStore(SYNC_QUEUE_KEY);
+  const all = await idbAll(store);
+
+  for (const item of all) {
+    try {
+      const resp = await fetch(item.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(item.body)
+      });
+      if (resp.ok) {
+        store.delete(item.id);
+      }
+    } catch {
+      // Leave in queue for next sync attempt
+    }
+  }
+  return tx.done;
+}
+
+function openSyncDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("heita-sync", 1);
+    req.onupgradeneeded = (e) => {
+      e.target.result.createObjectStore(SYNC_QUEUE_KEY, {
+        keyPath: "id",
+        autoIncrement: true
+      });
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function idbAll(store) {
+  return new Promise((resolve, reject) => {
+    const req = store.getAll();
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
