@@ -36,6 +36,7 @@ model User {
   staffAuditLogs    StaffAuditLog[]      @relation("StaffAuditActor")
   referralCodesOwned ReferralCode[]
   importRuns        CustomerImportRun[]  @relation("CustomerImportActor")
+  ocrReceipts       OcrReceipt[]
 }
 
 model Account {
@@ -135,6 +136,7 @@ model Business {
   importRuns            CustomerImportRun[]
   subscriptions         BusinessSubscription[]
   invoices              BusinessInvoice[]
+  ocrReceipts           OcrReceipt[]
 }
 
 model QrCode {
@@ -677,6 +679,36 @@ enum BusinessCategory {
   SERVICES
   ENTERTAINMENT
   OTHER
+}
+
+model OcrReceipt {
+  id              String              @id @default(cuid())
+  businessId      String
+  userId          String
+  membershipId    String?
+  imageUrl        String
+  rawOcrText      String?
+  parsedTotal     Float?
+  parsedBusiness  String?
+  pointsToAward   Int?
+  status          OcrReceiptStatus    @default(PENDING_REVIEW)
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  transactionId   String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  business        Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status])
+  @@index([userId])
+}
+
+enum OcrReceiptStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  PROCESSED
 }
 
 model BusinessSubscription {
