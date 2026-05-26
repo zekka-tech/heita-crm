@@ -59,9 +59,47 @@ export const dynamic = "force-dynamic";
 
 export default async function LandingPage() {
   const featuredCategories = await listFeaturedCategories();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://heita.co.za";
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([
+            {
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              name: "Heita CRM",
+              url: appUrl,
+              description:
+                "A mobile-first PWA CRM that connects retailers and small businesses with their customers through QR, WhatsApp, AI workspaces, and loyalty rewards.",
+              potentialAction: {
+                "@type": "SearchAction",
+                target: {
+                  "@type": "EntryPoint",
+                  urlTemplate: `${appUrl}/discover?q={search_term_string}`
+                },
+                "query-input": "required name=search_term_string"
+              }
+            },
+            {
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              name: "Heita",
+              url: appUrl,
+              logo: `${appUrl}/icons/icon-512.svg`,
+              contactPoint: {
+                "@type": "ContactPoint",
+                email: "support@heita.co.za",
+                contactType: "customer service",
+                areaServed: "ZA",
+                availableLanguage: ["English", "Zulu", "Xhosa", "Afrikaans"]
+              }
+            }
+          ])
+        }}
+      />
       <section className="surface-hero relative px-6 py-10 sm:px-12 sm:py-16">
         <div className="relative grid gap-10 lg:grid-cols-[1.35fr_0.85fr] lg:items-center">
           <div>

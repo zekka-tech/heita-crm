@@ -9,10 +9,10 @@ import { ServiceWorkerRegister } from "@/components/layout/service-worker-regist
 import { resolveLocale } from "@/i18n/locale";
 import "./globals.css";
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://heita.co.za";
+
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ),
+  metadataBase: new URL(APP_URL),
   title: {
     default: "Heita — loyalty & messaging for South African retailers",
     template: "%s · Heita"
@@ -31,6 +31,15 @@ export const metadata: Metadata = {
       { url: "/icons/icon-192.svg", sizes: "192x192", type: "image/svg+xml" },
       { url: "/icons/icon-512.svg", sizes: "512x512", type: "image/svg+xml" }
     ]
+  },
+  alternates: {
+    languages: {
+      "en-ZA": APP_URL,
+      zu: APP_URL,
+      xh: APP_URL,
+      af: APP_URL,
+      "x-default": APP_URL
+    }
   },
   openGraph: {
     type: "website",

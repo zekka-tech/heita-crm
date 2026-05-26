@@ -74,6 +74,9 @@ const nextConfig: NextConfig = {
         headers: securityHeaders
       }
     ];
+  },
+  async rewrites() {
+    return [{ source: "/sitemap.xml", destination: "/api/sitemap" }];
   }
 };
 

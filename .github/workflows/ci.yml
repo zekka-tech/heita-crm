@@ -15,6 +15,7 @@ env:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   quality:
@@ -59,6 +60,37 @@ jobs:
 
       - name: Migration drift check
         run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+      - name: Destructive migration safety gate
+        if: github.event_name == 'pull_request'
+        env:
+          SHADOW_DATABASE_URL: "postgresql://heita:heita@localhost:5432/heita_shadow"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create a shadow DB for diff
+          PGPASSWORD=heita psql -h localhost -U heita -d heita -c "CREATE DATABASE heita_shadow;" 2>/dev/null || true
+
+          # Generate SQL diff: what the PR migration adds vs the currently deployed schema
+          DIFF=$(npx prisma migrate diff \
+            --from-schema-datasource prisma/schema.prisma \
+            --to-migrations prisma/migrations \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --script 2>/dev/null || true)
+
+          # Detect destructive operations
+          if echo "$DIFF" | grep -qiE "^(DROP TABLE|DROP COLUMN|ALTER TABLE .* DROP|ALTER TABLE .* RENAME|ALTER TABLE .* ALTER COLUMN .* TYPE)"; then
+            echo "::warning::Destructive migration detected. Checking for 'migration-approved' label..."
+            LABELS=$(gh pr view ${{ github.event.pull_request.number }} --json labels --jq '[.labels[].name] | join(",")' 2>/dev/null || echo "")
+            if echo "$LABELS" | grep -q "migration-approved"; then
+              echo "::notice::Label 'migration-approved' found — allowing destructive migration."
+            else
+              echo "::error::This PR contains destructive SQL (DROP/ALTER COLUMN). Add the 'migration-approved' label after a manual DBA review to unblock."
+              echo "$DIFF"
+              exit 1
+            fi
+          else
+            echo "No destructive operations detected."
+          fi
 
       - name: Typecheck
         run: npm run typecheck

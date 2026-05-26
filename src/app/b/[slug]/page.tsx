@@ -34,17 +34,26 @@ export async function generateMetadata({ params }: BusinessLandingPageProps) {
 
   if (!business) return { title: "Business" };
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://heita.co.za";
+  const desc =
+    business.description ??
+    `Join ${business.name} on Heita to earn loyalty points and special offers.`;
+
   return {
     title: business.name,
-    description:
-      business.description ??
-      `Join ${business.name} on Heita to earn loyalty points and special offers.`,
+    description: desc,
+    alternates: {
+      languages: {
+        "en-ZA": `${appUrl}/b/${slug}`,
+        zu: `${appUrl}/b/${slug}`,
+        xh: `${appUrl}/b/${slug}`,
+        af: `${appUrl}/b/${slug}`
+      }
+    },
     openGraph: {
       title: business.name,
-      description:
-        business.description ??
-        `Join ${business.name} on Heita to earn loyalty points and special offers.`,
-      images: ["/opengraph-image"]
+      description: desc,
+      images: [`${appUrl}/api/og/${slug}`]
     }
   };
 }
@@ -94,26 +103,47 @@ export default async function BusinessLandingPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "LocalBusiness",
-            name: business.name,
-            description: business.description ?? undefined,
-            image: business.logoUrl ?? undefined,
-            telephone: business.phone ?? undefined,
-            email: business.email ?? undefined,
-            address: business.city
-              ? {
-                  "@type": "PostalAddress",
-                  streetAddress: business.addressLine1 ?? undefined,
-                  addressLocality: business.city,
-                  addressRegion: prettyProvince(business.province),
-                  postalCode: business.postalCode ?? undefined,
-                  addressCountry: "ZA"
-                }
-              : undefined,
-            url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/b/${business.slug}`
-          })
+          __html: JSON.stringify([
+            {
+              "@context": "https://schema.org",
+              "@type": "LocalBusiness",
+              name: business.name,
+              description: business.description ?? undefined,
+              image: business.logoUrl ?? undefined,
+              telephone: business.phone ?? undefined,
+              email: business.email ?? undefined,
+              address: business.city
+                ? {
+                    "@type": "PostalAddress",
+                    streetAddress: business.addressLine1 ?? undefined,
+                    addressLocality: business.city,
+                    addressRegion: prettyProvince(business.province),
+                    postalCode: business.postalCode ?? undefined,
+                    addressCountry: "ZA"
+                  }
+                : undefined,
+              url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/b/${business.slug}`
+            },
+            ...business.rewards.map((r) => ({
+              "@context": "https://schema.org",
+              "@type": "Offer",
+              name: r.title,
+              description: r.description ?? undefined,
+              seller: { "@type": "LocalBusiness", name: business.name }
+            })),
+            ...business.events.map((e) => ({
+              "@context": "https://schema.org",
+              "@type": "Event",
+              name: e.title,
+              description: e.description ?? undefined,
+              startDate: e.startsAt.toISOString(),
+              endDate: e.endsAt?.toISOString() ?? undefined,
+              location: e.location
+                ? { "@type": "Place", name: e.location }
+                : { "@type": "VirtualLocation" },
+              organizer: { "@type": "LocalBusiness", name: business.name }
+            }))
+          ])
         }}
       />
       <section className="surface-hero relative overflow-hidden px-6 py-10 sm:px-12">
