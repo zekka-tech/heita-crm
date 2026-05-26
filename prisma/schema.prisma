@@ -133,6 +133,8 @@ model Business {
   staffAuditLogs        StaffAuditLog[]
   referralCodes         ReferralCode[]
   importRuns            CustomerImportRun[]
+  subscriptions         BusinessSubscription[]
+  invoices              BusinessInvoice[]
 }
 
 model QrCode {
@@ -675,6 +677,54 @@ enum BusinessCategory {
   SERVICES
   ENTERTAINMENT
   OTHER
+}
+
+model BusinessSubscription {
+  id                String                   @id @default(cuid())
+  businessId        String
+  planId            BusinessPlanId
+  status            SubscriptionStatus       @default(ACTIVE)
+  yocoCustomerId    String?
+  yocoSubscriptionId String?                 @unique
+  currentPeriodStart DateTime
+  currentPeriodEnd  DateTime
+  cancelAtPeriodEnd Boolean                  @default(false)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  business          Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([status])
+}
+
+model BusinessInvoice {
+  id             String          @id @default(cuid())
+  businessId     String
+  planId         BusinessPlanId
+  amountZar      Int
+  status         InvoiceStatus   @default(PENDING)
+  yocoPaymentId  String?         @unique
+  issuedAt       DateTime        @default(now())
+  paidAt         DateTime?
+  periodStart    DateTime
+  periodEnd      DateTime
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([status])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  TRIALING
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  VOID
 }
 
 enum BusinessPlanId {
