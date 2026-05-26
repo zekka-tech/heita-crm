@@ -20,6 +20,18 @@ const config = [
     rules: {
       "@next/next/no-page-custom-font": "off"
     }
+  },
+  {
+    rules: {
+      "no-eval": "error",
+      "no-new-func": "error",
+      "no-implied-eval": "error",
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }
+      ]
+    }
   }
 ];
 

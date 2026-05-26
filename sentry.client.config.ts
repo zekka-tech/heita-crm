@@ -12,6 +12,7 @@ if (SENTRY_COMMON.enabled) {
     replaysOnErrorSampleRate: Number(
       process.env.NEXT_PUBLIC_SENTRY_REPLAY_ERROR_SAMPLE_RATE ?? "0.5"
     ),
-    beforeSend: buildSentryBeforeSend()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    beforeSend: buildSentryBeforeSend() as any
   });
 }

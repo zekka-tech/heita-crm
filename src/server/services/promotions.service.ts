@@ -22,6 +22,8 @@ const MANAGER_ROLES = [StaffRole.MANAGER] as const;
 export type ListPromotionsInput = {
   businessId: string;
   userId: string;
+  limit?: number;
+  cursor?: string;
 };
 
 export async function listPromotions(input: ListPromotionsInput) {
@@ -33,7 +35,9 @@ export async function listPromotions(input: ListPromotionsInput) {
 
   return prisma.promotion.findMany({
     where: { businessId: input.businessId },
-    orderBy: { startsAt: "desc" }
+    orderBy: { startsAt: "desc" },
+    take: input.limit ?? 50,
+    ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {})
   });
 }
 

@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
+import { Breadcrumb } from "@/components/shared/breadcrumb";
 import { auth } from "@/lib/auth";
 import { describeTierPerks } from "@/lib/loyalty";
 import { prisma } from "@/lib/prisma";
@@ -100,6 +101,13 @@ export default async function BusinessLandingPage({
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
+      <Breadcrumb
+        crumbs={[
+          { label: "Discover", href: "/discover" },
+          { label: business.name }
+        ]}
+        className="mb-4"
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

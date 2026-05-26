@@ -1,30 +1,30 @@
 import { OtpPurpose } from "@prisma/client";
 
 import { issueOtpCode, verifyOtpAttempt } from "@/lib/otp";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { getRedis } from "@/lib/redis";
 
-const STAFF_STEP_UP_WINDOW_SECONDS = 15 * 60;
-const memoryStore = new Map<string, number>();
+const STAFF_STEP_UP_WINDOW_SECONDS = parseInt(process.env.STAFF_STEP_UP_WINDOW_SECONDS ?? "300", 10);
 
 function getStepUpKey(userId: string, businessId: string) {
   return `staff-step-up:${userId}:${businessId}`;
 }
 
-function getMemoryStepUpExpiry(key: string): number | null {
-  const expiresAt = memoryStore.get(key);
-  if (!expiresAt) {
-    return null;
+export async function requestStaffStepUpOtp(input: {
+  phone: string;
+  userId: string;
+  businessId: string;
+}) {
+  const rl = await enforceRateLimit({
+    identifier: `staff-step-up:${input.userId}:${input.businessId}`,
+    windowSeconds: 15 * 60,
+    max: 5
+  });
+  if (!rl.allowed) {
+    throw new Error(
+      `Too many step-up verification attempts. Try again in ${rl.resetInSeconds} seconds.`
+    );
   }
-
-  if (expiresAt <= Date.now()) {
-    memoryStore.delete(key);
-    return null;
-  }
-
-  return expiresAt;
-}
-
-export async function requestStaffStepUpOtp(input: { phone: string }) {
   return issueOtpCode({
     phone: input.phone,
     purpose: OtpPurpose.STAFF_STEP_UP
@@ -51,15 +51,10 @@ export async function verifyStaffStepUpOtp(input: {
   const key = getStepUpKey(input.userId, input.businessId);
 
   if (!redis) {
-    memoryStore.set(key, Date.now() + STAFF_STEP_UP_WINDOW_SECONDS * 1000);
-    return true;
+    throw new Error("Step-up auth requires Redis; distributed state not available");
   }
 
-  try {
-    await redis.set(key, "1", "EX", STAFF_STEP_UP_WINDOW_SECONDS);
-  } catch {
-    memoryStore.set(key, Date.now() + STAFF_STEP_UP_WINDOW_SECONDS * 1000);
-  }
+  await redis.set(key, "1", "EX", STAFF_STEP_UP_WINDOW_SECONDS);
 
   return true;
 }
@@ -72,19 +67,11 @@ export async function hasFreshStaffStepUp(input: {
   const redis = getRedis();
 
   if (!redis) {
-    return Boolean(getMemoryStepUpExpiry(key));
+    throw new Error("Step-up auth requires Redis; distributed state not available");
   }
 
-  try {
-    const value = await redis.get(key);
-    if (value) {
-      return true;
-    }
-  } catch {
-    return Boolean(getMemoryStepUpExpiry(key));
-  }
-
-  return false;
+  const value = await redis.get(key);
+  return Boolean(value);
 }
 
 export async function requireFreshStaffStepUp(input: {

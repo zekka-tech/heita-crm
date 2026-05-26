@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Mail, Phone, Sparkles, Trash2, UserRound } from "lucide-react";
 
+import { DeleteAccountButton } from "@/components/account/delete-account-button";
 import { NotificationPreferencesCard } from "@/components/account/notification-preferences-card";
 import { ProfileSettings } from "@/components/account/profile-settings";
 import { PushSubscriptionCard } from "@/components/account/push-subscription-card";
@@ -148,6 +149,7 @@ export default async function ProfilePage() {
         <p className="text-sm text-ink-muted">
           {t("dangerBody")}
         </p>
+        <DeleteAccountButton />
       </Card>
     </section>
   );

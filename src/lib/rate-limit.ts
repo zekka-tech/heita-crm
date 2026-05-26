@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { getRedis } from "@/lib/redis";
 
 export type RateLimitDecision = {
@@ -53,6 +54,10 @@ export async function enforceRateLimit(
   const redis = getRedis();
 
   if (!redis) {
+    logger.warn(
+      { identifier: opts.identifier },
+      "rate_limit.redis_unavailable_using_memory_fallback"
+    );
     return decideFromMemory(opts);
   }
 
@@ -76,7 +81,11 @@ export async function enforceRateLimit(
       remaining: Math.max(0, opts.max - count),
       resetInSeconds
     };
-  } catch {
+  } catch (err) {
+    logger.warn(
+      { identifier: opts.identifier, err },
+      "rate_limit.redis_error_using_memory_fallback"
+    );
     return decideFromMemory(opts);
   }
 }

@@ -37,6 +37,7 @@ model User {
   referralCodesOwned ReferralCode[]
   importRuns        CustomerImportRun[]  @relation("CustomerImportActor")
   ocrReceipts       OcrReceipt[]
+  reviewedReceipts  OcrReceipt[]         @relation("OcrReceiptReviewer")
 }
 
 model Account {
@@ -393,20 +394,20 @@ model Event {
 }
 
 model Message {
-  id             String         @id @default(cuid())
+  id             String          @id @default(cuid())
   businessId     String
   userId         String?
   contactPhone   String?
   channel        MessageChannel
   direction      String
   externalId     String?
-  status         String?
+  status         MessageStatus?
   body           String
   metadata       Json?
   sentAt         DateTime?
-  createdAt      DateTime       @default(now())
-  business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt      DateTime        @default(now())
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user           User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   attachments    MessageAttachment[]
 
   @@index([businessId, channel, createdAt])
@@ -604,6 +605,14 @@ enum MessageChannel {
   IN_APP
 }
 
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
 enum OtpPurpose {
   SIGN_IN
   SIGN_UP
@@ -699,6 +708,7 @@ model OcrReceipt {
   updatedAt       DateTime            @updatedAt
   business        Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
   user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewer        User?               @relation("OcrReceiptReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
 
   @@index([businessId, status])
   @@index([userId])

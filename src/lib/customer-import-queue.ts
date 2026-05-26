@@ -1,10 +1,12 @@
 import { Job, Queue, Worker } from "bullmq";
 
 import { logger } from "@/lib/logger";
+import { incrementDlqMovedCounter, incrementQueueJobMetric } from "@/lib/metrics";
 import { getQueueRedis } from "@/lib/redis";
 import { processCustomerImportRun } from "@/server/services/customer-import.service";
 
 export const CUSTOMER_IMPORT_QUEUE = "customer-import";
+export const CUSTOMER_IMPORT_DLQ = "customer-import-dlq";
 
 type CustomerImportJob = {
   importRunId: string;
@@ -12,6 +14,7 @@ type CustomerImportJob = {
 
 declare global {
   var __heitaCustomerImportQueue__: Queue<CustomerImportJob> | undefined;
+  var __heitaCustomerImportDlq__: Queue | undefined;
 }
 
 export function getCustomerImportQueue() {
@@ -39,6 +42,22 @@ export function getCustomerImportQueue() {
   }
 
   return global.__heitaCustomerImportQueue__;
+}
+
+export function getCustomerImportDlq() {
+  const redis = getQueueRedis();
+  if (!redis) {
+    return null;
+  }
+
+  if (!global.__heitaCustomerImportDlq__) {
+    global.__heitaCustomerImportDlq__ = new Queue(CUSTOMER_IMPORT_DLQ, {
+      connection: redis,
+      defaultJobOptions: { removeOnComplete: 100, removeOnFail: false }
+    });
+  }
+
+  return global.__heitaCustomerImportDlq__;
 }
 
 export async function enqueueCustomerImportRun(importRunId: string) {
@@ -74,18 +93,59 @@ export async function handleCustomerImportJob(job: Job<CustomerImportJob>) {
   return processCustomerImportRun(job.data.importRunId);
 }
 
+/**
+ * Moves a permanently-failed customer-import job to the dead-letter queue.
+ * Call this from the worker's "failed" event handler after all retries are exhausted.
+ */
+export async function moveCustomerImportJobToDlq(
+  job: Job<CustomerImportJob>,
+  err: Error
+): Promise<void> {
+  const dlq = getCustomerImportDlq();
+  if (!dlq) return;
+
+  await dlq.add("failed-job", {
+    jobId: job.id,
+    data: job.data,
+    error: err.message
+  });
+  logger.error({ jobId: job.id, err }, "customer.import.job.moved_to_dlq");
+}
+
 export function startCustomerImportWorker() {
   const redis = getQueueRedis();
   if (!redis) {
     return null;
   }
 
-  return new Worker<CustomerImportJob>(
+  const worker = new Worker<CustomerImportJob>(
     CUSTOMER_IMPORT_QUEUE,
     handleCustomerImportJob,
     {
       connection: redis,
-      concurrency: 1
+      concurrency: 1,
+      stalledInterval: 30_000,
+      maxStalledCount: 2
     }
   );
+
+  worker.on("completed", () => {
+    incrementQueueJobMetric("customer-import", "completed");
+  });
+
+  worker.on("failed", (job, error) => {
+    incrementQueueJobMetric("customer-import", "failed");
+    if (job && job.attemptsMade >= (job.opts.attempts ?? 3)) {
+      void moveCustomerImportJobToDlq(job, error).catch((dlqErr) => {
+        logger.error({ err: dlqErr, jobId: job.id }, "customer.import.dlq.move_failed");
+      });
+    }
+  });
+
+  worker.on("stalled", (jobId) => {
+    logger.error({ jobId }, "customer.import.worker.job_stalled");
+    incrementDlqMovedCounter("customer-import");
+  });
+
+  return worker;
 }

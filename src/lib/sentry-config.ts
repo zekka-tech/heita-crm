@@ -48,19 +48,22 @@ export type SentryRedactableEvent = {
   request?: {
     headers?: Record<string, unknown> | null;
     cookies?: Record<string, unknown> | null;
+    status?: number;
   };
   user?:
     | { id?: string | number | null | undefined; [key: string]: unknown }
     | null;
   extra?: Record<string, unknown>;
   contexts?: Record<string, unknown>;
+  tags?: Record<string, string | number | boolean | bigint | null | undefined>;
 };
 
 export function buildSentryBeforeSend<E extends SentryRedactableEvent>(): (
-  event: E,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  event: any,
   hint?: unknown
-) => E {
-  return (event) => {
+) => E | null {
+  return (event: E) => {
     if (event.request?.headers) {
       event.request.headers = redactStringDeep(event.request.headers);
     }
@@ -77,6 +80,14 @@ export function buildSentryBeforeSend<E extends SentryRedactableEvent>(): (
     if (event.contexts) {
       event.contexts = redactStringDeep(event.contexts);
     }
+
+    // Filter 4xx client errors to reduce Sentry quota usage.
+    // Only capture if the event has been explicitly flagged with capture_4xx=true.
+    const statusCode = event.request?.status;
+    if (statusCode !== undefined && statusCode >= 400 && statusCode < 500) {
+      if (!event.tags?.capture_4xx) return null;
+    }
+
     return event;
   };
 }
@@ -89,8 +100,21 @@ export const SENTRY_COMMON = {
   enabled: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN),
   tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? "0.1"),
   attachStacktrace: true,
-  sendDefaultPii: false
-} as const;
+  sendDefaultPii: false,
+  ignoreErrors: [
+    "fetch failed",
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "socket hang up",
+    "AbortError",
+    "The operation was aborted",
+    /^timeout$/i,
+    "Load failed",
+    "NetworkError",
+    "Failed to fetch"
+  ]
+};
 
 export function sentryConfigured() {
   return Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN);

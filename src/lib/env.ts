@@ -16,7 +16,8 @@ const envSchema = z
     ANTHROPIC_API_KEY: z.string().optional(),
     OLLAMA_BASE_URL: z.string().optional(),
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.coerce.number().int().min(1).max(20).default(5),
-    CIRCUIT_BREAKER_COOLDOWN_MS: z.coerce.number().int().min(1000).max(300_000).default(60_000)
+    CIRCUIT_BREAKER_COOLDOWN_MS: z.coerce.number().int().min(1000).max(300_000).default(60_000),
+    METRICS_BEARER_TOKEN: z.string().optional()
   })
   .superRefine((data, ctx) => {
     const isProduction = data.NODE_ENV === "production";
@@ -57,6 +58,14 @@ const envSchema = z
         message:
           "Configure ANTHROPIC_API_KEY or OLLAMA_BASE_URL in production so AI chat has a provider.",
         path: ["ANTHROPIC_API_KEY"]
+      });
+    }
+
+    if (isProduction && !data.METRICS_BEARER_TOKEN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "METRICS_BEARER_TOKEN is required in production to protect the /api/metrics endpoint.",
+        path: ["METRICS_BEARER_TOKEN"]
       });
     }
   });

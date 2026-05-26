@@ -30,6 +30,14 @@ export function CookieConsentBanner() {
   const handleChoice = (choice: CookieConsentChoice) => {
     writeCookieConsent(choice);
     setConsent(choice);
+    // Fire-and-forget: persist the choice to the DB for authenticated users.
+    // The localStorage state is the source of truth for the banner UI.
+    void fetch("/api/account/consents/cookie", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ choice }),
+      credentials: "same-origin"
+    }).catch(() => undefined);
   };
 
   return (

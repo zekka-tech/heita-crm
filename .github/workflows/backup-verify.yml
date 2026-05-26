@@ -1,0 +1,45 @@
+name: Backup Verification
+
+on:
+  schedule:
+    # Weekly on Sunday at 06:00 UTC — well after the nightly backup window
+    - cron: "0 6 * * 0"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Verify latest Postgres backup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Postgres client tools
+        run: sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.BACKUP_AWS_REGION || 'af-south-1' }}
+
+      - name: Verify latest backup
+        env:
+          BACKUP_S3_URI: ${{ secrets.BACKUP_S3_URI }}
+          BACKUP_PREFIX: heita-crm
+          BACKUP_MIN_SIZE_BYTES: "102400"
+        run: bash scripts/verify-backup.sh
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": ":rotating_light: *Heita backup verification FAILED* on `${{ github.ref_name }}`.\nCheck: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

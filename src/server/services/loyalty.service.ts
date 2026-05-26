@@ -6,11 +6,12 @@ import {
   getTierPerks
 } from "@/lib/loyalty";
 import { runIdempotentOperation } from "@/lib/idempotency";
-import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 import { applyReferralRewardIfEligible } from "@/server/services/referral.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
-type LoyaltyTx = Prisma.TransactionClient;
+type LoyaltyTx = PrismaTransactionClient;
 
 const LOYALTY_TRANSACTION_OPTIONS = {
   maxWait: 5_000,
@@ -680,61 +681,129 @@ async function expireMembershipPoints(
   };
 }
 
-export async function expireEligiblePoints(now = new Date()): Promise<ExpirePointsResult> {
-  const memberships = await prisma.membership.findMany({
-    where: {
-      isActive: true,
-      pointsBalance: {
-        gt: 0
-      },
-      business: {
-        deletedAt: null,
-        isActive: true
-      },
-      transactions: {
-        some: {
-          expiresAt: {
-            lte: now
-          },
-          pointsDelta: {
-            gt: 0
-          },
-          expiryTarget: null,
-          refundTarget: null
-        }
-      }
-    },
-    select: {
-      id: true,
-      businessId: true
-    }
-  });
+const EXPIRE_PAGE_SIZE = 500;
 
+const EXPIRE_WHERE = (now: Date) => ({
+  isActive: true,
+  pointsBalance: { gt: 0 },
+  business: { deletedAt: null, isActive: true },
+  transactions: {
+    some: {
+      expiresAt: { lte: now },
+      pointsDelta: { gt: 0 },
+      expiryTarget: null,
+      refundTarget: null
+    }
+  }
+});
+
+export async function expireEligiblePoints(now = new Date()): Promise<ExpirePointsResult> {
+  let cursor: string | undefined;
   let membershipsProcessed = 0;
   let transactionsCreated = 0;
   let pointsExpired = 0;
 
-  for (const membership of memberships) {
-    const result = await prisma.$transaction(
-      (tx) =>
-        expireMembershipPoints(tx, {
-          membershipId: membership.id,
-          businessId: membership.businessId,
-          now
-        }),
-      LOYALTY_TRANSACTION_OPTIONS
-    );
+  while (true) {
+    const memberships = await prisma.membership.findMany({
+      where: EXPIRE_WHERE(now),
+      select: { id: true, businessId: true },
+      take: EXPIRE_PAGE_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+    });
 
-    if (result.transactionsCreated > 0) {
-      membershipsProcessed += 1;
-      transactionsCreated += result.transactionsCreated;
-      pointsExpired += result.pointsExpired;
+    if (memberships.length === 0) break;
+
+    const lastMembership = memberships[memberships.length - 1];
+    cursor = lastMembership?.id;
+
+    for (const membership of memberships) {
+      const result = await prisma.$transaction(
+        (tx) =>
+          expireMembershipPoints(tx, {
+            membershipId: membership.id,
+            businessId: membership.businessId,
+            now
+          }),
+        LOYALTY_TRANSACTION_OPTIONS
+      );
+
+      if (result.transactionsCreated > 0) {
+        membershipsProcessed += 1;
+        transactionsCreated += result.transactionsCreated;
+        pointsExpired += result.pointsExpired;
+      }
     }
+
+    if (memberships.length < EXPIRE_PAGE_SIZE) break;
   }
 
-  return {
-    membershipsProcessed,
-    transactionsCreated,
-    pointsExpired
-  };
+  return { membershipsProcessed, transactionsCreated, pointsExpired };
+}
+
+export type RecalcTiersResult = {
+  total: number;
+  fixed: number;
+};
+
+export async function recalculateMembershipTiers(): Promise<RecalcTiersResult> {
+  const PAGE_SIZE = 500;
+  let cursor: string | undefined;
+  let total = 0;
+  let fixed = 0;
+
+  while (true) {
+    const memberships = await prisma.membership.findMany({
+      where: { isActive: true, business: { deletedAt: null, isActive: true } },
+      select: { id: true, businessId: true, pointsBalance: true, tierId: true },
+      take: PAGE_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+    });
+
+    if (memberships.length === 0) break;
+
+    const lastMembership = memberships[memberships.length - 1];
+    cursor = lastMembership?.id;
+    total += memberships.length;
+
+    const businessIds = [...new Set(memberships.map((m) => m.businessId))];
+    const tiersByBusiness = await prisma.loyaltyTier.findMany({
+      where: { businessId: { in: businessIds } },
+      orderBy: { minPoints: "asc" }
+    });
+
+    const tierMap = new Map<string, typeof tiersByBusiness>();
+    for (const tier of tiersByBusiness) {
+      const existing = tierMap.get(tier.businessId);
+      if (existing) {
+        existing.push(tier);
+      } else {
+        tierMap.set(tier.businessId, [tier]);
+      }
+    }
+
+    for (const membership of memberships) {
+      try {
+        const tiers = tierMap.get(membership.businessId) ?? [];
+        const correctTier = tiers.reduce<(typeof tiers)[0] | null>((best, tier) => {
+          if (membership.pointsBalance >= tier.minPoints) return tier;
+          return best;
+        }, null);
+        const correctTierId = correctTier?.id ?? null;
+
+        if (membership.tierId !== correctTierId) {
+          await prisma.membership.update({
+            where: { id: membership.id },
+            data: { tierId: correctTierId }
+          });
+          fixed += 1;
+        }
+      } catch (err) {
+        logger.error({ err, membershipId: membership.id }, "tier_recalculation.row_error");
+      }
+    }
+
+    if (memberships.length < PAGE_SIZE) break;
+  }
+
+  return { total, fixed };
 }

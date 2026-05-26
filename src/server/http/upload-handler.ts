@@ -19,6 +19,7 @@ import {
   isAiWorkspaceServiceError,
   requestDocumentIngestion
 } from "@/server/services/ai-workspace.service";
+import { checkPlanLimit } from "@/server/services/billing.service";
 
 const UploadRequestSchema = z.object({
   businessId: z.string().min(1),
@@ -143,6 +144,22 @@ export async function handleCreateUpload(request: Request) {
     userId: session.userId,
     allowedRoles: [StaffRole.AI_TRAINER, StaffRole.MANAGER]
   });
+
+  const uploadCheck = await checkPlanLimit(parsed.data.businessId, "documentUploadsPerMonth");
+  if (!uploadCheck.allowed) {
+    observeHttpRoute({
+      route: "/api/upload",
+      method: "POST",
+      status: 429,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      {
+        error: `Document upload limit reached (${uploadCheck.current}/${uploadCheck.limit} this month). Upgrade your plan to upload more documents.`
+      },
+      { status: 429, headers: { [requestIdHeader]: requestId } }
+    );
+  }
 
   if (!storageConfigured()) {
     logger.warn(

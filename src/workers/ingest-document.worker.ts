@@ -2,9 +2,11 @@ import { Worker } from "bullmq";
 
 import {
   DOCUMENT_INGESTION_QUEUE,
-  handleDocumentIngestionJob
+  handleDocumentIngestionJob,
+  moveIngestionJobToDlq
 } from "@/lib/ai/ingestion-queue";
 import { logger } from "@/lib/logger";
+import { incrementDlqMovedCounter, incrementQueueJobMetric } from "@/lib/metrics";
 import { getQueueRedis } from "@/lib/redis";
 
 export function startDocumentIngestionWorker() {
@@ -16,15 +18,29 @@ export function startDocumentIngestionWorker() {
 
   const worker = new Worker(DOCUMENT_INGESTION_QUEUE, handleDocumentIngestionJob, {
     connection: redis,
-    concurrency: 2
+    concurrency: 2,
+    stalledInterval: 30_000,
+    maxStalledCount: 2
   });
 
   worker.on("completed", (job) => {
     logger.info({ jobId: job.id }, "ai.document.worker_completed");
+    incrementQueueJobMetric("document-ingestion", "completed");
   });
 
   worker.on("failed", (job, error) => {
     logger.error({ err: error, jobId: job?.id }, "ai.document.worker_failed");
+    incrementQueueJobMetric("document-ingestion", "failed");
+    if (job && job.attemptsMade >= (job.opts.attempts ?? 3)) {
+      void moveIngestionJobToDlq(job, error).catch((dlqErr) => {
+        logger.error({ err: dlqErr, jobId: job.id }, "ingestion.dlq.move_failed");
+      });
+    }
+  });
+
+  worker.on("stalled", (jobId) => {
+    logger.error({ jobId }, "ai.document.worker.job_stalled");
+    incrementDlqMovedCounter("document-ingestion");
   });
 
   return worker;

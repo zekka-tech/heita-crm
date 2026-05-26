@@ -6,6 +6,7 @@ import { BusinessCard } from "@/components/business/business-card";
 import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Breadcrumb } from "@/components/shared/breadcrumb";
 import { formatEnumLabel, provinces } from "@/lib/business";
 import { discoverBusinesses } from "@/server/services/discovery.service";
 
@@ -68,6 +69,13 @@ export default async function CategoryPage({
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
+      <Breadcrumb
+        crumbs={[
+          { label: "Categories", href: "/discover" },
+          { label: label }
+        ]}
+        className="mb-4"
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

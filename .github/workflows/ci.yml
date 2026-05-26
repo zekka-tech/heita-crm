@@ -124,7 +124,6 @@ jobs:
 
       - name: npm audit (production only, high)
         run: npm audit --omit=dev --audit-level=high
-        continue-on-error: true
 
       - name: Trivy filesystem scan (fail on critical)
         uses: aquasecurity/trivy-action@0

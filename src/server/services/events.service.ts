@@ -22,6 +22,8 @@ const MANAGER_ROLES = [StaffRole.MANAGER] as const;
 export type ListEventsForStaffInput = {
   businessId: string;
   userId: string;
+  limit?: number;
+  cursor?: string;
 };
 
 export type StaffEventListEntry = {
@@ -49,7 +51,9 @@ export async function listEventsForStaff(
 
   const events = await prisma.event.findMany({
     where: { businessId: input.businessId },
-    orderBy: { startsAt: "asc" }
+    orderBy: { startsAt: "asc" },
+    take: input.limit ?? 100,
+    ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {})
   });
 
   const now = Date.now();

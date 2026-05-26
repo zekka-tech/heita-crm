@@ -76,7 +76,9 @@ export function TurnstileWidget({ siteKey, action, onToken, className }: Turnsti
         async
         defer
       />
-      <div ref={containerRef} className={className} />
+      <div aria-label="Security verification">
+        <div ref={containerRef} className={className} />
+      </div>
     </>
   );
 }

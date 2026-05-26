@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
 
 import { logger } from "@/lib/logger";
+import { constantTimeEqual } from "@/lib/security";
 import { handleYocoWebhook } from "@/server/services/billing.service";
 
 export const config = { api: { bodyParser: false } };
@@ -43,7 +44,7 @@ export default async function handler(
     .update(rawBody)
     .digest("hex");
 
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+  if (!constantTimeEqual(signature, expected)) {
     logger.warn({}, "yoco.webhook.invalid_signature");
     return res.status(401).json({ error: "Invalid signature." });
   }

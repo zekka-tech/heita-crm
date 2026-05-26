@@ -26,8 +26,20 @@ export default defineConfig({
         "src/lib/security.ts",
         "src/lib/rate-limit.ts",
         "src/lib/otp.ts",
-        "src/lib/qr.ts"
-      ]
+        "src/lib/qr.ts",
+        "src/lib/logger.ts",
+        "src/lib/billing.ts",
+        "src/lib/csrf.ts",
+        "src/server/services/loyalty.service.ts",
+        "src/server/services/referral.service.ts",
+        "src/server/services/customer-import.service.ts"
+      ],
+      thresholds: {
+        lines: 60,
+        branches: 50,
+        functions: 60,
+        statements: 60
+      }
     }
   }
 });

@@ -90,7 +90,8 @@ export async function embedTexts(input: string[], signal?: AbortSignal) {
   return input.map((value) => fallbackEmbedding(value));
 }
 
-export async function embedText(input: string, signal?: AbortSignal) {
-  const [embedding] = await embedTexts([input], signal);
-  return embedding;
+export async function embedText(input: string, signal?: AbortSignal): Promise<number[]> {
+  const results = await embedTexts([input], signal);
+  // embedTexts always returns one embedding per input string
+  return results[0] ?? [];
 }

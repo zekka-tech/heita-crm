@@ -1,10 +1,10 @@
 import type { APIRequestContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 
-async function getCsrfToken(request: APIRequestContext) {
+async function getCsrfToken(request: APIRequestContext): Promise<string> {
   const response = await request.get("/sign-in");
   expect(response.ok()).toBeTruthy();
-  const token = response.headers()["x-heita-csrf"];
+  const token = response.headers()["x-heita-csrf"] ?? "";
   expect(token).toBeTruthy();
   return token;
 }

@@ -34,7 +34,9 @@ export async function requestStaffStepUpAction(formData: FormData) {
   });
 
   const { code } = await requestStaffStepUpOtp({
-    phone: session.user.phone
+    phone: session.user.phone,
+    userId,
+    businessId
   });
 
   await sendOtpSms({

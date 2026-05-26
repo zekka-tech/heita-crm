@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
+import { requireFreshStaffStepUp } from "@/lib/staff-step-up";
 import { getWhatsappCustomerServiceWindowStatus } from "@/server/services/conversation.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
@@ -39,6 +40,8 @@ export async function sendWhatsappReplyAction(formData: FormData) {
     userId,
     allowedRoles: [StaffRole.STAFF]
   });
+
+  await requireFreshStaffStepUp({ businessId, userId });
 
   const business = await prisma.business.findUniqueOrThrow({
     where: {
@@ -188,14 +191,13 @@ function parseInteractiveButtons(raw: string) {
     .map((line) => line.trim())
     .filter(Boolean)
     .slice(0, 3)
-    .map((line, index) => {
-      const [id, title] = line.split("|").map((value) => value.trim());
-      return {
-        id: id || `btn-${index + 1}`,
-        title: title || id
-      };
-    })
-    .filter((button) => button.title);
+    .flatMap((line, index) => {
+      const parts = line.split("|").map((value) => value.trim());
+      const id = parts[0] || `btn-${index + 1}`;
+      const title = parts[1] || parts[0] || "";
+      if (!title) return [];
+      return [{ id, title }];
+    });
 }
 
 function parseInteractiveListRows(raw: string) {
@@ -204,13 +206,12 @@ function parseInteractiveListRows(raw: string) {
     .map((line) => line.trim())
     .filter(Boolean)
     .slice(0, 10)
-    .map((line, index) => {
-      const [id, title, description] = line.split("|").map((value) => value.trim());
-      return {
-        id: id || `row-${index + 1}`,
-        title: title || id,
-        description: description || undefined
-      };
-    })
-    .filter((row) => row.title);
+    .flatMap((line, index) => {
+      const parts = line.split("|").map((value) => value.trim());
+      const id = parts[0] || `row-${index + 1}`;
+      const title = parts[1] || parts[0] || "";
+      const description = parts[2] || undefined;
+      if (!title) return [];
+      return [{ id, title, description }];
+    });
 }

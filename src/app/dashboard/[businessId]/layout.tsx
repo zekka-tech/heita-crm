@@ -2,6 +2,10 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { BusinessSwitcher } from "@/components/dashboard/business-switcher";
+import {
+  DashboardBottomNav,
+  DashboardSidebarNav
+} from "@/components/dashboard/dashboard-bottom-nav";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -43,16 +47,23 @@ export default async function DashboardLayout({
     }));
 
   return (
-    <>
-      {businesses.length > 1 ? (
-        <div className="px-4 pt-4 sm:px-8">
-          <BusinessSwitcher
-            currentBusinessId={businessId}
-            businesses={businesses}
-          />
-        </div>
-      ) : null}
-      {children}
-    </>
+    <div className="flex min-h-screen">
+      <DashboardSidebarNav businessId={businessId} />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {businesses.length > 1 ? (
+          <div className="border-b border-line px-4 py-3 sm:px-8">
+            <BusinessSwitcher
+              currentBusinessId={businessId}
+              businesses={businesses}
+            />
+          </div>
+        ) : null}
+
+        <main className="flex-1 pb-20 lg:pb-0">{children}</main>
+      </div>
+
+      <DashboardBottomNav businessId={businessId} />
+    </div>
   );
 }

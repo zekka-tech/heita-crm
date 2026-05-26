@@ -79,8 +79,10 @@ export const businessPlans: BusinessPlan[] = [
   }
 ];
 
-export function getBusinessPlan(planId: BusinessPlanId) {
-  return businessPlans.find((plan) => plan.id === planId) ?? businessPlans[0];
+const FREE_PLAN = businessPlans.find((plan) => plan.id === "FREE") as BusinessPlan;
+
+export function getBusinessPlan(planId: BusinessPlanId): BusinessPlan {
+  return businessPlans.find((plan) => plan.id === planId) ?? FREE_PLAN;
 }
 
 export function formatZar(amount: number) {

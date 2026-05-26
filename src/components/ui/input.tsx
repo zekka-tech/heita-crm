@@ -68,12 +68,13 @@ export const Textarea = React.forwardRef<
           error && "border-danger focus:border-danger"
         )}
         aria-invalid={Boolean(error) || undefined}
+        aria-describedby={hint || error ? `${inputId}-hint` : undefined}
         {...props}
       />
       {error ? (
-        <p className="text-xs font-medium text-danger">{error}</p>
+        <p id={`${inputId}-hint`} role="alert" className="text-xs font-medium text-danger">{error}</p>
       ) : hint ? (
-        <p className="text-xs text-ink-subtle">{hint}</p>
+        <p id={`${inputId}-hint`} className="text-xs text-ink-subtle">{hint}</p>
       ) : null}
     </div>
   );
@@ -102,6 +103,7 @@ export const Select = React.forwardRef<
             error && "border-danger"
           )}
           aria-invalid={Boolean(error) || undefined}
+          aria-describedby={hint || error ? `${inputId}-hint` : undefined}
           {...props}
         >
           {children}
@@ -114,9 +116,9 @@ export const Select = React.forwardRef<
         </span>
       </div>
       {error ? (
-        <p className="text-xs font-medium text-danger">{error}</p>
+        <p id={`${inputId}-hint`} role="alert" className="text-xs font-medium text-danger">{error}</p>
       ) : hint ? (
-        <p className="text-xs text-ink-subtle">{hint}</p>
+        <p id={`${inputId}-hint`} className="text-xs text-ink-subtle">{hint}</p>
       ) : null}
     </div>
   );

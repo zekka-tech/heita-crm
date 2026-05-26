@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import { NextResponse } from "next/server";
 
 import { logger } from "@/lib/logger";
@@ -7,8 +9,10 @@ import {
   constantTimeEqual,
   getClientIp,
   isPrivateIp,
+  isUnixTimestampWithinSkew,
   verifyMetaWhatsappSignature
 } from "@/lib/security";
+import { CircuitBreakerOpenError, runWithCircuitBreaker } from "@/lib/circuit-breaker";
 import { handleWhatsappInboundPayload } from "@/server/services/whatsapp.service";
 
 const AT_PRODUCTION_RANGES = ["196.201.214.", "196.201.213."];
@@ -136,8 +140,33 @@ export async function handleWhatsappWebhook(request: Request) {
     );
   }
 
-  void handleWhatsappInboundPayload(payload).catch((error) => {
-    logger.error({ err: error, requestId }, "whatsapp.webhook.handler_failed");
+  const msgTimestamp = (payload as { entry?: { changes?: { value?: { messages?: { timestamp?: string | number }[] } }[] }[] } | undefined)
+    ?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.timestamp;
+  if (msgTimestamp !== undefined && !isUnixTimestampWithinSkew(Number(msgTimestamp), 300)) {
+    logger.warn({ timestamp: msgTimestamp }, "whatsapp.webhook.replay_detected");
+    observeHttpRoute({
+      route: "/api/webhooks/whatsapp",
+      method: "POST",
+      status: 401,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "Message timestamp outside acceptable window" },
+      { status: 401, headers: { [requestIdHeader]: requestId } }
+    );
+  }
+
+  void runWithCircuitBreaker("whatsapp-inbound", () =>
+    handleWhatsappInboundPayload(payload)
+  ).catch((error) => {
+    if (error instanceof CircuitBreakerOpenError) {
+      logger.warn(
+        { circuit: error.circuit, retryAfterMs: error.retryAfterMs, requestId },
+        "whatsapp.webhook.circuit_open_dropped"
+      );
+    } else {
+      logger.error({ err: error, requestId }, "whatsapp.webhook.handler_failed");
+    }
   });
 
   observeHttpRoute({
@@ -161,8 +190,29 @@ export async function handleAfricasTalkingWebhook(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.text();
-  logger.info({ size: body.length }, "africas_talking.webhook.received");
+  const rawBody = await request.text();
+
+  const receivedHmac = request.headers.get("x-at-signature") ?? "";
+  const expectedAt = crypto
+    .createHmac("sha256", process.env.AT_WEBHOOK_SECRET ?? "")
+    .update(rawBody)
+    .digest("hex");
+  if (!constantTimeEqual(expectedAt, receivedHmac)) {
+    logger.warn({}, "africas_talking.webhook.invalid_hmac");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const params = new URLSearchParams(rawBody);
+  const timestampRaw = params.get("timestamp");
+  if (timestampRaw !== null) {
+    const timestampMs = Number(timestampRaw);
+    if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > 5 * 60 * 1000) {
+      logger.warn({ timestamp: timestampRaw }, "africas_talking.webhook.replay_detected");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
+  logger.info({ size: rawBody.length }, "africas_talking.webhook.received");
 
   return NextResponse.json({ received: true });
 }

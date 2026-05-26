@@ -6,7 +6,7 @@ const handlers: ShutdownHandler[] = [];
 let registered = false;
 let shuttingDown = false;
 
-const SHUTDOWN_TIMEOUT_MS = 10_000;
+const SHUTDOWN_TIMEOUT_MS = parseInt(process.env.SHUTDOWN_TIMEOUT_MS ?? "30000", 10);
 
 export function registerShutdownHandler(handler: ShutdownHandler): () => void {
   handlers.push(handler);

@@ -1,10 +1,11 @@
 "use server";
 
-import { PromotionType } from "@prisma/client";
+import { PromotionType, StaffRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
+import { requireRole } from "@/lib/staff";
 import {
   broadcastPromotion,
   createPromotion,
@@ -47,6 +48,8 @@ export async function createPromotionAction(formData: FormData) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/promotions`);
   }
 
+  await requireRole({ businessId, userId, allowedRoles: [StaffRole.OWNER, StaffRole.MANAGER] });
+
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
   const type = parsePromotionType(formData.get("type"));
@@ -83,6 +86,8 @@ export async function updatePromotionAction(formData: FormData) {
   if (!userId) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/promotions`);
   }
+
+  await requireRole({ businessId, userId, allowedRoles: [StaffRole.OWNER, StaffRole.MANAGER] });
 
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
@@ -121,6 +126,8 @@ export async function deletePromotionAction(formData: FormData) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/promotions`);
   }
 
+  await requireRole({ businessId, userId, allowedRoles: [StaffRole.OWNER, StaffRole.MANAGER] });
+
   await deletePromotion({
     promotionId,
     actorUserId: userId
@@ -140,6 +147,8 @@ export async function broadcastPromotionAction(formData: FormData) {
   if (!userId) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/promotions`);
   }
+
+  await requireRole({ businessId, userId, allowedRoles: [StaffRole.OWNER, StaffRole.MANAGER] });
 
   await broadcastPromotion({
     promotionId,

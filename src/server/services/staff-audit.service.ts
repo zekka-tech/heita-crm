@@ -1,8 +1,8 @@
-import { Prisma, type PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 
-type AuditClient = PrismaClient | Prisma.TransactionClient;
+type AuditClient = typeof prisma | PrismaTransactionClient;
 
 type RecordStaffAuditLogInput = {
   businessId: string;
@@ -13,13 +13,13 @@ type RecordStaffAuditLogInput = {
   metadata?: Record<string, unknown> | null;
 };
 
-function getAuditClient(tx?: Prisma.TransactionClient): AuditClient {
+function getAuditClient(tx?: PrismaTransactionClient): AuditClient {
   return tx ?? prisma;
 }
 
 export async function recordStaffAuditLog(
   input: RecordStaffAuditLogInput,
-  tx?: Prisma.TransactionClient
+  tx?: PrismaTransactionClient
 ) {
   return getAuditClient(tx).staffAuditLog.create({
     data: {

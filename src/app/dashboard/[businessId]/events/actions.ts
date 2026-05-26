@@ -1,9 +1,11 @@
 "use server";
 
+import { StaffRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
+import { requireRole } from "@/lib/staff";
 import {
   createEvent,
   deleteEvent,
@@ -40,6 +42,8 @@ export async function createEventAction(formData: FormData) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/events`);
   }
 
+  await requireRole({ businessId, userId, allowedRoles: [StaffRole.OWNER, StaffRole.MANAGER] });
+
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
   const startsAt = parseDate(formData.get("startsAt"));
@@ -73,6 +77,8 @@ export async function updateEventAction(formData: FormData) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/events`);
   }
 
+  await requireRole({ businessId, userId, allowedRoles: [StaffRole.OWNER, StaffRole.MANAGER] });
+
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
   const startsAt = parseDate(formData.get("startsAt"));
@@ -105,6 +111,8 @@ export async function deleteEventAction(formData: FormData) {
   if (!userId) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/events`);
   }
+
+  await requireRole({ businessId, userId, allowedRoles: [StaffRole.OWNER, StaffRole.MANAGER] });
 
   await deleteEvent({
     eventId,

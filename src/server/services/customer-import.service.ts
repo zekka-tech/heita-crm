@@ -13,12 +13,19 @@ type ImportRow = {
 };
 
 const MAX_IMPORT_ROWS = 2000;
+const MAX_CSV_BYTES = 10 * 1024 * 1024; // 10 MB
 const CUSTOMER_IMPORT_TRANSACTION_OPTIONS = {
   maxWait: 5_000,
   timeout: 30_000
 };
 
 function parseImportRows(sourceCsv: string): ImportRow[] {
+  if (Buffer.byteLength(sourceCsv, "utf8") > MAX_CSV_BYTES) {
+    throw new Error(
+      "CSV file exceeds the 10 MB limit. Split the file into smaller chunks and re-import."
+    );
+  }
+
   const records = parse(sourceCsv, {
     columns: true,
     skip_empty_lines: true,

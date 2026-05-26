@@ -5,25 +5,9 @@ import type { NextConfig } from "next";
 
 const isProd = process.env.NODE_ENV === "production";
 
-const ContentSecurityPolicy = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'" + (isProd ? "" : " 'unsafe-eval'"),
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' data: blob: https:",
-  "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self' https: wss: " +
-    (isProd ? "" : "ws://localhost:* http://localhost:*"),
-  "frame-ancestors 'none'",
-  "form-action 'self'",
-  "base-uri 'self'",
-  "object-src 'none'",
-  "upgrade-insecure-requests"
-]
-  .filter(Boolean)
-  .join("; ");
-
+// CSP is set per-request in src/middleware.ts using a unique nonce.
+// The static headers below cover only the non-CSP security policies.
 const securityHeaders = [
-  { key: "Content-Security-Policy", value: ContentSecurityPolicy },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -65,7 +49,14 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true
   },
   images: {
-    remotePatterns: [{ protocol: "https", hostname: "**" }]
+    remotePatterns: [
+      { protocol: "https", hostname: "*.amazonaws.com" },
+      { protocol: "https", hostname: "*.cloudflare.com" },
+      { protocol: "https", hostname: "*.r2.cloudflarestorage.com" },
+      { protocol: "https", hostname: "*.googleusercontent.com" },
+      { protocol: "https", hostname: "avatars.githubusercontent.com" },
+      ...(process.env.NODE_ENV === "development" ? [{ protocol: "https" as const, hostname: "**" }] : []),
+    ],
   },
   async headers() {
     return [

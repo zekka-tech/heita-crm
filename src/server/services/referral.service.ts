@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { Prisma, TransactionType } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 
 const DEFAULT_REFERRAL_BONUS_POINTS = 50;
 const REFERRAL_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -64,7 +64,7 @@ export async function resolveReferralCode(input: {
   businessId: string;
   code: string;
   referredUserId: string;
-  tx?: Prisma.TransactionClient;
+  tx?: PrismaTransactionClient;
 }) {
   const client = input.tx ?? prisma;
   const normalizedCode = input.code.trim().toUpperCase();
@@ -89,7 +89,7 @@ export async function resolveReferralCode(input: {
 }
 
 export async function applyReferralRewardIfEligible(
-  tx: Prisma.TransactionClient,
+  tx: PrismaTransactionClient,
   input: {
     membershipId: string;
   }

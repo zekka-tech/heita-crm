@@ -88,6 +88,12 @@ a {
   text-decoration: none;
 }
 
+/* Prose links should be underlined for WCAG 2.4.4 */
+.prose a, .legal-content a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 button,
 input,
 textarea,

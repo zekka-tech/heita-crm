@@ -5,6 +5,7 @@ import { getQueueRedis } from "@/lib/redis";
 import { processBusinessDocument } from "@/lib/ai/document-processor";
 
 export const DOCUMENT_INGESTION_QUEUE = "document-ingestion";
+export const DOCUMENT_INGESTION_DLQ = "document-ingestion-dlq";
 
 type DocumentIngestionJob = {
   documentId: string;
@@ -12,6 +13,7 @@ type DocumentIngestionJob = {
 
 declare global {
   var __heitaDocumentQueue__: Queue<DocumentIngestionJob> | undefined;
+  var __heitaDocumentDlq__: Queue | undefined;
 }
 
 export function getDocumentIngestionQueue() {
@@ -39,6 +41,22 @@ export function getDocumentIngestionQueue() {
   }
 
   return global.__heitaDocumentQueue__;
+}
+
+export function getIngestionDlq() {
+  const redis = getQueueRedis();
+  if (!redis) {
+    return null;
+  }
+
+  if (!global.__heitaDocumentDlq__) {
+    global.__heitaDocumentDlq__ = new Queue(DOCUMENT_INGESTION_DLQ, {
+      connection: redis,
+      defaultJobOptions: { removeOnComplete: 100, removeOnFail: false }
+    });
+  }
+
+  return global.__heitaDocumentDlq__;
 }
 
 export async function enqueueDocumentIngestionJob(documentId: string) {
@@ -75,4 +93,23 @@ export async function handleDocumentIngestionJob(
 ) {
   logger.info({ jobId: job.id, documentId: job.data.documentId }, "ai.document.job_start");
   return processBusinessDocument(job.data.documentId);
+}
+
+/**
+ * Moves a permanently-failed ingestion job to the dead-letter queue.
+ * Call this from the worker's "failed" event handler after all retries are exhausted.
+ */
+export async function moveIngestionJobToDlq(
+  job: Job<DocumentIngestionJob>,
+  err: Error
+): Promise<void> {
+  const dlq = getIngestionDlq();
+  if (!dlq) return;
+
+  await dlq.add("failed-job", {
+    jobId: job.id,
+    data: job.data,
+    error: err.message
+  });
+  logger.error({ jobId: job.id, err }, "ingestion.job.moved_to_dlq");
 }

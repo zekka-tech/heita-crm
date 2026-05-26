@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { sendOtpSms } from "@/lib/sms";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
+import { checkPlanLimit } from "@/server/services/billing.service";
 
 const INVITE_TTL_HOURS = 72;
 
@@ -51,6 +52,13 @@ export async function createStaffInvite(input: CreateStaffInviteInput) {
     userId: input.actorUserId,
     allowedRoles: [StaffRole.OWNER]
   });
+
+  const seatCheck = await checkPlanLimit(input.businessId, "staffSeats");
+  if (!seatCheck.allowed) {
+    throw new Error(
+      `Staff seat limit reached (${seatCheck.current}/${seatCheck.limit}). Upgrade your plan to invite more staff.`
+    );
+  }
 
   const normalizedPhone = input.phone ? normalizeZaPhone(input.phone) : null;
   if (input.phone && !normalizedPhone) {
