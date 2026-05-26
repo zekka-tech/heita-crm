@@ -34,6 +34,8 @@ model User {
   consents          UserConsent[]
   aiTokenUsages     AiTokenUsage[]
   staffAuditLogs    StaffAuditLog[]      @relation("StaffAuditActor")
+  referralCodesOwned ReferralCode[]
+  importRuns        CustomerImportRun[]  @relation("CustomerImportActor")
 }
 
 model Account {
@@ -129,6 +131,8 @@ model Business {
   staffInvites          StaffInvite[]
   aiTokenUsages         AiTokenUsage[]
   staffAuditLogs        StaffAuditLog[]
+  referralCodes         ReferralCode[]
+  importRuns            CustomerImportRun[]
 }
 
 model QrCode {
@@ -170,14 +174,18 @@ model Membership {
   joinedAt       DateTime             @default(now())
   pointsBalance  Int                  @default(0)
   tierId         String?
+  referredByCodeId String?
+  referralRewardedAt DateTime?
   isActive       Boolean              @default(true)
   business       Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
   user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   tier           LoyaltyTier?         @relation(fields: [tierId], references: [id], onDelete: SetNull)
   transactions   LoyaltyTransaction[]
+  referredByCode ReferralCode?        @relation("ReferralAttribution", fields: [referredByCodeId], references: [id], onDelete: SetNull)
 
   @@unique([businessId, userId])
   @@index([userId])
+  @@index([referredByCodeId])
 }
 
 model StaffMember {
@@ -461,6 +469,45 @@ model Notification {
   @@index([userId, isRead, createdAt])
 }
 
+model ReferralCode {
+  id          String       @id @default(cuid())
+  businessId  String
+  ownerUserId String
+  code        String       @unique
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  ownerUser   User         @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  referrals   Membership[] @relation("ReferralAttribution")
+
+  @@unique([businessId, ownerUserId])
+  @@index([businessId, isActive])
+}
+
+model CustomerImportRun {
+  id           String       @id @default(cuid())
+  businessId   String
+  actorUserId  String
+  fileName     String
+  sourceCsv    String?
+  status       ImportStatus @default(PENDING)
+  totalRows    Int          @default(0)
+  importedRows Int          @default(0)
+  skippedRows  Int          @default(0)
+  failedRows   Int          @default(0)
+  errorSummary Json?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  finishedAt   DateTime?
+  business     Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actorUser    User         @relation("CustomerImportActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([status, createdAt])
+}
+
 model PushSubscription {
   id          String    @id @default(cuid())
   userId      String
@@ -540,6 +587,7 @@ enum JoinChannel {
   WHATSAPP_BOT
   DIRECT_LINK
   STAFF_INVITE
+  CSV_IMPORT
   GOOGLE_SIGNIN
   APPLE_SIGNIN
 }
@@ -576,11 +624,19 @@ enum ConsentChannel {
 
 enum TransactionType {
   SIGNUP_BONUS
+  REFERRAL_BONUS
   EARN
   REDEEM
   ADJUSTMENT
   EXPIRY
   REFUND
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 enum DocumentStatus {

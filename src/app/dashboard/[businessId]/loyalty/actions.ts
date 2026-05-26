@@ -300,3 +300,54 @@ export async function refundTransactionAction(formData: FormData) {
 
   redirect(`/dashboard/${businessId}/loyalty?updated=refund`);
 }
+
+export async function queueCustomerImportAction(formData: FormData) {
+  await requireCsrfFormData(formData);
+
+  const session = await auth();
+  const userId = session?.user?.id;
+  const businessId = String(formData.get("businessId") ?? "");
+  const file = formData.get("csvFile");
+
+  if (!userId) {
+    redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/loyalty`);
+  }
+
+  await requireRole({
+    businessId,
+    userId,
+    allowedRoles: [StaffRole.MANAGER]
+  });
+  await requireFreshStaffStepUp({ businessId, userId });
+
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error("Choose a CSV file to import.");
+  }
+
+  const fileName = file.name || "customer-import.csv";
+  if (!fileName.toLowerCase().endsWith(".csv")) {
+    throw new Error("Only CSV imports are supported.");
+  }
+
+  if (file.size > 1_000_000) {
+    throw new Error("CSV imports are limited to 1 MB per file.");
+  }
+
+  const sourceCsv = await file.text();
+  const [{ enqueueCustomerImportRun }, { createCustomerImportRun }] =
+    await Promise.all([
+      import("@/lib/customer-import-queue"),
+      import("@/server/services/customer-import.service")
+    ]);
+
+  const importRun = await createCustomerImportRun({
+    businessId,
+    actorUserId: userId,
+    fileName,
+    sourceCsv
+  });
+
+  await enqueueCustomerImportRun(importRun.id);
+
+  redirect(`/dashboard/${businessId}/loyalty?updated=import`);
+}

@@ -9,14 +9,13 @@ import { CsrfField } from "@/components/security/csrf-field";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { isBuildPhase } from "@/lib/build-phase";
 
 export const dynamic = "force-dynamic";
 
 type BusinessJoinPageProps = {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ channel?: string }>;
+  searchParams?: Promise<{ channel?: string; ref?: string }>;
 };
 
 export default async function BusinessJoinPage({
@@ -24,7 +23,16 @@ export default async function BusinessJoinPage({
   searchParams
 }: BusinessJoinPageProps) {
   const { slug } = await params;
+
+  if (isBuildPhase()) {
+    return <main className="px-4 py-6 sm:px-8" />;
+  }
+
   const resolvedSearchParams = searchParams ? await searchParams : {};
+  const [{ auth }, { prisma }] = await Promise.all([
+    import("@/lib/auth"),
+    import("@/lib/prisma")
+  ]);
   const session = await auth();
   const business = await prisma.business.findFirst({
     where: { slug, deletedAt: null }
@@ -48,6 +56,7 @@ export default async function BusinessJoinPage({
   )
     ? (resolvedSearchParams.channel as JoinChannel)
     : JoinChannel.DIRECT_LINK;
+  const referralCode = resolvedSearchParams.ref?.trim().toUpperCase() ?? "";
 
   return (
     <main className="px-4 py-6 sm:px-8">
@@ -111,6 +120,7 @@ export default async function BusinessJoinPage({
             <input type="hidden" name="businessId" value={business.id} />
             <input type="hidden" name="slug" value={business.slug} />
             <input type="hidden" name="channel" value={channel} />
+            <input type="hidden" name="referralCode" value={referralCode} />
             <label className="flex items-start gap-3 rounded-xl border border-line bg-surface-elevated px-3 py-3 text-sm text-ink">
               <input
                 type="checkbox"

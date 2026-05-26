@@ -7,6 +7,7 @@ import {
 } from "@/lib/loyalty";
 import { runIdempotentOperation } from "@/lib/idempotency";
 import { prisma } from "@/lib/prisma";
+import { applyReferralRewardIfEligible } from "@/server/services/referral.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 type LoyaltyTx = Prisma.TransactionClient;
@@ -251,6 +252,16 @@ export async function earnPoints(input: EarnPointsInput) {
               }
             }
           });
+
+          const referralReward = await applyReferralRewardIfEligible(tx, {
+            membershipId: membership.id
+          });
+
+          if (referralReward) {
+            await recalculateTier(tx, {
+              membershipId: referralReward.referrerMembershipId
+            });
+          }
 
           if (input.staffAudit) {
             await recordStaffAuditLog(

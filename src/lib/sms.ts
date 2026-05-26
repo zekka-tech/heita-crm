@@ -1,4 +1,5 @@
 import { runWithCircuitBreaker } from "@/lib/circuit-breaker";
+import { appendTraceHeaders } from "@/lib/tracing";
 
 export async function sendOtpSms(input: { to: string; code: string }) {
   const apiKey = process.env.AT_API_KEY;
@@ -29,11 +30,11 @@ export async function sendOtpSms(input: { to: string; code: string }) {
   const response = await runWithCircuitBreaker("africas-talking.sms", () =>
     fetch("https://api.africastalking.com/version1/messaging", {
       method: "POST",
-      headers: {
+      headers: appendTraceHeaders({
         Accept: "application/json",
         apiKey,
         "Content-Type": "application/x-www-form-urlencoded"
-      },
+      }),
       body: form.toString(),
       signal: AbortSignal.timeout(30_000)
     })

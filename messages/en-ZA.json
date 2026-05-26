@@ -86,7 +86,8 @@
     "pointsLabel": "points",
     "viewBusiness": "View business",
     "rewards": "Rewards",
-    "openChat": "Open chat"
+    "openChat": "Open chat",
+    "history": "History"
   },
   "notifications": {
     "eyebrow": "Notifications",
@@ -274,6 +275,20 @@
     "addToCalendar": "Add to calendar",
     "empty": "No upcoming events.",
     "backToBusiness": "Back to business profile"
+  },
+  "receiptHistory": {
+    "eyebrow": "Receipt history",
+    "title": "Points and redemption history",
+    "subtitle": "Review every loyalty transaction for this business and export it when you need a clean record.",
+    "exportCsv": "Export CSV",
+    "empty": "No matching transactions yet.",
+    "filters": {
+      "type": "Type",
+      "all": "All types",
+      "from": "From",
+      "to": "To",
+      "apply": "Apply filters"
+    }
   },
   "languageSwitcher": {
     "label": "Language",

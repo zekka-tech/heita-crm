@@ -4,6 +4,7 @@ import { Gift, Plus, Receipt, Users } from "lucide-react";
 import {
   createRewardAction,
   earnPointsAction,
+  queueCustomerImportAction,
   refundTransactionAction,
   redeemPointsAction,
   requestStaffStepUpAction,
@@ -15,12 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import { auth } from "@/lib/auth";
-
 export const dynamic = "force-dynamic";
+import { isBuildPhase } from "@/lib/build-phase";
 import { describeTierPerks } from "@/lib/loyalty";
-import { prisma } from "@/lib/prisma";
-import { hasFreshStaffStepUp } from "@/lib/staff-step-up";
 
 type LoyaltyDashboardPageProps = {
   params: Promise<{ businessId: string }>;
@@ -32,6 +30,16 @@ export default async function LoyaltyDashboardPage({
   searchParams
 }: LoyaltyDashboardPageProps) {
   const { businessId } = await params;
+
+  if (isBuildPhase()) {
+    return <main className="px-4 pb-24 pt-6 sm:px-8" />;
+  }
+
+  const [{ auth }, { prisma }, { hasFreshStaffStepUp }] = await Promise.all([
+    import("@/lib/auth"),
+    import("@/lib/prisma"),
+    import("@/lib/staff-step-up")
+  ]);
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = await auth();
 
@@ -57,7 +65,11 @@ export default async function LoyaltyDashboardPage({
         orderBy: { joinedAt: "desc" }
       },
       rewards: { orderBy: { createdAt: "desc" } },
-      loyaltyTiers: { orderBy: { minPoints: "asc" } }
+      loyaltyTiers: { orderBy: { minPoints: "asc" } },
+      importRuns: {
+        orderBy: { createdAt: "desc" },
+        take: 5
+      }
     }
   });
 
@@ -221,6 +233,64 @@ export default async function LoyaltyDashboardPage({
                 Redeem points
               </Button>
             </form>
+          </Card>
+
+          <Card variant="surface" className="space-y-4">
+            <header className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary-action" />
+              <h2 className="section-title">Bulk customer import</h2>
+            </header>
+            <p className="text-sm text-ink-muted">
+              Upload a CSV with <code>name</code>, <code>phone</code>, optional{" "}
+              <code>openingPoints</code>, and optional <code>tier</code>. Existing
+              memberships are skipped; new members get an imported opening balance.
+            </p>
+            <form action={queueCustomerImportAction} className="grid gap-3">
+              <CsrfField />
+              <input type="hidden" name="businessId" value={business.id} />
+              <Input
+                name="csvFile"
+                type="file"
+                label="Customer CSV"
+                accept=".csv,text/csv"
+                required
+              />
+              <Button type="submit" variant="primary">
+                Queue import
+              </Button>
+            </form>
+            <div className="grid gap-2">
+              {business.importRuns.length ? (
+                business.importRuns.map((run) => (
+                  <div
+                    key={run.id}
+                    className="rounded-xl border border-line bg-surface-elevated px-3 py-3 text-sm"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-medium text-ink">{run.fileName}</p>
+                      <Chip
+                        variant={
+                          run.status === "COMPLETED"
+                            ? "success"
+                            : run.status === "FAILED"
+                              ? "warning"
+                              : "primary"
+                        }
+                        size="sm"
+                      >
+                        {run.status}
+                      </Chip>
+                    </div>
+                    <p className="mt-1 text-xs text-ink-subtle">
+                      {run.importedRows} imported · {run.skippedRows} skipped ·{" "}
+                      {run.failedRows} failed
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-ink-subtle">No customer imports yet.</p>
+              )}
+            </div>
           </Card>
         </div>
 

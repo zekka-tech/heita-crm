@@ -86,7 +86,8 @@
     "pointsLabel": "amanqaku",
     "viewBusiness": "Jonga ishishini",
     "rewards": "Imivuzo",
-    "openChat": "Vula incoko"
+    "openChat": "Vula incoko",
+    "history": "Imbali"
   },
   "notifications": {
     "eyebrow": "Izaziso",
@@ -274,6 +275,20 @@
     "addToCalendar": "Yongeza kwikhalenda",
     "empty": "Akukho ziganeko zizayo.",
     "backToBusiness": "Buyela kwiprofayile yeshishini"
+  },
+  "receiptHistory": {
+    "eyebrow": "Imbali yeentengiselwano",
+    "title": "Imbali yamanqaku nokuhlangula",
+    "subtitle": "Jonga yonke intengiselwano yokunyaniseka yale shishini uze uyikhuphele xa ufuna irekhodi elicacileyo.",
+    "exportCsv": "Khuphela i-CSV",
+    "empty": "Akukho ntengiselwano zihambelanayo okwangoku.",
+    "filters": {
+      "type": "Uhlobo",
+      "all": "Zonke iintlobo",
+      "from": "Ukusuka",
+      "to": "Ukuya",
+      "apply": "Faka izihluzi"
+    }
   },
   "languageSwitcher": {
     "label": "Ulwimi",

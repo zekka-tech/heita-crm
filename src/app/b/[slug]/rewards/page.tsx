@@ -8,9 +8,8 @@ import { RewardCard } from "@/components/loyalty/reward-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
-import { auth } from "@/lib/auth";
+import { isBuildPhase } from "@/lib/build-phase";
 import { describeTierPerks } from "@/lib/loyalty";
-import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +21,16 @@ export default async function BusinessRewardsPage({
   params
 }: BusinessRewardsPageProps) {
   const { slug } = await params;
+
+  if (isBuildPhase()) {
+    return <main className="px-4 pb-24 pt-6 sm:px-8" />;
+  }
+
+  const [{ auth }, { prisma }, { getOrCreateReferralCode }] = await Promise.all([
+    import("@/lib/auth"),
+    import("@/lib/prisma"),
+    import("@/server/services/referral.service")
+  ]);
   const session = await auth();
 
   const business = await prisma.business.findFirst({
@@ -48,6 +57,16 @@ export default async function BusinessRewardsPage({
         },
         include: { tier: true }
       })
+    : null;
+  const referralCode =
+    membership && session?.user?.id
+      ? await getOrCreateReferralCode({
+          businessId: business.id,
+          ownerUserId: session.user.id
+        })
+      : null;
+  const referralLink = referralCode
+    ? `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/b/${slug}/join?ref=${referralCode.code}`
     : null;
 
   return (
@@ -85,6 +104,26 @@ export default async function BusinessRewardsPage({
           <Button asChild variant="primary">
             <Link href={`/b/${slug}/join`}>Join now</Link>
           </Button>
+        </Card>
+      ) : null}
+
+      {membership && referralLink ? (
+        <Card variant="surface" className="mt-6 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="section-title">Refer a friend</h2>
+              <p className="text-sm text-ink-muted">
+                Share your referral link. When a friend joins and earns their first points, you
+                receive a referral bonus.
+              </p>
+            </div>
+            <Chip variant="primary" size="sm">
+              Code {referralCode?.code}
+            </Chip>
+          </div>
+          <div className="rounded-xl border border-line bg-surface-elevated px-3 py-3 text-sm text-ink">
+            {referralLink}
+          </div>
         </Card>
       ) : null}
 

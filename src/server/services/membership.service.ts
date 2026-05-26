@@ -2,11 +2,13 @@ import { JoinChannel, TransactionType } from "@prisma/client";
 
 import { calculatePointsExpiryDate } from "@/lib/loyalty";
 import { prisma } from "@/lib/prisma";
+import { resolveReferralCode } from "@/server/services/referral.service";
 
 type JoinBusinessInput = {
   businessId: string;
   userId: string;
   joinChannel: JoinChannel;
+  referralCode?: string | null;
 };
 
 export async function joinBusiness(input: JoinBusinessInput) {
@@ -42,6 +44,14 @@ export async function joinBusiness(input: JoinBusinessInput) {
       [...business.loyaltyTiers]
         .reverse()
         .find((candidate) => pointsBalance >= candidate.minPoints) ?? null;
+    const referralCode = input.referralCode
+      ? await resolveReferralCode({
+          businessId: business.id,
+          code: input.referralCode,
+          referredUserId: input.userId,
+          tx
+        })
+      : null;
 
     const membership = await tx.membership.create({
       data: {
@@ -49,7 +59,8 @@ export async function joinBusiness(input: JoinBusinessInput) {
         userId: input.userId,
         joinChannel: input.joinChannel,
         pointsBalance,
-        tierId: tier?.id ?? null
+        tierId: tier?.id ?? null,
+        referredByCodeId: referralCode?.id ?? null
       }
     });
 

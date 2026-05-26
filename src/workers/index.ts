@@ -2,14 +2,20 @@ import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
 import { registerShutdownHandler } from "@/lib/shutdown";
+import { startCustomerImportWorker } from "@/workers/customer-import.worker";
 import { startDocumentIngestionWorker } from "@/workers/ingest-document.worker";
 
 export async function startWorkers() {
   const documentWorker = startDocumentIngestionWorker();
+  const customerImportWorker = startCustomerImportWorker();
 
   registerShutdownHandler(async () => {
     if (documentWorker) {
       await documentWorker.close().catch(() => undefined);
+    }
+
+    if (customerImportWorker) {
+      await customerImportWorker.close().catch(() => undefined);
     }
   });
 
@@ -32,7 +38,7 @@ export async function startWorkers() {
   });
 
   return {
-    status: documentWorker ? "running" : "idle"
+    status: documentWorker || customerImportWorker ? "running" : "idle"
   };
 }
 

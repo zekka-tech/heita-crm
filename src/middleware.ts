@@ -11,7 +11,6 @@ import { deploymentReadOnlyEnabled, env } from "@/lib/env";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 
 const { auth } = NextAuth(authBaseConfig);
-
 const protectedPrefixes = [
   "/home",
   "/wallet",
@@ -65,7 +64,6 @@ export default auth((request) => {
   const isAuthRoute = authPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
-
   const incomingCsrf = request.cookies.get(CSRF_COOKIE)?.value;
 
   if (deploymentReadOnlyEnabled() && isMutation) {

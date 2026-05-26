@@ -1,3 +1,5 @@
+import { appendTraceHeaders } from "@/lib/tracing";
+
 type SendEmailInput = {
   to: string;
   subject: string;
@@ -20,10 +22,10 @@ export async function sendEmail(input: SendEmailInput) {
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: {
+    headers: appendTraceHeaders({
       Authorization: `Bearer ${process.env.EMAIL_SERVER_PASSWORD}`,
       "Content-Type": "application/json"
-    },
+    }),
     body: JSON.stringify({
       from: process.env.EMAIL_FROM,
       to: [input.to],

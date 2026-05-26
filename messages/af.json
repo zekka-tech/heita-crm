@@ -86,7 +86,8 @@
     "pointsLabel": "punte",
     "viewBusiness": "Bekyk besigheid",
     "rewards": "Belonings",
-    "openChat": "Open klets"
+    "openChat": "Open klets",
+    "history": "Geskiedenis"
   },
   "notifications": {
     "eyebrow": "Kennisgewings",
@@ -274,6 +275,20 @@
     "addToCalendar": "Voeg by kalender",
     "empty": "Geen komende geleenthede nie.",
     "backToBusiness": "Terug na besigheidsprofiel"
+  },
+  "receiptHistory": {
+    "eyebrow": "Transaksiegeskiedenis",
+    "title": "Punte- en aflosgeskiedenis",
+    "subtitle": "Gaan elke lojaliteitstransaksie vir hierdie besigheid na en voer dit uit wanneer jy 'n skoon rekord nodig het.",
+    "exportCsv": "Voer CSV uit",
+    "empty": "Nog geen ooreenstemmende transaksies nie.",
+    "filters": {
+      "type": "Tipe",
+      "all": "Alle tipes",
+      "from": "Van",
+      "to": "Tot",
+      "apply": "Pas filters toe"
+    }
   },
   "languageSwitcher": {
     "label": "Taal",

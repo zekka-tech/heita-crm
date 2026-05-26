@@ -1,4 +1,5 @@
 import { runWithCircuitBreaker } from "@/lib/circuit-breaker";
+import { appendTraceHeaders } from "@/lib/tracing";
 
 const baseUrl = "https://graph.facebook.com";
 
@@ -10,6 +11,17 @@ type WhatsAppTemplateComponent = {
     | { type: "text"; text: string }
     | { type: "payload"; payload: string }
   >;
+};
+
+type InteractiveButton = {
+  id: string;
+  title: string;
+};
+
+type InteractiveListRow = {
+  id: string;
+  title: string;
+  description?: string;
 };
 
 type RequestOptions = {
@@ -62,10 +74,10 @@ async function requestWhatsApp<T>(path: string, options: RequestOptions = {}) {
       const response = await runWithCircuitBreaker("whatsapp.graph", () =>
         fetch(url, {
           method: options.method ?? "POST",
-          headers: {
+          headers: appendTraceHeaders({
             Authorization: `Bearer ${accessToken}`,
             ...(options.body ? { "Content-Type": "application/json" } : {})
-          },
+          }),
           body: options.body ? JSON.stringify(options.body) : undefined,
           signal
         })
@@ -147,6 +159,88 @@ export async function sendWhatsAppTemplateMessage(input: {
             code: input.languageCode ?? "en_ZA"
           },
           components: input.components ?? []
+        }
+      }
+    }
+  );
+
+  return {
+    payload,
+    messageId: getMessageId(payload)
+  };
+}
+
+export async function sendWhatsAppInteractiveButtonsMessage(input: {
+  phoneNumberId: string;
+  to: string;
+  body: string;
+  footer?: string;
+  buttons: InteractiveButton[];
+}) {
+  const payload = await requestWhatsApp<GraphMessageResponse>(
+    `${input.phoneNumberId}/messages`,
+    {
+      body: {
+        messaging_product: "whatsapp",
+        to: normalizeRecipient(input.to),
+        type: "interactive",
+        interactive: {
+          type: "button",
+          body: { text: input.body },
+          ...(input.footer ? { footer: { text: input.footer } } : {}),
+          action: {
+            buttons: input.buttons.map((button) => ({
+              type: "reply",
+              reply: {
+                id: button.id,
+                title: button.title
+              }
+            }))
+          }
+        }
+      }
+    }
+  );
+
+  return {
+    payload,
+    messageId: getMessageId(payload)
+  };
+}
+
+export async function sendWhatsAppInteractiveListMessage(input: {
+  phoneNumberId: string;
+  to: string;
+  body: string;
+  buttonLabel: string;
+  sectionTitle?: string;
+  footer?: string;
+  rows: InteractiveListRow[];
+}) {
+  const payload = await requestWhatsApp<GraphMessageResponse>(
+    `${input.phoneNumberId}/messages`,
+    {
+      body: {
+        messaging_product: "whatsapp",
+        to: normalizeRecipient(input.to),
+        type: "interactive",
+        interactive: {
+          type: "list",
+          body: { text: input.body },
+          ...(input.footer ? { footer: { text: input.footer } } : {}),
+          action: {
+            button: input.buttonLabel,
+            sections: [
+              {
+                ...(input.sectionTitle ? { title: input.sectionTitle } : {}),
+                rows: input.rows.map((row) => ({
+                  id: row.id,
+                  title: row.title,
+                  ...(row.description ? { description: row.description } : {})
+                }))
+              }
+            ]
+          }
         }
       }
     }

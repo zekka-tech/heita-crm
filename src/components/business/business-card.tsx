@@ -18,6 +18,7 @@ type BusinessCardProps = {
     viewBusiness?: string;
     rewards?: string;
     openChat?: string;
+    history?: string;
   };
   className?: string;
 };
@@ -93,6 +94,12 @@ export function BusinessCard({
           className="btn btn--secondary btn--ghost-compact"
         >
           {labels?.openChat ?? "Open chat"}
+        </Link>
+        <Link
+          href={`/b/${business.slug}/history`}
+          className="btn btn--secondary btn--ghost-compact"
+        >
+          {labels?.history ?? "History"}
         </Link>
       </div>
     </article>

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  sendWhatsAppInteractiveButtonsMessage,
+  sendWhatsAppInteractiveListMessage,
   sendWhatsAppTemplateMessage,
   sendWhatsAppTextMessage
 } from "@/lib/whatsapp";
@@ -90,5 +92,63 @@ describe("whatsapp client", () => {
     });
 
     expect(result.messageId).toBe("wamid.template");
+  });
+
+  it("sends interactive button payloads", async () => {
+    const fetchMock = vi.fn(async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.type).toBe("interactive");
+      expect(body.interactive.type).toBe("button");
+      expect(body.interactive.action.buttons).toHaveLength(2);
+      expect(body.interactive.action.buttons[0].reply.title).toBe("Join now");
+
+      return new Response(JSON.stringify({ messages: [{ id: "wamid.buttons" }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await sendWhatsAppInteractiveButtonsMessage({
+      phoneNumberId: "1234",
+      to: "+27 82 123 4567",
+      body: "Pick an option",
+      buttons: [
+        { id: "join", title: "Join now" },
+        { id: "rewards", title: "See rewards" }
+      ]
+    });
+
+    expect(result.messageId).toBe("wamid.buttons");
+  });
+
+  it("sends interactive list payloads", async () => {
+    const fetchMock = vi.fn(async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.type).toBe("interactive");
+      expect(body.interactive.type).toBe("list");
+      expect(body.interactive.action.button).toBe("Choose");
+      expect(body.interactive.action.sections[0].rows[0].title).toBe("Redeem reward");
+
+      return new Response(JSON.stringify({ messages: [{ id: "wamid.list" }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await sendWhatsAppInteractiveListMessage({
+      phoneNumberId: "1234",
+      to: "27821234567",
+      body: "Select an action",
+      buttonLabel: "Choose",
+      rows: [
+        { id: "redeem", title: "Redeem reward", description: "Use your points" }
+      ]
+    });
+
+    expect(result.messageId).toBe("wamid.list");
   });
 });

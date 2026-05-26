@@ -86,7 +86,8 @@
     "pointsLabel": "amaphuzu",
     "viewBusiness": "Buka ibhizinisi",
     "rewards": "Imivuzo",
-    "openChat": "Vula ingxoxo"
+    "openChat": "Vula ingxoxo",
+    "history": "Umlando"
   },
   "notifications": {
     "eyebrow": "Izaziso",
@@ -274,6 +275,20 @@
     "addToCalendar": "Engeza ekhalendeni",
     "empty": "Ayikho imicimbi ezayo.",
     "backToBusiness": "Buyela kuphrofayela yebhizinisi"
+  },
+  "receiptHistory": {
+    "eyebrow": "Umlando wokuthengiselana",
+    "title": "Umlando wamaphuzu nokuhlenga",
+    "subtitle": "Bheka konke ukuthengiselana kokwethembeka kwaleli bhizinisi bese ukulanda uma udinga irekhodi elicacile.",
+    "exportCsv": "Landa i-CSV",
+    "empty": "Akukho kuthengiselana okufanayo okwamanje.",
+    "filters": {
+      "type": "Uhlobo",
+      "all": "Zonke izinhlobo",
+      "from": "Kusukela",
+      "to": "Kuze kube",
+      "apply": "Sebenzisa izihlungi"
+    }
   },
   "languageSwitcher": {
     "label": "Ulimi",

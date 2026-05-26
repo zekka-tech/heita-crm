@@ -5,14 +5,21 @@ import { Sparkles } from "lucide-react";
 import { BusinessCard } from "@/components/business/business-card";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
-import { auth } from "@/lib/auth";
-import { resolveLocale } from "@/i18n/locale";
-import { prisma } from "@/lib/prisma";
+import { isBuildPhase } from "@/lib/build-phase";
 
 export const metadata = { title: "Wallet" };
 export const dynamic = "force-dynamic";
 
 export default async function WalletPage() {
+  if (isBuildPhase()) {
+    return <section className="grid gap-5" />;
+  }
+
+  const [{ auth }, { resolveLocale }, { prisma }] = await Promise.all([
+    import("@/lib/auth"),
+    import("@/i18n/locale"),
+    import("@/lib/prisma")
+  ]);
   const session = await auth();
   const locale = await resolveLocale();
   const t = await getTranslations("wallet");
@@ -74,7 +81,8 @@ export default async function WalletPage() {
                 points: t("pointsLabel"),
                 viewBusiness: t("viewBusiness"),
                 rewards: t("rewards"),
-                openChat: t("openChat")
+                openChat: t("openChat"),
+                history: t("history")
               }}
             />
             <Card variant="outline" className="space-y-3">

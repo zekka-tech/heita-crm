@@ -1,4 +1,5 @@
 import { runWithCircuitBreaker } from "@/lib/circuit-breaker";
+import { appendTraceHeaders } from "@/lib/tracing";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -30,11 +31,11 @@ export async function* streamAnthropicChat(
   const response = await runWithCircuitBreaker("anthropic.chat", () =>
     fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
+      headers: appendTraceHeaders({
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
         "Content-Type": "application/json"
-      },
+      }),
       body: JSON.stringify({
         model,
         max_tokens: options.maxTokens ?? 512,

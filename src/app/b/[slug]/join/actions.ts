@@ -17,6 +17,7 @@ export async function joinBusinessAction(formData: FormData) {
   const businessId = String(formData.get("businessId") ?? "");
   const slug = String(formData.get("slug") ?? "");
   const channelValue = String(formData.get("channel") ?? JoinChannel.DIRECT_LINK);
+  const referralCode = String(formData.get("referralCode") ?? "").trim() || null;
   const marketingConsent = String(formData.get("marketingConsent") ?? "") === "true";
   const channel = Object.values(JoinChannel).includes(channelValue as JoinChannel)
     ? (channelValue as JoinChannel)
@@ -29,7 +30,8 @@ export async function joinBusinessAction(formData: FormData) {
   await joinBusiness({
     businessId,
     userId,
-    joinChannel: channel
+    joinChannel: channel,
+    referralCode
   });
 
   if (marketingConsent) {

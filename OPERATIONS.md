@@ -47,6 +47,27 @@ curl -fsS http://localhost:3000/api/health?deep=1
 - Object storage: lifecycle policy retaining 30 days of snapshots
 - Redis: persistence enabled for operational recovery, not primary retention
 
+### Automated backup flow
+
+- GitHub Actions workflow: `.github/workflows/backup.yml`
+- Backup script: `scripts/backup-postgres.sh`
+- Required secrets:
+  - `BACKUP_DATABASE_URL`
+  - `BACKUP_S3_URI`
+  - `BACKUP_AWS_ACCESS_KEY_ID`
+  - `BACKUP_AWS_SECRET_ACCESS_KEY`
+  - `BACKUP_AWS_REGION`
+- Output format: compressed PostgreSQL custom dump plus a sibling SHA-256 file
+- Restore command:
+
+```bash
+pg_restore --clean --if-exists --no-owner --no-privileges \
+  --dbname "$DATABASE_URL" \
+  ./heita-crm-<timestamp>.dump
+```
+
+- Target posture: daily logical backups, 30-day retention, and WAL archiving managed by the primary Postgres platform for the 15-minute RPO target.
+
 ## Required secret groups
 
 - Auth: `AUTH_SECRET`, OAuth provider keys

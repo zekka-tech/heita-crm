@@ -7,14 +7,7 @@ import { CsrfField } from "@/components/security/csrf-field";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
-import { auth } from "@/lib/auth";
-import { requireRole } from "@/lib/staff";
-import { prisma } from "@/lib/prisma";
-import {
-  getBusinessConversationThread,
-  getWhatsappCustomerServiceWindowStatus,
-  listBusinessConversations
-} from "@/server/services/conversation.service";
+import { isBuildPhase } from "@/lib/build-phase";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +21,26 @@ export default async function DashboardMessagesPage({
   searchParams
 }: MessagesPageProps) {
   const { businessId } = await params;
+
+  if (isBuildPhase()) {
+    return <main className="px-4 pb-24 pt-6 sm:px-8" />;
+  }
+
+  const [
+    { auth },
+    { requireRole },
+    { prisma },
+    {
+      getBusinessConversationThread,
+      getWhatsappCustomerServiceWindowStatus,
+      listBusinessConversations
+    }
+  ] = await Promise.all([
+    import("@/lib/auth"),
+    import("@/lib/staff"),
+    import("@/lib/prisma"),
+    import("@/server/services/conversation.service")
+  ]);
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = await auth();
 
@@ -206,11 +219,53 @@ export default async function DashboardMessagesPage({
                     rows={4}
                     placeholder="Write a WhatsApp reply"
                   />
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="label-stack">
+                      <span className="label">Message mode</span>
+                      <select name="messageMode" defaultValue="text" className="input">
+                        <option value="text">Free-text reply</option>
+                        <option value="template">Template</option>
+                        <option value="interactive-buttons">Interactive buttons</option>
+                        <option value="interactive-list">Interactive list</option>
+                      </select>
+                    </label>
+                    <Input
+                      name="footer"
+                      label="Footer (optional)"
+                      placeholder="Reply terms or short footer"
+                    />
+                  </div>
                   <Input
                     name="templateName"
                     label="Template name"
                     placeholder="Optional approved template name"
                     hint="If you set a template name, the body is passed as a single body parameter."
+                  />
+                  <Textarea
+                    name="interactiveButtons"
+                    label="Interactive buttons"
+                    rows={3}
+                    placeholder={"join_now|Join now\nview_rewards|View rewards"}
+                    hint="For button mode: one button per line as id|title, up to 3 buttons."
+                  />
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Input
+                      name="listButtonLabel"
+                      label="List button label"
+                      placeholder="Choose an option"
+                    />
+                    <Input
+                      name="listSectionTitle"
+                      label="List section title"
+                      placeholder="Available actions"
+                    />
+                  </div>
+                  <Textarea
+                    name="interactiveListRows"
+                    label="Interactive list rows"
+                    rows={4}
+                    placeholder={"join|Join programme|Claim welcome points\nredeem|Redeem reward|Use points now"}
+                    hint="For list mode: one row per line as id|title|description, up to 10 rows."
                   />
                   <div className="flex items-center justify-between gap-3">
                     {resolvedSearchParams.sent ? (

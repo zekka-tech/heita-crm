@@ -1,4 +1,10 @@
-import { context, trace, type SpanStatusCode, type Tracer } from "@opentelemetry/api";
+import {
+  context,
+  propagation,
+  trace,
+  type SpanStatusCode,
+  type Tracer
+} from "@opentelemetry/api";
 
 const tracer: Tracer = trace.getTracer("heita-crm");
 
@@ -30,4 +36,18 @@ export async function withSpan<T>(
 
 export function currentTraceId() {
   return trace.getSpan(context.active())?.spanContext().traceId ?? null;
+}
+
+export function appendTraceHeaders(
+  headers: HeadersInit | undefined = undefined
+): Headers {
+  const next = new Headers(headers);
+  const carrier: Record<string, string> = {};
+  propagation.inject(context.active(), carrier);
+
+  for (const [key, value] of Object.entries(carrier)) {
+    next.set(key, value);
+  }
+
+  return next;
 }
