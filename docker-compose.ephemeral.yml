@@ -1,0 +1,59 @@
+version: "3.9"
+
+# Ephemeral environment for PR preview smoke-tests in CI.
+# Use: HEITA_IMAGE=<pr-image> docker compose -f docker-compose.ephemeral.yml up -d
+# Tear down: docker compose -f docker-compose.ephemeral.yml down -v
+
+services:
+  app:
+    image: ${HEITA_IMAGE:-ghcr.io/zekka-tech/heita-crm:latest}
+    container_name: heita_ephemeral_app
+    restart: no
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://heita:heita_ephemeral@postgres:5432/heita
+      REDIS_URL: redis://redis:6379
+      AUTH_SECRET: ephemeral-ci-secret-not-for-prod
+      NEXT_PUBLIC_APP_URL: http://localhost:3001
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "3001:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: heita_ephemeral_postgres
+    restart: no
+    environment:
+      POSTGRES_USER: heita
+      POSTGRES_PASSWORD: heita_ephemeral
+      POSTGRES_DB: heita
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U heita -d heita"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: heita_ephemeral_redis
+    restart: no
+    command: redis-server --save "" --appendonly no
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

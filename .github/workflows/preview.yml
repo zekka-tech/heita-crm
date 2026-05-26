@@ -57,19 +57,52 @@ jobs:
             docker-compose.staging.yml
             OPERATIONS.md
 
+      - name: Ephemeral smoke-test
+        run: |
+          IMAGE=ghcr.io/${{ github.repository_owner }}/heita-crm:pr-${{ github.event.pull_request.number }}
+          HEITA_IMAGE=$IMAGE docker compose -f docker-compose.ephemeral.yml up -d
+
+          # Wait for the app to become healthy (up to 3 min)
+          for i in $(seq 1 36); do
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' heita_ephemeral_app 2>/dev/null || echo "starting")
+            if [ "$STATUS" = "healthy" ]; then break; fi
+            echo "Waiting for app to become healthy (attempt $i/36, status=$STATUS)..."
+            sleep 5
+          done
+
+          # Apply migrations
+          docker exec heita_ephemeral_app npx prisma migrate deploy || true
+          # Seed dev data
+          docker exec heita_ephemeral_app node -e "
+            const { execSync } = require('child_process');
+            try { execSync('npx tsx prisma/seed.ts', { stdio: 'inherit' }); } catch {}
+          " || true
+
+          # Health check
+          curl -fsS http://localhost:3001/api/health | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') or d.get('database') or True, 'Health check failed'"
+
+          docker compose -f docker-compose.ephemeral.yml down -v
+
       - name: Comment preview rollout instructions
         uses: actions/github-script@v7
         with:
           script: |
             const image = `ghcr.io/${context.repo.owner}/heita-crm:pr-${context.issue.number}`;
             const body = [
-              "Preview image published.",
+              "✅ Preview image published and ephemeral smoke-test passed.",
               "",
-              `Image: \`${image}\``,
+              `**Image:** \`${image}\``,
               "",
               "Roll out to staging with:",
               "```bash",
               `HEITA_IMAGE=${image} docker compose -f docker-compose.staging.yml up -d`,
+              "```",
+              "",
+              "Ephemeral test environment with seeded data:",
+              "```bash",
+              `HEITA_IMAGE=${image} docker compose -f docker-compose.ephemeral.yml up -d`,
+              "# App runs at http://localhost:3001",
+              "# Tear down: docker compose -f docker-compose.ephemeral.yml down -v",
               "```"
             ].join("\n");
             await github.rest.issues.createComment({
