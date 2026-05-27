@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getIngestionDlq } from "@/lib/ai/ingestion-queue";
 import { getCustomerImportDlq } from "@/lib/customer-import-queue";
+import { setDlqPendingGauge } from "@/lib/metrics";
 import { constantTimeEqual } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,10 @@ export async function GET(request: Request) {
     failedReason: job.failedReason,
     enqueuedAt: job.timestamp ? new Date(job.timestamp).toISOString() : null
   });
+
+  // Update Prometheus gauge so heita_dlq_pending_jobs reflects current state
+  setDlqPendingGauge("document-ingestion-dlq", ingestionJobs.length);
+  setDlqPendingGauge("customer-import-dlq", importJobs.length);
 
   return NextResponse.json({
     queues: {

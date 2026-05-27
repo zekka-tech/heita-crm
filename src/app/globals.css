@@ -58,6 +58,25 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
+
+    /* Surface and canvas — dark variants */
+    --color-surface: #0f172a;
+    --color-surface-elevated: #1e293b;
+    --color-canvas: #0b1120;
+
+    /* Ink — inverted contrast hierarchy */
+    --color-ink: #f1f5f9;
+    --color-ink-muted: #94a3b8;
+    --color-ink-subtle: #64748b;
+
+    /* Borders — visible on dark backgrounds */
+    --color-border: #1e293b;
+    --color-border-strong: #334155;
+
+    /* Navy surface — darker in dark mode */
+    --color-navy: #1e3a5f;
+    --color-navy-soft: #1e3a5f;
+    --color-navy-foreground: #e2e8f0;
   }
 }
 

@@ -78,6 +78,8 @@ export default async function RootLayout({
   return (
     <html lang={locale}>
       <head>
+        {/* iOS home screen icon — requires PNG, SVGs are not used by Safari */}
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"

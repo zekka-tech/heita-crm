@@ -15,6 +15,14 @@ type RateLimitOptions = {
 
 const memoryStore = new Map<string, { count: number; resetAt: number }>();
 
+// Evict stale entries every 10 minutes to prevent unbounded memory growth
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of memoryStore) {
+    if (entry.resetAt <= now) memoryStore.delete(key);
+  }
+}, 10 * 60 * 1000).unref();
+
 function decideFromMemory(opts: RateLimitOptions): RateLimitDecision {
   const now = Date.now();
   const key = `${opts.identifier}:${opts.windowSeconds}`;
@@ -63,13 +71,21 @@ export async function enforceRateLimit(
 
   try {
     const key = `rl:${opts.identifier}:${opts.windowSeconds}`;
-    const count = await redis.incr(key);
 
-    if (count === 1) {
-      await redis.expire(key, opts.windowSeconds);
-    }
+    // Atomic INCR + conditional EXPIRE using a Lua script to avoid the
+    // race where a crash between INCR and EXPIRE leaves a key with no TTL.
+    const result = await redis.eval(
+      `local c = redis.call('INCR', KEYS[1])
+       if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+       local ttl = redis.call('TTL', KEYS[1])
+       return {c, ttl}`,
+      1,
+      key,
+      String(opts.windowSeconds)
+    ) as [number, number];
 
-    const ttl = await redis.ttl(key);
+    const count = result[0];
+    const ttl = result[1];
     const resetInSeconds = ttl > 0 ? ttl : opts.windowSeconds;
 
     if (count > opts.max) {
