@@ -93,7 +93,7 @@ jobs:
           docker compose -f docker-compose.ephemeral.yml down -v
 
       - name: Comment preview rollout instructions
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const image = `ghcr.io/${context.repo.owner}/heita-crm:pr-${context.issue.number}`;
