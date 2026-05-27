@@ -7,7 +7,6 @@ import { Toaster } from "sonner";
 import { HeitaTRPCProvider } from "@/components/providers/trpc-provider";
 import { CookieConsentBanner } from "@/components/layout/cookie-consent-banner";
 import { PwaInstallBanner } from "@/components/layout/pwa-install-banner";
-import { PwaUpdatePrompt } from "@/components/layout/pwa-update-prompt";
 import { ServiceWorkerRegister } from "@/components/layout/service-worker-register";
 import { resolveLocale } from "@/i18n/locale";
 import "./globals.css";
@@ -101,12 +100,11 @@ export default async function RootLayout({
           <HeitaTRPCProvider>
             <ServiceWorkerRegister />
             <PwaInstallBanner />
-            <PwaUpdatePrompt />
             <CookieConsentBanner />
             <div id="main-content" className="app-frame">
               {children}
             </div>
-            <Toaster position="bottom-center" richColors closeButton />
+            <Toaster position="bottom-center" offset="5rem" richColors closeButton />
           </HeitaTRPCProvider>
         </NextIntlClientProvider>
       </body>

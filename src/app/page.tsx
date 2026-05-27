@@ -140,7 +140,9 @@ export default async function LandingPage() {
                 <p className="metric-label text-white/70">Provinces ready</p>
               </div>
               <div>
-                <p className="metric-value text-white">WhatsApp</p>
+                <p className="font-display text-lg font-bold leading-tight text-white sm:text-[1.875rem]">
+                  WhatsApp
+                </p>
                 <p className="metric-label text-white/70">Cloud API native</p>
               </div>
               <div>

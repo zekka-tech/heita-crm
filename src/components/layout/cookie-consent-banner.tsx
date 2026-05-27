@@ -41,7 +41,7 @@ export function CookieConsentBanner() {
   };
 
   return (
-    <div className="sticky bottom-3 z-50 mx-4 sm:mx-8">
+    <div className="fixed bottom-20 left-4 right-4 z-40 sm:bottom-4 sm:left-8 sm:right-8">
       <div className="surface-glass flex flex-col gap-3 rounded-3xl border border-line/80 px-4 py-4 shadow-xl backdrop-blur sm:flex-row sm:items-end sm:justify-between">
         <div className="max-w-2xl space-y-2">
           <div className="flex items-center gap-2 text-ink">
