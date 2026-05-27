@@ -46,6 +46,7 @@ export default async function WalletPage() {
   return (
     <section className="grid gap-5">
       <Card variant="hero" className="px-6 py-8 sm:px-8">
+        <h1 className="sr-only">{t("eyebrow")}</h1>
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
           {t("eyebrow")}
         </p>

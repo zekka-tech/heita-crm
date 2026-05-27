@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { BusinessCategory, Province } from "@prisma/client";
+
+export const metadata: Metadata = {
+  title: "Discover businesses",
+  description: "Find South African retailers and small businesses near you offering loyalty rewards on Heita."
+};
 
 import { BusinessCard } from "@/components/business/business-card";
 import { GeoDiscoveryButton } from "@/components/discover/geo-discovery-button";

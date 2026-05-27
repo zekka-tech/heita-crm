@@ -1,4 +1,4 @@
-import { JoinChannel, MessageChannel } from "@prisma/client";
+import { JoinChannel, MessageChannel, MessageStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
@@ -182,7 +182,7 @@ async function logOutboundWhatsappMessage(input: {
   contactPhone: string;
   externalId?: string | null;
   body: string;
-  status?: string | null;
+  status?: MessageStatus | null;
   metadata?: Record<string, unknown>;
 }) {
   await prisma.message.create({
@@ -193,7 +193,7 @@ async function logOutboundWhatsappMessage(input: {
       channel: MessageChannel.WHATSAPP,
       direction: "OUTBOUND",
       externalId: input.externalId ?? null,
-      status: input.status ?? "queued",
+      status: input.status ?? MessageStatus.QUEUED,
       body: input.body,
       metadata: input.metadata as Prisma.InputJsonValue | undefined,
       sentAt: new Date()
@@ -216,7 +216,7 @@ async function persistStatusUpdates(
     await prisma.message.updateMany({
       where: { externalId: status.id },
       data: {
-        status: status.status,
+        status: status.status as MessageStatus,
         metadata: {
           status: status.status,
           updatedAt: status.timestamp
@@ -374,7 +374,7 @@ async function routeInboundToBusiness(input: RouteInput): Promise<void> {
       channel: MessageChannel.WHATSAPP,
       direction: "INBOUND",
       externalId: input.externalId,
-      status: "received",
+      status: MessageStatus.RECEIVED,
       body: input.body,
       metadata: { fromPhone: input.fromPhone }
     }
@@ -443,7 +443,7 @@ async function sendOnboardingPrompt(input: RouteInput): Promise<void> {
       contactPhone: input.fromPhone,
       externalId: response.messageId,
       body,
-      status: "sent",
+      status: MessageStatus.SENT,
       metadata: { kind: "onboarding_prompt" }
     });
   } catch (error) {
@@ -483,7 +483,7 @@ async function sendJoinInvite(
       contactPhone: input.fromPhone,
       externalId: response.messageId,
       body: `Join invite sent for ${input.businessName}`,
-      status: "sent",
+      status: MessageStatus.SENT,
       metadata: { kind: "join_invite", joinChannel: input.joinChannel }
     });
   } catch (error) {

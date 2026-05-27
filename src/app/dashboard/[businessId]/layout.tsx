@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
+
+export const metadata: Metadata = {
+  title: { default: "Dashboard", template: "%s · Heita Dashboard" },
+  robots: { index: false }
+};
 
 import { BusinessSwitcher } from "@/components/dashboard/business-switcher";
 import {

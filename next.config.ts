@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 
 import createNextIntlPlugin from "next-intl/plugin";
+import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const isProd = process.env.NODE_ENV === "production";
@@ -69,4 +70,17 @@ const nextConfig: NextConfig = {
   }
 };
 
-export default withNextIntl(nextConfig);
+const withIntl = withNextIntl(nextConfig);
+
+export default withSentryConfig(withIntl, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  sourcemaps: { disable: false },
+  webpack: {
+    treeshake: { removeDebugLogging: true },
+    automaticVercelMonitors: false
+  }
+});

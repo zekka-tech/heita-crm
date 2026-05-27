@@ -18,6 +18,11 @@ const LOYALTY_TRANSACTION_OPTIONS = {
   timeout: 20_000
 };
 
+const REDEEM_TRANSACTION_OPTIONS = {
+  ...LOYALTY_TRANSACTION_OPTIONS,
+  isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+};
+
 const REFUNDABLE_TYPES = new Set<TransactionType>([
   TransactionType.EARN,
   TransactionType.SIGNUP_BONUS,
@@ -414,7 +419,7 @@ export async function redeemPoints(input: RedeemPointsInput) {
 
           return updatedMembership;
         },
-        LOYALTY_TRANSACTION_OPTIONS
+        REDEEM_TRANSACTION_OPTIONS
       ),
     replay: async () =>
       prisma.membership.findUniqueOrThrow({
@@ -609,7 +614,8 @@ async function expireMembershipPoints(
       expiryTarget: null,
       refundTarget: null
     },
-    orderBy: [{ expiresAt: "asc" }, { createdAt: "asc" }]
+    orderBy: [{ expiresAt: "asc" }, { createdAt: "asc" }],
+    take: 1_000
   });
 
   let remainingBalance = membership.pointsBalance;

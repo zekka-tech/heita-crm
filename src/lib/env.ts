@@ -23,7 +23,8 @@ const envSchema = z
     AWS_ACCESS_KEY_ID: z.string().optional(),
     AWS_SECRET_ACCESS_KEY: z.string().optional(),
     VAPID_PRIVATE_KEY: z.string().optional(),
-    VAPID_SUBJECT: z.string().optional()
+    VAPID_SUBJECT: z.string().optional(),
+    OTLP_ENDPOINT: z.string().url().optional()
   })
   .superRefine((data, ctx) => {
     const isProduction = data.NODE_ENV === "production";

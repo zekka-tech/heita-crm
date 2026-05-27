@@ -5,6 +5,8 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("../sentry.server.config");
+    const { registerNodeTelemetry } = await import("./instrumentation.node");
+    await registerNodeTelemetry();
   }
 
   if (process.env.NEXT_RUNTIME === "edge") {

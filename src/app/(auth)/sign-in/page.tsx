@@ -1,5 +1,13 @@
+import type { Metadata } from "next";
+
 import { PhoneOtpAuthForm } from "@/components/auth/phone-otp-auth-form";
 import { turnstileSiteKey } from "@/lib/turnstile";
+
+export const metadata: Metadata = {
+  title: "Sign in",
+  description: "Sign in to your Heita account.",
+  robots: { index: false }
+};
 
 type SignInPageProps = {
   searchParams?: Promise<{ error?: string }>;

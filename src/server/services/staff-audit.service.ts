@@ -6,7 +6,7 @@ type AuditClient = typeof prisma | PrismaTransactionClient;
 
 type RecordStaffAuditLogInput = {
   businessId: string;
-  actorUserId: string;
+  actorUserId: string | null | undefined;
   action: string;
   targetType: string;
   targetId?: string | null;
@@ -24,7 +24,7 @@ export async function recordStaffAuditLog(
   return getAuditClient(tx).staffAuditLog.create({
     data: {
       businessId: input.businessId,
-      actorUserId: input.actorUserId,
+      actorUserId: input.actorUserId ?? null,
       action: input.action,
       targetType: input.targetType,
       targetId: input.targetId ?? null,

@@ -1,6 +1,6 @@
 "use server";
 
-import { MessageChannel, StaffRole } from "@prisma/client";
+import { MessageChannel, MessageStatus, StaffRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
@@ -133,7 +133,7 @@ export async function sendWhatsappReplyAction(formData: FormData) {
         channel: MessageChannel.WHATSAPP,
         direction: "OUTBOUND",
         externalId: response.messageId,
-        status: "sent",
+        status: MessageStatus.SENT,
         body:
           body ||
           (messageMode === "interactive-list"

@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
 
+import { Toaster } from "sonner";
+
 import { HeitaTRPCProvider } from "@/components/providers/trpc-provider";
 import { CookieConsentBanner } from "@/components/layout/cookie-consent-banner";
 import { PwaInstallBanner } from "@/components/layout/pwa-install-banner";
@@ -104,6 +106,7 @@ export default async function RootLayout({
             <div id="main-content" className="app-frame">
               {children}
             </div>
+            <Toaster position="bottom-center" richColors closeButton />
           </HeitaTRPCProvider>
         </NextIntlClientProvider>
       </body>

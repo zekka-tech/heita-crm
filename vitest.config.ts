@@ -32,13 +32,14 @@ export default defineConfig({
         "src/lib/csrf.ts",
         "src/server/services/loyalty.service.ts",
         "src/server/services/referral.service.ts",
-        "src/server/services/customer-import.service.ts"
+        "src/server/services/customer-import.service.ts",
+        "src/server/http/webhook-handlers.ts"
       ],
       thresholds: {
-        lines: 60,
-        branches: 50,
-        functions: 60,
-        statements: 60
+        lines: 80,
+        branches: 75,
+        functions: 80,
+        statements: 80
       }
     }
   }

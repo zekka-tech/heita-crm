@@ -566,14 +566,14 @@ model AiTokenUsage {
 model StaffAuditLog {
   id          String   @id @default(cuid())
   businessId  String
-  actorUserId String
+  actorUserId String?
   action      String
   targetType  String
   targetId    String?
   metadata    Json?
   createdAt   DateTime @default(now())
   business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  actorUser   User      @relation("StaffAuditActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+  actorUser   User?     @relation("StaffAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([businessId, createdAt])
   @@index([actorUserId, createdAt])
@@ -611,6 +611,7 @@ enum MessageStatus {
   DELIVERED
   READ
   FAILED
+  RECEIVED
 }
 
 enum OtpPurpose {
@@ -697,7 +698,7 @@ model OcrReceipt {
   membershipId    String?
   imageUrl        String
   rawOcrText      String?
-  parsedTotal     Float?
+  parsedTotal     Decimal?          @db.Decimal(10, 2)
   parsedBusiness  String?
   pointsToAward   Int?
   status          OcrReceiptStatus    @default(PENDING_REVIEW)

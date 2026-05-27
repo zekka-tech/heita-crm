@@ -1,5 +1,13 @@
+import type { Metadata } from "next";
+
 import { PhoneOtpAuthForm } from "@/components/auth/phone-otp-auth-form";
 import { turnstileSiteKey } from "@/lib/turnstile";
+
+export const metadata: Metadata = {
+  title: "Create account",
+  description: "Join Heita — loyalty rewards and messaging for South African retailers.",
+  robots: { index: false }
+};
 
 export default function SignUpPage() {
   return (
