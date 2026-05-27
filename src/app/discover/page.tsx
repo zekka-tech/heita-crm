@@ -40,7 +40,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     category,
     province,
     city: params.city ?? null
-  });
+  }).catch(() => []);
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">

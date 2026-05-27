@@ -58,7 +58,7 @@ const features = [
 export const dynamic = "force-dynamic";
 
 export default async function LandingPage() {
-  const featuredCategories = await listFeaturedCategories();
+  const featuredCategories = await listFeaturedCategories().catch(() => []);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://heita.co.za";
 
   return (
