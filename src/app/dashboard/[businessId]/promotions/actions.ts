@@ -100,6 +100,7 @@ export async function updatePromotionAction(formData: FormData) {
 
   await updatePromotion({
     promotionId,
+    businessId,
     actorUserId: userId,
     title,
     description,
@@ -130,6 +131,7 @@ export async function deletePromotionAction(formData: FormData) {
 
   await deletePromotion({
     promotionId,
+    businessId,
     actorUserId: userId
   });
 
@@ -152,6 +154,7 @@ export async function broadcastPromotionAction(formData: FormData) {
 
   await broadcastPromotion({
     promotionId,
+    businessId,
     actorUserId: userId
   });
 

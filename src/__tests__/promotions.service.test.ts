@@ -139,6 +139,7 @@ describe("promotions service", () => {
 
       const result = await broadcastPromotion({
         promotionId: "promo_1",
+        businessId: "biz_1",
         actorUserId: "user_1"
       });
 
@@ -191,6 +192,7 @@ describe("promotions service", () => {
 
       const result = await broadcastPromotion({
         promotionId: "promo_2",
+        businessId: "biz_1",
         actorUserId: "user_1"
       });
 
@@ -234,6 +236,7 @@ describe("promotions service", () => {
 
       const result = await broadcastPromotion({
         promotionId: "promo_3",
+        businessId: "biz_1",
         actorUserId: "user_1"
       });
 
@@ -278,7 +281,7 @@ describe("promotions service", () => {
         business: { id: "biz_1", slug: "acme", name: "Acme" }
       });
       await expect(
-        broadcastPromotion({ promotionId: "promo_archived", actorUserId: "user_1" })
+        broadcastPromotion({ promotionId: "promo_archived", businessId: "biz_1", actorUserId: "user_1" })
       ).rejects.toThrow(/archived promotions cannot be broadcast/i);
 
       prisma.promotion.findUniqueOrThrow.mockResolvedValueOnce({
@@ -294,7 +297,7 @@ describe("promotions service", () => {
         business: { id: "biz_1", slug: "acme", name: "Acme" }
       });
       await expect(
-        broadcastPromotion({ promotionId: "promo_future", actorUserId: "user_1" })
+        broadcastPromotion({ promotionId: "promo_future", businessId: "biz_1", actorUserId: "user_1" })
       ).rejects.toThrow(/has not started yet/i);
 
       prisma.promotion.findUniqueOrThrow.mockResolvedValueOnce({
@@ -310,7 +313,7 @@ describe("promotions service", () => {
         business: { id: "biz_1", slug: "acme", name: "Acme" }
       });
       await expect(
-        broadcastPromotion({ promotionId: "promo_ended", actorUserId: "user_1" })
+        broadcastPromotion({ promotionId: "promo_ended", businessId: "biz_1", actorUserId: "user_1" })
       ).rejects.toThrow(/already ended/i);
 
       prisma.promotion.findUniqueOrThrow.mockResolvedValueOnce({
@@ -326,7 +329,7 @@ describe("promotions service", () => {
         business: { id: "biz_1", slug: "acme", name: "Acme" }
       });
       await expect(
-        broadcastPromotion({ promotionId: "promo_sent", actorUserId: "user_1" })
+        broadcastPromotion({ promotionId: "promo_sent", businessId: "biz_1", actorUserId: "user_1" })
       ).rejects.toThrow(/already been broadcast/i);
     });
   });

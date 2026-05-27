@@ -126,6 +126,7 @@ describe("updateEvent", () => {
     await expect(
       updateEvent({
         eventId: "evt_1",
+        businessId: "biz_2",
         actorUserId: "user_2",
         title: "New title"
       })
@@ -149,7 +150,7 @@ describe("deleteEvent", () => {
       title: "Old launch"
     });
 
-    await deleteEvent({ eventId: "evt_9", actorUserId: "user_1" });
+    await deleteEvent({ eventId: "evt_9", businessId: "biz_1", actorUserId: "user_1" });
 
     expect(prisma.event.delete).toHaveBeenCalledWith({ where: { id: "evt_9" } });
     expect(prisma.staffAuditLog.create).toHaveBeenCalledWith(

@@ -88,6 +88,7 @@ export async function updateEventAction(formData: FormData) {
 
   await updateEvent({
     eventId,
+    businessId,
     actorUserId: userId,
     title,
     description,
@@ -116,6 +117,7 @@ export async function deleteEventAction(formData: FormData) {
 
   await deleteEvent({
     eventId,
+    businessId,
     actorUserId: userId
   });
 

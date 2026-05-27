@@ -142,6 +142,7 @@ export async function createEvent(input: CreateEventInput) {
 
 export type UpdateEventInput = {
   eventId: string;
+  businessId: string;
   actorUserId: string;
   title?: string;
   description?: string | null;
@@ -153,7 +154,7 @@ export type UpdateEventInput = {
 
 export async function updateEvent(input: UpdateEventInput) {
   const existing = await prisma.event.findUniqueOrThrow({
-    where: { id: input.eventId },
+    where: { id: input.eventId, businessId: input.businessId },
     select: {
       id: true,
       businessId: true,
@@ -225,12 +226,13 @@ export async function updateEvent(input: UpdateEventInput) {
 
 export type DeleteEventInput = {
   eventId: string;
+  businessId: string;
   actorUserId: string;
 };
 
 export async function deleteEvent(input: DeleteEventInput) {
   const existing = await prisma.event.findUniqueOrThrow({
-    where: { id: input.eventId },
+    where: { id: input.eventId, businessId: input.businessId },
     select: { id: true, businessId: true, title: true }
   });
 

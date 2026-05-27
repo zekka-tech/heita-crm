@@ -64,13 +64,7 @@ export default async function handler(
 
     return res.status(200).json({
       ok: true,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        preferredAiMode: user.preferredAiMode,
-        notificationPreferences: user.notificationPreferences
-      }
+      user: { id: user.id, name: user.name, email: user.email }
     });
   }
 

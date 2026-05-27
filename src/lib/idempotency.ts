@@ -111,20 +111,21 @@ export async function runIdempotentOperation<T>(input: {
     }
 
     const result = await input.execute();
-    await redis.set(completedKey, "1", "EX", ttlSeconds);
+    // Only set the completed key after execute() succeeds. If this Redis write
+    // fails, the lock expires naturally and a retry will re-execute — which is
+    // safe because execute() is already inside a Prisma $transaction.
+    try {
+      await redis.set(completedKey, "1", "EX", ttlSeconds);
+    } catch {
+      // Best-effort; a Redis failure here just means the next call won't replay
+      // and will re-execute. Prisma's unique constraints prevent double-writes.
+    }
     return result;
   } catch (error) {
-    if (error instanceof Error && error.message.includes("processed")) {
-      throw error;
-    }
-
-    return runMemoryIdempotentOperation({
-      cacheKey,
-      ttlSeconds,
-      lockSeconds,
-      execute: input.execute,
-      replay: input.replay
-    });
+    // Re-throw all errors — never silently fall back to the in-memory store
+    // after the Redis lock was acquired. The DB transaction may have already
+    // committed, so re-executing via in-memory would double-process.
+    throw error;
   } finally {
     try {
       await redis.del(lockKey);

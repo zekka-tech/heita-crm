@@ -2,12 +2,13 @@ version: "3.9"
 
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: heita-crm:latest
+    # Pull the pre-built, CI-tested image from GHCR. Never add a build: block
+    # here — building on the VPS bypasses Trivy scanning and Cosign signing.
+    image: ghcr.io/zekka-tech/heita-crm:latest
     container_name: heita_app
     restart: unless-stopped
+    networks:
+      - heita_internal
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,6 +42,8 @@ services:
     image: pgvector/pgvector:pg16
     container_name: heita_postgres
     restart: unless-stopped
+    networks:
+      - heita_internal
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-heita}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
@@ -72,14 +75,18 @@ services:
     image: redis:7-alpine
     container_name: heita_redis
     restart: unless-stopped
+    networks:
+      - heita_internal
     volumes:
       - redis_data:/data
+    # noeviction: BullMQ jobs and OTP codes must NEVER be silently dropped.
+    # allkeys-lru is only appropriate for pure cache instances.
     command: >
       redis-server
       --appendonly yes
       --requirepass "${REDIS_PASSWORD:?required}"
       --maxmemory 384mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping"]
       interval: 10s
@@ -102,3 +109,8 @@ services:
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  heita_internal:
+    driver: bridge
+    internal: true

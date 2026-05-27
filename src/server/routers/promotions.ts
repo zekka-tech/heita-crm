@@ -26,6 +26,7 @@ const createInputSchema = z.object({
 
 const updateInputSchema = z.object({
   promotionId: z.string().min(1),
+  businessId: z.string().min(1),
   title: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().max(2000).optional().nullable(),
   type: promotionTypeSchema.optional(),
@@ -95,19 +96,21 @@ export const promotionsRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ promotionId: z.string().min(1) }))
+    .input(z.object({ promotionId: z.string().min(1), businessId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       return deletePromotion({
         promotionId: input.promotionId,
+        businessId: input.businessId,
         actorUserId: ctx.userId
       });
     }),
 
   broadcast: protectedProcedure
-    .input(z.object({ promotionId: z.string().min(1) }))
+    .input(z.object({ promotionId: z.string().min(1), businessId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       return broadcastPromotion({
         promotionId: input.promotionId,
+        businessId: input.businessId,
         actorUserId: ctx.userId
       });
     })

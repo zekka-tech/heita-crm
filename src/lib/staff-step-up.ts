@@ -37,6 +37,17 @@ export async function verifyStaffStepUpOtp(input: {
   phone: string;
   code: string;
 }) {
+  const rl = await enforceRateLimit({
+    identifier: `staff-step-up-verify:${input.userId}:${input.businessId}`,
+    windowSeconds: 15 * 60,
+    max: 5
+  });
+  if (!rl.allowed) {
+    throw new Error(
+      `Too many verification attempts. Try again in ${rl.resetInSeconds} seconds.`
+    );
+  }
+
   const verified = await verifyOtpAttempt({
     phone: input.phone,
     code: input.code,

@@ -35,9 +35,18 @@ export async function exportAccountData(userId: string) {
     await Promise.all([
       prisma.user.findUniqueOrThrow({
         where: { id: userId },
-        include: {
-          accounts: true,
-          pushSubscriptions: true
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          image: true,
+          createdAt: true,
+          updatedAt: true,
+          notificationPreferences: true,
+          // Expose only provider name — never access/refresh tokens
+          accounts: { select: { provider: true, type: true } },
+          pushSubscriptions: { select: { endpoint: true, createdAt: true } }
         }
       }),
       prisma.membership.findMany({
@@ -94,6 +103,8 @@ export async function exportAccountData(userId: string) {
   };
 }
 
+const ALLOWED_AI_MODES = ["ollama", "anthropic"] as const;
+
 export async function updateAccountProfile(input: {
   userId: string;
   name?: string | null;
@@ -101,6 +112,22 @@ export async function updateAccountProfile(input: {
   preferredAiMode?: string | null;
   notificationPreferences?: NotificationPreferences | null;
 }) {
+  if (input.name !== undefined && input.name !== null && input.name.length > 120) {
+    throw new Error("Name must be 120 characters or fewer.");
+  }
+  if (input.email !== undefined && input.email !== null) {
+    if (input.email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) {
+      throw new Error("Provide a valid email address.");
+    }
+  }
+  if (
+    input.preferredAiMode !== undefined &&
+    input.preferredAiMode !== null &&
+    !ALLOWED_AI_MODES.includes(input.preferredAiMode as (typeof ALLOWED_AI_MODES)[number])
+  ) {
+    throw new Error("Invalid AI mode.");
+  }
+
   const normalizedPreferences =
     input.notificationPreferences !== undefined
       ? normalizeNotificationPreferences(input.notificationPreferences)
@@ -116,7 +143,8 @@ export async function updateAccountProfile(input: {
         normalizedPreferences !== undefined
           ? (normalizedPreferences as Prisma.InputJsonValue)
           : undefined
-    }
+    },
+    select: { id: true, name: true, email: true, image: true, updatedAt: true }
   });
 }
 

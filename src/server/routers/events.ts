@@ -20,6 +20,7 @@ const createInputSchema = z.object({
 
 const updateInputSchema = z.object({
   eventId: z.string().min(1),
+  businessId: z.string().min(1),
   title: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().max(2000).optional().nullable(),
   startsAt: z.coerce.date().optional(),
@@ -83,10 +84,11 @@ export const eventsRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ eventId: z.string().min(1) }))
+    .input(z.object({ eventId: z.string().min(1), businessId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       return deleteEvent({
         eventId: input.eventId,
+        businessId: input.businessId,
         actorUserId: ctx.userId
       });
     })

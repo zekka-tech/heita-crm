@@ -127,6 +127,7 @@ export async function createPromotion(input: CreatePromotionInput) {
 
 export type UpdatePromotionInput = {
   promotionId: string;
+  businessId: string;
   actorUserId: string;
   title?: string;
   description?: string | null;
@@ -141,7 +142,7 @@ export type UpdatePromotionInput = {
 
 export async function updatePromotion(input: UpdatePromotionInput) {
   const existing = await prisma.promotion.findUniqueOrThrow({
-    where: { id: input.promotionId },
+    where: { id: input.promotionId, businessId: input.businessId },
     select: {
       id: true,
       businessId: true,
@@ -220,12 +221,13 @@ export async function updatePromotion(input: UpdatePromotionInput) {
 
 export type DeletePromotionInput = {
   promotionId: string;
+  businessId: string;
   actorUserId: string;
 };
 
 export async function deletePromotion(input: DeletePromotionInput) {
   const existing = await prisma.promotion.findUniqueOrThrow({
-    where: { id: input.promotionId },
+    where: { id: input.promotionId, businessId: input.businessId },
     select: { id: true, businessId: true }
   });
 
@@ -261,6 +263,7 @@ export async function deletePromotion(input: DeletePromotionInput) {
 
 export type BroadcastPromotionInput = {
   promotionId: string;
+  businessId: string;
   actorUserId: string;
 };
 
@@ -299,7 +302,7 @@ export async function broadcastPromotion(
   input: BroadcastPromotionInput
 ): Promise<BroadcastPromotionResult> {
   const promotion = await prisma.promotion.findUniqueOrThrow({
-    where: { id: input.promotionId },
+    where: { id: input.promotionId, businessId: input.businessId },
     include: {
       business: { select: { id: true, slug: true, name: true } }
     }

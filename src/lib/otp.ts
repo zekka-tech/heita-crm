@@ -9,7 +9,7 @@ import { constantTimeEqual } from "@/lib/security";
 const OTP_TTL_SECONDS = 600;
 
 function getOtpSecret(): string {
-  const secret = process.env.AUTH_SECRET ?? process.env.OTP_SECRET;
+  const secret = process.env.AUTH_SECRET;
 
   if (!secret) {
     if (process.env.NODE_ENV === "production") {
@@ -118,10 +118,14 @@ export async function verifyOtpAttempt(input: {
     return false;
   }
 
-  await prisma.otpCode.update({
-    where: { id: otpRecord.id },
+  // Atomic consume: only one concurrent request wins; the loser sees count=0.
+  const consumed = await prisma.otpCode.updateMany({
+    where: { id: otpRecord.id, consumedAt: null },
     data: { consumedAt: new Date() }
   });
+  if (consumed.count === 0) {
+    return false;
+  }
 
   if (redis) {
     try {

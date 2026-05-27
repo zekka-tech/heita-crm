@@ -1,6 +1,11 @@
 import { logger } from "@/lib/logger";
 
-type ShutdownHandler = () => Promise<void> | void;
+type ShutdownPhase = "workers" | "infra";
+
+type ShutdownHandler = {
+  fn: () => Promise<void> | void;
+  phase: ShutdownPhase;
+};
 
 const handlers: ShutdownHandler[] = [];
 let registered = false;
@@ -8,7 +13,11 @@ let shuttingDown = false;
 
 const SHUTDOWN_TIMEOUT_MS = parseInt(process.env.SHUTDOWN_TIMEOUT_MS ?? "30000", 10);
 
-export function registerShutdownHandler(handler: ShutdownHandler): () => void {
+export function registerShutdownHandler(
+  fn: () => Promise<void> | void,
+  phase: ShutdownPhase = "infra"
+): () => void {
+  const handler: ShutdownHandler = { fn, phase };
   handlers.push(handler);
   ensureSignalListeners();
 
@@ -40,13 +49,12 @@ function ensureSignalListeners() {
   process.on("SIGINT", onSignal);
 }
 
-async function runShutdown(signal: NodeJS.Signals): Promise<void> {
-  logger.info({ signal, handlers: handlers.length }, "shutdown.start");
-
-  const tasks = handlers.map(async (handler) => {
+async function runPhase(phase: ShutdownPhase): Promise<void> {
+  const phaseHandlers = handlers.filter((h) => h.phase === phase);
+  const tasks = phaseHandlers.map(async (handler) => {
     try {
       await Promise.race([
-        Promise.resolve().then(() => handler()),
+        Promise.resolve().then(() => handler.fn()),
         new Promise<void>((_, reject) =>
           setTimeout(
             () => reject(new Error(`shutdown handler exceeded ${SHUTDOWN_TIMEOUT_MS}ms`)),
@@ -58,8 +66,16 @@ async function runShutdown(signal: NodeJS.Signals): Promise<void> {
       logger.error({ err: error }, "shutdown.handler_failed");
     }
   });
-
   await Promise.all(tasks);
+}
+
+async function runShutdown(signal: NodeJS.Signals): Promise<void> {
+  logger.info({ signal, handlers: handlers.length }, "shutdown.start");
+
+  // Workers drain first so in-flight jobs finish before DB/Redis disconnect.
+  await runPhase("workers");
+  await runPhase("infra");
+
   logger.info("shutdown.complete");
 }
 
@@ -68,5 +84,8 @@ export const __shutdownInternals = {
     handlers.length = 0;
     registered = false;
     shuttingDown = false;
+  },
+  handlerCount() {
+    return handlers.length;
   }
 };

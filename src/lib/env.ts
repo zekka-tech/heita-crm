@@ -19,7 +19,7 @@ const envSchema = z
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.coerce.number().int().min(1).max(20).default(5),
     CIRCUIT_BREAKER_COOLDOWN_MS: z.coerce.number().int().min(1000).max(300_000).default(60_000),
     METRICS_BEARER_TOKEN: z.string().optional(),
-    CRON_SECRET: z.string().optional(),
+    CRON_SECRET: z.string().min(32).optional(),
     AWS_ACCESS_KEY_ID: z.string().optional(),
     AWS_SECRET_ACCESS_KEY: z.string().optional(),
     VAPID_PRIVATE_KEY: z.string().optional(),

@@ -6,8 +6,9 @@ const OFFLINE_URL = "/offline.html";
 const APP_SHELL_ASSETS = ["/", OFFLINE_URL, "/manifest.json", "/icons/icon-192.svg", "/icons/icon-512.svg"];
 
 self.addEventListener("install", (event) => {
+  // Do NOT call skipWaiting() here — let the user trigger the update via the
+  // PwaUpdatePrompt component to avoid interrupting in-flight requests.
   event.waitUntil(caches.open(APP_SHELL_CACHE).then((cache) => cache.addAll(APP_SHELL_ASSETS)));
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -99,7 +100,14 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(networkFirst(event.request, DATA_CACHE, 5000));
+    // Never cache authenticated API responses — serving stale session data
+    // after sign-out could expose one user's data to another.
+    const safePublicApis = ["/api/health", "/api/categories"];
+    const isSafePublic = safePublicApis.some((p) => url.pathname === p || url.pathname.startsWith(p + "/"));
+    if (isSafePublic) {
+      event.respondWith(networkFirst(event.request, DATA_CACHE, 5000));
+    }
+    // All other /api/* routes: pass through to network only, no caching.
     return;
   }
 

@@ -23,6 +23,7 @@ export async function getOrCreateReferralCode(input: {
   businessId: string;
   ownerUserId: string;
 }) {
+  // Check first to avoid burning a code on every call for users who already have one.
   const existing = await prisma.referralCode.findUnique({
     where: {
       businessId_ownerUserId: {
@@ -36,23 +37,33 @@ export async function getOrCreateReferralCode(input: {
     return existing;
   }
 
+  // Two concurrent first-time requests may both reach here. Use upsert so the
+  // second writer just returns the record created by the first.
   for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = generateReferralCodeValue();
     try {
-      return await prisma.referralCode.create({
-        data: {
+      return await prisma.referralCode.upsert({
+        where: {
+          businessId_ownerUserId: {
+            businessId: input.businessId,
+            ownerUserId: input.ownerUserId
+          }
+        },
+        update: {},
+        create: {
           businessId: input.businessId,
           ownerUserId: input.ownerUserId,
-          code: generateReferralCodeValue()
+          code
         }
       });
     } catch (error) {
+      // P2002 on the `code` unique index — try a different code value
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
       ) {
         continue;
       }
-
       throw error;
     }
   }

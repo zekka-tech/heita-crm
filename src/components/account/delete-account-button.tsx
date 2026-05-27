@@ -24,7 +24,7 @@ export function DeleteAccountButton() {
     try {
       const res = await fetch("/api/account", {
         method: "DELETE",
-        headers: { "x-csrf-token": getCsrfToken() }
+        headers: { "x-heita-csrf": getCsrfToken() }
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
