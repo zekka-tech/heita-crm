@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -40,10 +41,11 @@ export function BusinessCard({
       <div className="flex items-start gap-4">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-white text-lg font-display font-bold shadow-glow">
           {business.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={business.logoUrl}
               alt=""
+              width={56}
+              height={56}
               className="h-full w-full rounded-2xl object-cover"
             />
           ) : (

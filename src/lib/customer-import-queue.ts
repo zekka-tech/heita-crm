@@ -1,7 +1,7 @@
 import { Job, Queue, Worker } from "bullmq";
 
 import { logger } from "@/lib/logger";
-import { incrementDlqMovedCounter, incrementQueueJobMetric } from "@/lib/metrics";
+import { incrementQueueJobMetric } from "@/lib/metrics";
 import { getQueueRedis } from "@/lib/redis";
 import { processCustomerImportRun } from "@/server/services/customer-import.service";
 
@@ -145,7 +145,7 @@ export function startCustomerImportWorker() {
 
   worker.on("stalled", (jobId) => {
     logger.error({ jobId }, "customer.import.worker.job_stalled");
-    incrementDlqMovedCounter("customer-import");
+    incrementQueueJobMetric("customer-import", "stalled");
   });
 
   return worker;

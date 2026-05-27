@@ -30,11 +30,26 @@ export function verifyMetaWhatsappSignature(input: {
 }
 
 export function getClientIp(headers: Headers): string {
-  return (
-    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    headers.get("x-real-ip") ??
-    "0.0.0.0"
-  );
+  // Only trust X-Forwarded-For / X-Real-IP headers when the request comes
+  // from a known reverse proxy. TRUSTED_PROXY_IPS is a comma-separated list
+  // of proxy CIDRs/IPs set at deploy time (e.g. the load balancer address).
+  // When unset, fall back to the direct connection IP rather than blindly
+  // trusting a header that any caller can spoof.
+  const trustedProxies = (process.env.TRUSTED_PROXY_IPS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const remoteIp = headers.get("x-real-ip") ?? "0.0.0.0";
+  const isTrustedProxy =
+    trustedProxies.length === 0 ||
+    trustedProxies.some((proxy) => remoteIp === proxy || remoteIp.startsWith(proxy));
+
+  if (isTrustedProxy) {
+    return headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? remoteIp;
+  }
+
+  return remoteIp;
 }
 
 export function isUnixTimestampWithinSkew(

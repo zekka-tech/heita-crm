@@ -37,6 +37,35 @@ services:
         max-size: "100m"
         max-file: "5"
 
+  # Vector log shipper — tails json-file logs from the app container and
+  # forwards structured JSON to the configured sink (Loki, Elasticsearch, etc).
+  # Set VECTOR_SINK_* env vars in .env.production to activate shipping.
+  # If no sink is configured Vector starts but forwards nothing (safe default).
+  vector:
+    image: timberio/vector:0.41.1-alpine
+    container_name: heita_vector
+    restart: unless-stopped
+    networks:
+      - heita_internal
+    depends_on:
+      - app
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docker/vector/vector.yaml:/etc/vector/vector.yaml:ro
+    env_file:
+      - .env.production
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   postgres:
     # Digest-pinned to a specific build. Re-pin via: bash scripts/pin-image-digests.sh
     image: pgvector/pgvector:pg16

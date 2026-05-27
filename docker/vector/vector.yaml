@@ -1,0 +1,54 @@
+# Vector log shipping configuration for Heita CRM
+# Reads structured JSON logs from the app container via Docker socket
+# and forwards to a Loki sink (or any other configured sink).
+#
+# Required env vars in .env.production:
+#   LOKI_URL      — e.g. http://loki:3100 (leave unset to disable shipping)
+#   LOKI_LABELS   — optional extra labels, e.g. env=production
+
+sources:
+  docker_logs:
+    type: docker_logs
+    include_containers:
+      - heita_app
+
+transforms:
+  parse_json:
+    type: remap
+    inputs:
+      - docker_logs
+    source: |
+      # Attempt to parse the message as structured JSON (pino output)
+      parsed, err = parse_json(.message)
+      if err == null {
+        . = merge(., parsed)
+      }
+      # Normalise log level field name
+      if exists(.level) {
+        .severity = to_string(.level) ?? "info"
+      }
+
+sinks:
+  # ── Loki sink (activate by setting LOKI_URL) ──────────────────────────
+  loki:
+    type: loki
+    inputs:
+      - parse_json
+    endpoint: "${LOKI_URL:-http://localhost:3100}"
+    encoding:
+      codec: json
+    labels:
+      service: heita-crm
+      container: heita_app
+      env: "${HEITA_ENV:-production}"
+    # Disable if LOKI_URL is not set
+    healthcheck:
+      enabled: false
+
+  # ── Console sink (always on — useful for docker compose logs vector) ──
+  console:
+    type: console
+    inputs:
+      - parse_json
+    encoding:
+      codec: json

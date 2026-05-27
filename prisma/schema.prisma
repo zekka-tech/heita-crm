@@ -412,6 +412,7 @@ model Message {
 
   @@index([businessId, channel, createdAt])
   @@index([businessId, contactPhone, createdAt])
+  @@index([userId])
   @@unique([channel, externalId])
 }
 
@@ -711,7 +712,7 @@ model OcrReceipt {
   user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   reviewer        User?               @relation("OcrReceiptReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
 
-  @@index([businessId, status])
+  @@index([businessId, status, createdAt])
   @@index([userId])
 }
 

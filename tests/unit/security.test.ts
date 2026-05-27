@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   constantTimeEqual,
+  getClientIp,
   hmacSha256,
   isUnixTimestampWithinSkew,
   isPrivateIp,
@@ -98,6 +99,38 @@ describe("isPrivateIp", () => {
   it("does not flag public addresses", () => {
     expect(isPrivateIp("8.8.8.8")).toBe(false);
     expect(isPrivateIp("196.201.213.55")).toBe(false);
+  });
+});
+
+describe("getClientIp — trusted proxy validation", () => {
+  afterEach(() => {
+    delete process.env.TRUSTED_PROXY_IPS;
+  });
+
+  function makeHeaders(xForwardedFor: string, xRealIp: string) {
+    return new Headers({ "x-forwarded-for": xForwardedFor, "x-real-ip": xRealIp });
+  }
+
+  it("returns x-forwarded-for client when remote IP is a trusted proxy", () => {
+    process.env.TRUSTED_PROXY_IPS = "10.0.0.1";
+    const headers = makeHeaders("1.2.3.4, 10.0.0.1", "10.0.0.1");
+    expect(getClientIp(headers)).toBe("1.2.3.4");
+  });
+
+  it("returns x-real-ip (direct connection) when remote IP is NOT a trusted proxy", () => {
+    process.env.TRUSTED_PROXY_IPS = "10.0.0.1";
+    const headers = makeHeaders("1.2.3.4, 5.6.7.8", "5.6.7.8");
+    expect(getClientIp(headers)).toBe("5.6.7.8");
+  });
+
+  it("trusts x-forwarded-for when TRUSTED_PROXY_IPS is not set (open trust, backward-compatible)", () => {
+    const headers = makeHeaders("1.2.3.4", "10.0.0.1");
+    expect(getClientIp(headers)).toBe("1.2.3.4");
+  });
+
+  it("falls back to 0.0.0.0 when no IP headers are present", () => {
+    process.env.TRUSTED_PROXY_IPS = "10.0.0.1";
+    expect(getClientIp(new Headers())).toBe("0.0.0.0");
   });
 });
 

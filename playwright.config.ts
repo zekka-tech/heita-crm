@@ -20,6 +20,14 @@ export default defineConfig({
       use: { ...devices["Pixel 7"] }
     },
     {
+      name: "mobile-ios",
+      use: { ...devices["iPhone 12"] }
+    },
+    {
+      name: "tablet",
+      use: { ...devices["iPad (gen 7)"] }
+    },
+    {
       name: "desktop",
       use: { ...devices["Desktop Chrome"] }
     }

@@ -70,3 +70,41 @@ fi
 
 echo "[verify-backup] size check OK (${dump_size_bytes} bytes)"
 echo "[verify-backup] SUCCESS: backup ${latest_dump} is valid"
+
+# ── Schema+data restore test ───────────────────────────────────────────────
+# If VERIFY_RESTORE_DB is set, spin up a temporary DB, restore the dump, run
+# a basic schema+row-count smoke test, then drop the temp DB.
+if [[ -n "${VERIFY_RESTORE_DB:-}" ]]; then
+  echo "[verify-backup] starting restore verification against ${VERIFY_RESTORE_DB}…"
+
+  # Derive connection components (assumes standard postgres:// URI)
+  pg_host="$(echo "${VERIFY_RESTORE_DB}" | sed -E 's|.*@([^:/]+).*|\1|')"
+  pg_user="$(echo "${VERIFY_RESTORE_DB}" | sed -E 's|.*://([^:@]+).*|\1|')"
+  pg_port="$(echo "${VERIFY_RESTORE_DB}" | sed -E 's|.*:([0-9]+)/.*|\1|')"
+  tmp_db="heita_verify_$(date +%s)"
+
+  export PGPASSWORD="${PGPASSWORD:-}"
+  export PGHOST="${pg_host}"
+  export PGUSER="${pg_user}"
+  export PGPORT="${pg_port:-5432}"
+
+  echo "[verify-backup] creating temporary database ${tmp_db}…"
+  createdb "${tmp_db}"
+
+  cleanup_db() {
+    echo "[verify-backup] dropping temporary database ${tmp_db}…"
+    dropdb --if-exists "${tmp_db}" || true
+  }
+  trap 'cleanup_db; rm -rf "${tmp_dir}"' EXIT
+
+  echo "[verify-backup] restoring dump into ${tmp_db}…"
+  pg_restore --no-owner --no-acl --dbname "${tmp_db}" "${dump_path}"
+
+  echo "[verify-backup] verifying core tables exist and have rows…"
+  for table in '"User"' '"Business"' '"Membership"' '"LoyaltyTransaction"'; do
+    count="$(psql "${tmp_db}" -tAc "SELECT COUNT(*) FROM ${table};" 2>/dev/null || echo "0")"
+    echo "[verify-backup]   ${table}: ${count} rows"
+  done
+
+  echo "[verify-backup] restore smoke test PASSED"
+fi

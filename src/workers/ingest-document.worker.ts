@@ -43,7 +43,7 @@ export function startDocumentIngestionWorker() {
 
   worker.on("stalled", (jobId) => {
     logger.error({ jobId }, "ai.document.worker.job_stalled");
-    incrementDlqMovedCounter("document-ingestion");
+    incrementQueueJobMetric("document-ingestion", "stalled");
   });
 
   return worker;

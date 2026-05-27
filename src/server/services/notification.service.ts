@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { sendEmail } from "@/lib/email";
+import { logger } from "@/lib/logger";
 import {
   getBusinessNotificationPreference,
   isWithinQuietHours,
@@ -78,7 +79,12 @@ export async function sendNotification(input: NotificationInput) {
     );
   }
 
-  await Promise.allSettled(deliveries);
+  const results = await Promise.allSettled(deliveries);
+  for (const result of results) {
+    if (result.status === "rejected") {
+      logger.error({ err: result.reason, userId: input.userId }, "notification.delivery_failed");
+    }
+  }
 
   return notification;
 }

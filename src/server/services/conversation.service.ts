@@ -34,69 +34,68 @@ function computeCustomerServiceWindow(lastInboundAt: Date | null) {
 }
 
 export async function listBusinessConversations(input: { businessId: string }) {
-  const messages = await prisma.message.findMany({
+  // Fetch the most recent message per unique contactPhone using distinct.
+  // This avoids the earlier approach of fetching 300 messages and grouping
+  // client-side, which silently dropped threads beyond the first 300 rows.
+  const latestMessages = await prisma.message.findMany({
     where: {
       businessId: input.businessId,
       channel: MessageChannel.WHATSAPP,
-      contactPhone: {
-        not: null
-      }
+      contactPhone: { not: null }
     },
+    distinct: ["contactPhone"],
     include: {
       user: {
-        select: {
-          id: true,
-          name: true,
-          phone: true
-        }
+        select: { id: true, name: true, phone: true }
       }
     },
-    orderBy: {
-      createdAt: "desc"
-    },
-    take: 300
+    orderBy: { createdAt: "desc" },
+    take: 200
   });
 
-  const conversations = new Map<string, ConversationParticipant>();
+  const conversations: ConversationParticipant[] = await Promise.all(
+    latestMessages.map(async (message) => {
+      const contactPhone = message.contactPhone!;
 
-  for (const message of messages) {
-    const contactPhone = message.contactPhone;
-    if (!contactPhone) {
-      continue;
-    }
+      const [unreadCount, lastInbound] = await Promise.all([
+        prisma.message.count({
+          where: {
+            businessId: input.businessId,
+            channel: MessageChannel.WHATSAPP,
+            contactPhone,
+            direction: "INBOUND"
+          }
+        }),
+        prisma.message.findFirst({
+          where: {
+            businessId: input.businessId,
+            channel: MessageChannel.WHATSAPP,
+            contactPhone,
+            direction: "INBOUND"
+          },
+          orderBy: { createdAt: "desc" },
+          select: { createdAt: true }
+        })
+      ]);
 
-    const existing = conversations.get(contactPhone);
-    if (!existing) {
-      const lastInboundAt =
-        message.direction === "INBOUND" ? message.createdAt : null;
-      const serviceWindow = computeCustomerServiceWindow(lastInboundAt);
+      const serviceWindow = computeCustomerServiceWindow(lastInbound?.createdAt ?? null);
 
-      conversations.set(contactPhone, {
+      return {
         userId: message.userId,
         contactPhone,
         name: message.user?.name ?? null,
         lastMessageAt: message.createdAt,
         lastMessageBody: message.body,
         lastDirection: message.direction,
-        unreadCount: message.direction === "INBOUND" ? 1 : 0,
+        unreadCount,
         status: message.status,
         customerServiceWindowOpen: serviceWindow.open,
         customerServiceWindowExpiresAt: serviceWindow.expiresAt
-      });
-      continue;
-    }
+      };
+    })
+  );
 
-    if (message.direction === "INBOUND") {
-      existing.unreadCount += 1;
-      if (!existing.customerServiceWindowOpen) {
-        const serviceWindow = computeCustomerServiceWindow(message.createdAt);
-        existing.customerServiceWindowOpen = serviceWindow.open;
-        existing.customerServiceWindowExpiresAt = serviceWindow.expiresAt;
-      }
-    }
-  }
-
-  return [...conversations.values()].sort(
+  return conversations.sort(
     (left, right) => right.lastMessageAt.getTime() - left.lastMessageAt.getTime()
   );
 }

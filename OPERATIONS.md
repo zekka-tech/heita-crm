@@ -186,3 +186,31 @@ If verification fails, refuse to roll out and open a security incident.
 - Postmortem template lives under `docs/incidents/TEMPLATE.md` (add as needed).
 - Sentry release tag must be referenced in every incident note.
 - Game-day learnings amend this playbook directly — no separate runbook.
+
+---
+
+## Secrets Rotation Runbook
+
+Rotate secrets on a **90-day cycle** or immediately after any suspected compromise.
+
+### Critical secrets and rotation steps
+
+| Secret | Location | Rotation procedure |
+|--------|----------|--------------------|
+| `AUTH_SECRET` | GitHub → Settings → Secrets | 1. Generate: `openssl rand -base64 32`. 2. Update GitHub secret. 3. Deploy. 4. All active sessions are invalidated — users must re-authenticate. |
+| `WHATSAPP_APP_SECRET` | GitHub + Meta Developer Console | 1. Rotate in Meta Developer Console. 2. Update GitHub secret. 3. Deploy. 4. Verify webhook signature in staging using `deploy-verify.yml`. |
+| `YOCO_SECRET_KEY` | GitHub + Yoco Dashboard | 1. Generate new key in Yoco Dashboard. 2. Update GitHub secret. 3. Deploy. 4. Confirm webhook delivery in Yoco logs. |
+| `DATABASE_URL` | GitHub + database host | 1. Create new DB user with same grants. 2. Update `DATABASE_URL` secret. 3. Deploy. 4. Verify health endpoint. 5. Drop old DB user after 24 h. |
+| `BACKUP_AWS_ACCESS_KEY_ID` + `BACKUP_AWS_SECRET_ACCESS_KEY` | GitHub + AWS IAM | 1. Create new IAM access key. 2. Update GitHub secrets. 3. Trigger manual `backup.yml` run. 4. Verify backup lands in S3. 5. Deactivate old key. |
+| `REDIS_URL` | GitHub + Redis provider | 1. Rotate AUTH password on Redis. 2. Update `REDIS_URL`. 3. Deploy. 4. Confirm BullMQ queue connectivity via health endpoint. |
+| `DEEPSEEK_API_KEY` / `MINIMAX_API_KEY` | GitHub | Regenerate via provider dashboard, update secret, redeploy. |
+| VAPID keys (`VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY`) | GitHub | 1. `npm run vapid:generate`. 2. Update secrets. 3. Deploy. **Note:** all existing push subscriptions become invalid — users must re-subscribe. |
+
+### Rotation checklist
+
+- [ ] New secret value generated and stored in password manager
+- [ ] GitHub secret updated via `gh secret set <NAME>`
+- [ ] Deployment triggered and health checks green
+- [ ] Old secret invalidated / revoked at source
+- [ ] Rotation date logged in `docs/secrets-rotation-log.md` (create if absent)
+- [ ] Post-rotation smoke test run (`deploy-verify.yml` → workflow_dispatch)

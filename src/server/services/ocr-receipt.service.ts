@@ -4,6 +4,7 @@ import { appendTraceHeaders } from "@/lib/tracing";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { recalculateTier } from "@/server/services/loyalty.service";
+import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 type OcrResult = {
   total: number | null;
@@ -342,6 +343,20 @@ export async function approveOcrReceipt(
   }, { maxWait: 5_000, timeout: 20_000 });
 
   logger.info({ receiptId, staffUserId }, "ocr.receipt.approved");
+
+  const approved = await prisma.ocrReceipt.findUnique({
+    where: { id: receiptId },
+    select: { businessId: true }
+  });
+  if (approved) {
+    await recordStaffAuditLog({
+      businessId: approved.businessId,
+      actorUserId: staffUserId,
+      action: "OCR_RECEIPT_APPROVED",
+      targetType: "OcrReceipt",
+      targetId: receiptId
+    });
+  }
 }
 
 export async function rejectOcrReceipt(receiptId: string, staffUserId: string) {
@@ -350,6 +365,20 @@ export async function rejectOcrReceipt(receiptId: string, staffUserId: string) {
     data: { status: "REJECTED", reviewedAt: new Date(), reviewedBy: staffUserId }
   });
   logger.info({ receiptId, staffUserId }, "ocr.receipt.rejected");
+
+  const rejected = await prisma.ocrReceipt.findUnique({
+    where: { id: receiptId },
+    select: { businessId: true }
+  });
+  if (rejected) {
+    await recordStaffAuditLog({
+      businessId: rejected.businessId,
+      actorUserId: staffUserId,
+      action: "OCR_RECEIPT_REJECTED",
+      targetType: "OcrReceipt",
+      targetId: receiptId
+    });
+  }
 }
 
 export async function listPendingOcrReceipts(businessId: string) {
