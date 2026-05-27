@@ -19,18 +19,14 @@ function readCookie(name: string): string | null {
  * the value is still loading.
  */
 export function useCsrfToken(): string | null {
-  const [token, setToken] = useState<string | null>(() => {
-    const value = readCookie(CSRF_COOKIE);
-    return isValidCsrfToken(value) ? value : null;
-  });
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    if (token) return;
     const value = readCookie(CSRF_COOKIE);
     if (isValidCsrfToken(value)) {
       setToken(value);
     }
-  }, [token]);
+  }, []);
 
   return token;
 }
