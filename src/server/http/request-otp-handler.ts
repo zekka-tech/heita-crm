@@ -24,7 +24,7 @@ const OTP_PER_PHONE_PER_HOUR = 5;
 const OTP_PER_IP_PER_HOUR = 20;
 const OTP_PER_PHONE_PER_MINUTE = 1;
 const EXPOSE_DEV_OTP =
-  process.env.NODE_ENV !== "production" || process.env.E2E_EXPOSE_DEV_OTP === "1";
+  process.env.NODE_ENV !== "production" && process.env.E2E_EXPOSE_DEV_OTP === "1";
 
 export async function handleRequestOtp(request: Request) {
   const startedAt = Date.now();

@@ -11,6 +11,7 @@ import {
 } from "@/app/dashboard/[businessId]/promotions/actions";
 import { CsrfField } from "@/components/security/csrf-field";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Input, Select, Textarea } from "@/components/ui/input";
@@ -179,9 +180,9 @@ export default async function PromotionsDashboardPage({
                 )}
               </div>
             </div>
-            <Button type="submit" variant="primary" className="md:col-span-2">
+            <SubmitButton variant="primary" className="md:col-span-2">
               {t("saveCta")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
 
@@ -339,9 +340,9 @@ export default async function PromotionsDashboardPage({
                           </label>
                         ))}
                       </div>
-                      <Button type="submit" variant="secondary" className="md:col-span-2">
+                      <SubmitButton variant="secondary" className="md:col-span-2">
                         {t("saveCta")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {canBroadcast ? (
@@ -349,20 +350,20 @@ export default async function PromotionsDashboardPage({
                           <CsrfField />
                           <input type="hidden" name="businessId" value={business.id} />
                           <input type="hidden" name="promotionId" value={promotion.id} />
-                          <Button type="submit" variant="primary" size="sm">
+                          <SubmitButton variant="primary" size="sm">
                             <Megaphone className="h-3.5 w-3.5" />
                             {t("broadcastCta")}
-                          </Button>
+                          </SubmitButton>
                         </form>
                       ) : null}
                       <form action={deletePromotionAction}>
                         <CsrfField />
                         <input type="hidden" name="businessId" value={business.id} />
                         <input type="hidden" name="promotionId" value={promotion.id} />
-                        <Button type="submit" variant="danger" size="sm">
+                        <SubmitButton variant="danger" size="sm">
                           <Trash2 className="h-3.5 w-3.5" />
                           {t("deleteCta")}
-                        </Button>
+                        </SubmitButton>
                       </form>
                     </div>
                   </article>

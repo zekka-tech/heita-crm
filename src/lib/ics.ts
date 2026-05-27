@@ -86,6 +86,7 @@ export function buildEventIcs(input: EventCalendarInput) {
 export function buildEventIcsFilename(title: string) {
   const slug = title
     .toLowerCase()
+    .replace(/[\r\n]+/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);

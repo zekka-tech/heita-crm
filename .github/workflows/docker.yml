@@ -71,3 +71,47 @@ jobs:
           COSIGN_EXPERIMENTAL: "1"
         run: |
           cosign sign --yes ghcr.io/${{ github.repository_owner }}/heita-crm@${{ steps.build.outputs.digest }}
+
+  staging:
+    name: Deploy to staging & smoke test
+    runs-on: ubuntu-latest
+    needs: image
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to staging via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/heita
+            docker compose -f docker-compose.staging.yml pull app
+            docker compose -f docker-compose.staging.yml up -d --no-deps app
+            # Wait for readiness (up to 60s)
+            for i in $(seq 1 12); do
+              STATUS=$(docker compose -f docker-compose.staging.yml exec -T app wget -qO- http://localhost:3000/api/health/live 2>/dev/null || echo "down")
+              if echo "$STATUS" | grep -q '"status":"ok"'; then
+                echo "App is live"; break
+              fi
+              echo "Waiting... ($i/12)"; sleep 5
+            done
+
+      - name: Smoke test — liveness probe
+        run: |
+          curl -f --max-time 10 "${{ secrets.STAGING_APP_URL }}/api/health/live" | \
+            grep -q '"status":"ok"' && echo "Live OK"
+
+      - name: Smoke test — deep readiness probe
+        run: |
+          curl -f --max-time 15 "${{ secrets.STAGING_APP_URL }}/api/health?deep=1" | \
+            grep -q '"status"' && echo "Readiness OK"
+
+      - name: Smoke test — landing page reachable
+        run: |
+          HTTP=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "${{ secrets.STAGING_APP_URL }}/")
+          [ "$HTTP" = "200" ] && echo "Landing OK" || (echo "Landing returned $HTTP"; exit 1)

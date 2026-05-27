@@ -1,6 +1,7 @@
 import { ConsentChannel, ConsentType, Prisma } from "@prisma/client";
 
 import { sendEmail } from "@/lib/email";
+import { logger } from "@/lib/logger";
 import {
   normalizeNotificationPreferences,
   type NotificationPreferences
@@ -133,7 +134,16 @@ export async function updateAccountProfile(input: {
       ? normalizeNotificationPreferences(input.notificationPreferences)
       : undefined;
 
-  return prisma.user.update({
+  const changedFields = (
+    [
+      input.name !== undefined && "name",
+      input.email !== undefined && "email",
+      input.preferredAiMode !== undefined && "preferredAiMode",
+      input.notificationPreferences !== undefined && "notificationPreferences"
+    ] as const
+  ).filter(Boolean);
+
+  const result = await prisma.user.update({
     where: { id: input.userId },
     data: {
       name: input.name ?? undefined,
@@ -146,6 +156,10 @@ export async function updateAccountProfile(input: {
     },
     select: { id: true, name: true, email: true, image: true, updatedAt: true }
   });
+
+  logger.info({ userId: input.userId, changedFields }, "account.profile.updated");
+
+  return result;
 }
 
 export async function softDeleteAccount(userId: string) {

@@ -3,6 +3,7 @@ import type { BusinessPlanId } from "@prisma/client";
 import { getBusinessPlan } from "@/lib/billing";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 export type PlanLimitKey =
   | "members"
@@ -127,6 +128,18 @@ export async function handleYocoWebhook(payload: {
     periodEnd.setMonth(periodEnd.getMonth() + 1);
 
     await prisma.$transaction(async (tx) => {
+      // Idempotency: skip if this payment has already been processed.
+      const existingInvoice = await tx.businessInvoice.findFirst({
+        where: { yocoPaymentId: payload.payload.id }
+      });
+      if (existingInvoice) {
+        logger.info(
+          { businessId, yocoPaymentId: payload.payload.id },
+          "billing.webhook.duplicate_ignored"
+        );
+        return;
+      }
+
       await tx.business.update({
         where: { id: businessId },
         data: { planId }
@@ -153,6 +166,17 @@ export async function handleYocoWebhook(payload: {
           periodEnd
         }
       });
+      await recordStaffAuditLog(
+        {
+          businessId,
+          actorUserId: null,
+          action: "BILLING_SUBSCRIPTION_ACTIVATED",
+          targetType: "Business",
+          targetId: businessId,
+          metadata: { planId, yocoPaymentId: payload.payload.id, amountZar: plan.monthlyPriceZar }
+        },
+        tx
+      );
     });
 
     logger.info({ businessId, planId }, "billing.subscription.activated");
@@ -160,6 +184,14 @@ export async function handleYocoWebhook(payload: {
     await prisma.businessSubscription.updateMany({
       where: { businessId, status: "ACTIVE" },
       data: { status: "PAST_DUE" }
+    });
+    await recordStaffAuditLog({
+      businessId,
+      actorUserId: null,
+      action: "BILLING_PAYMENT_FAILED",
+      targetType: "Business",
+      targetId: businessId,
+      metadata: { planId, yocoPaymentId: payload.payload.id }
     });
     logger.warn({ businessId, planId }, "billing.subscription.past_due");
   } else if (type === "subscription.cancelled") {
@@ -172,6 +204,17 @@ export async function handleYocoWebhook(payload: {
         where: { id: businessId },
         data: { planId: "FREE" }
       });
+      await recordStaffAuditLog(
+        {
+          businessId,
+          actorUserId: null,
+          action: "BILLING_SUBSCRIPTION_CANCELLED",
+          targetType: "Business",
+          targetId: businessId,
+          metadata: { planId, yocoSubscriptionId: payload.payload.id }
+        },
+        tx
+      );
     });
     logger.info({ businessId, planId }, "billing.subscription.cancelled");
   } else {

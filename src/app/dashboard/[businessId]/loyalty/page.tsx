@@ -13,6 +13,7 @@ import {
 } from "@/app/dashboard/[businessId]/loyalty/actions";
 import { CsrfField } from "@/components/security/csrf-field";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
 import { Input, Select, Textarea } from "@/components/ui/input";
@@ -123,9 +124,9 @@ export default async function LoyaltyDashboardPage({
               <form action={requestStaffStepUpAction} className="grid gap-3">
                 <CsrfField />
                 <input type="hidden" name="businessId" value={business.id} />
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary">
                   Send staff OTP
-                </Button>
+                </SubmitButton>
               </form>
               <form action={verifyStaffStepUpAction} className="grid gap-3">
                 <CsrfField />
@@ -138,9 +139,9 @@ export default async function LoyaltyDashboardPage({
                   placeholder="123456"
                   required
                 />
-                <Button type="submit" variant="primary">
+                <SubmitButton variant="primary">
                   Verify staff access
-                </Button>
+                </SubmitButton>
               </form>
             </div>
             {resolvedSearchParams.stepUp ? (
@@ -190,9 +191,9 @@ export default async function LoyaltyDashboardPage({
                 required
               />
               <Input name="description" label="Description" placeholder="e.g. In-store purchase" />
-              <Button type="submit" variant="primary">
+              <SubmitButton variant="primary">
                 Issue points
-              </Button>
+              </SubmitButton>
             </form>
           </Card>
 
@@ -229,9 +230,9 @@ export default async function LoyaltyDashboardPage({
                 label="Description"
                 placeholder="e.g. Manual staff redemption"
               />
-              <Button type="submit" variant="danger">
+              <SubmitButton variant="danger">
                 Redeem points
-              </Button>
+              </SubmitButton>
             </form>
           </Card>
 
@@ -255,9 +256,9 @@ export default async function LoyaltyDashboardPage({
                 accept=".csv,text/csv"
                 required
               />
-              <Button type="submit" variant="primary">
+              <SubmitButton variant="primary">
                 Queue import
-              </Button>
+              </SubmitButton>
             </form>
             <div className="grid gap-2">
               {business.importRuns.length ? (
@@ -357,9 +358,9 @@ export default async function LoyaltyDashboardPage({
                     />
                     Exclusive access
                   </label>
-                  <Button type="submit" variant="secondary">
+                  <SubmitButton variant="secondary">
                     Save perks
-                  </Button>
+                  </SubmitButton>
                 </form>
               );
             })}
@@ -401,9 +402,9 @@ export default async function LoyaltyDashboardPage({
               className="md:col-span-4"
               rows={3}
             />
-            <Button type="submit" variant="primary" className="md:col-span-1">
+            <SubmitButton variant="primary" className="md:col-span-1">
               Add reward
-            </Button>
+            </SubmitButton>
           </form>
 
           <div className="grid gap-2">
@@ -501,9 +502,9 @@ export default async function LoyaltyDashboardPage({
                                     name="idempotencyKey"
                                     value={crypto.randomUUID()}
                                   />
-                                  <Button type="submit" variant="secondary" size="sm">
+                                  <SubmitButton variant="secondary" size="sm">
                                     Refund
-                                  </Button>
+                                  </SubmitButton>
                                 </form>
                               ) : null}
                             </div>

@@ -124,6 +124,7 @@ export function startCustomerImportWorker() {
     {
       connection: redis,
       concurrency: 1,
+      lockDuration: 5 * 60 * 1000,
       stalledInterval: 30_000,
       maxStalledCount: 2
     }

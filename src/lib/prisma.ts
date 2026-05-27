@@ -13,9 +13,8 @@ const basePrisma = new PrismaClient({
 });
 
 // Soft-delete middleware: automatically filter out soft-deleted rows for
-// User and Business models on findFirst and findMany queries.
-// findUnique is skipped because it uses a unique selector (not a where clause
-// that accepts deletedAt filtering without converting to findFirst).
+// User and Business models. findUnique/findUniqueOrThrow are rewritten to
+// findFirst/findFirstOrThrow so the deletedAt filter can be applied.
 const extendedPrisma = basePrisma.$extends({
   query: {
     user: {
@@ -27,6 +26,18 @@ const extendedPrisma = basePrisma.$extends({
         args.where = { ...args.where, deletedAt: null };
         return query(args);
       },
+      async findUnique({ args, query: _query }) {
+        return basePrisma.user.findFirst({
+          ...args,
+          where: { ...args.where, deletedAt: null }
+        } as Parameters<typeof basePrisma.user.findFirst>[0]);
+      },
+      async findUniqueOrThrow({ args, query: _query }) {
+        return basePrisma.user.findFirstOrThrow({
+          ...args,
+          where: { ...args.where, deletedAt: null }
+        } as Parameters<typeof basePrisma.user.findFirstOrThrow>[0]);
+      },
     },
     business: {
       async findFirst({ args, query }) {
@@ -36,6 +47,18 @@ const extendedPrisma = basePrisma.$extends({
       async findMany({ args, query }) {
         args.where = { ...args.where, deletedAt: null };
         return query(args);
+      },
+      async findUnique({ args, query: _query }) {
+        return basePrisma.business.findFirst({
+          ...args,
+          where: { ...args.where, deletedAt: null }
+        } as Parameters<typeof basePrisma.business.findFirst>[0]);
+      },
+      async findUniqueOrThrow({ args, query: _query }) {
+        return basePrisma.business.findFirstOrThrow({
+          ...args,
+          where: { ...args.where, deletedAt: null }
+        } as Parameters<typeof basePrisma.business.findFirstOrThrow>[0]);
       },
     },
   },

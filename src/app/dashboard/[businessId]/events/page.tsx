@@ -10,6 +10,7 @@ import {
 } from "@/app/dashboard/[businessId]/events/actions";
 import { CsrfField } from "@/components/security/csrf-field";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Input, Textarea } from "@/components/ui/input";
@@ -139,9 +140,9 @@ export default async function EventsDashboardPage({
               <Bell className="h-3.5 w-3.5 text-primary-action" />
               {t("formLabels.reminder")}
             </label>
-            <Button type="submit" variant="primary" className="md:col-span-2">
+            <SubmitButton variant="primary" className="md:col-span-2">
               {t("saveCta")}
-            </Button>
+            </SubmitButton>
           </form>
         </Card>
 
@@ -241,19 +242,19 @@ export default async function EventsDashboardPage({
                       <Bell className="h-3.5 w-3.5 text-primary-action" />
                       {t("formLabels.reminder")}
                     </label>
-                    <Button type="submit" variant="secondary" className="md:col-span-2">
+                    <SubmitButton variant="secondary" className="md:col-span-2">
                       {t("saveCta")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <form action={deleteEventAction}>
                       <CsrfField />
                       <input type="hidden" name="businessId" value={business.id} />
                       <input type="hidden" name="eventId" value={event.id} />
-                      <Button type="submit" variant="danger" size="sm">
+                      <SubmitButton variant="danger" size="sm">
                         <Trash2 className="h-3.5 w-3.5" />
                         {t("deleteCta")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   </div>
                 </article>
@@ -293,9 +294,9 @@ export default async function EventsDashboardPage({
                     <CsrfField />
                     <input type="hidden" name="businessId" value={business.id} />
                     <input type="hidden" name="eventId" value={event.id} />
-                    <Button type="submit" variant="ghost" size="sm">
+                    <SubmitButton variant="ghost" size="sm">
                       <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    </SubmitButton>
                   </form>
                 </li>
               ))}

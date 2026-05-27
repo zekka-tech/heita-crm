@@ -1,0 +1,78 @@
+name: Post-deploy smoke tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      app_url:
+        description: "App base URL to test (e.g. https://staging.heita.co.za)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Smoke tests — ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.11.0"
+          cache: "npm"
+
+      - name: Install Playwright
+        run: npm ci --prefer-offline --no-audit --progress=false && npx playwright install --with-deps chromium
+
+      - name: Liveness probe
+        run: |
+          curl -f --max-time 10 "${{ inputs.app_url }}/api/health/live" | \
+            grep -q '"status":"ok"' && echo "Live OK"
+
+      - name: Deep readiness probe (DB + Redis)
+        run: |
+          curl -f --max-time 20 "${{ inputs.app_url }}/api/health?deep=1" | \
+            grep -q '"status"' && echo "Readiness OK"
+
+      - name: Metrics endpoint protected
+        run: |
+          HTTP=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "${{ inputs.app_url }}/api/metrics")
+          [ "$HTTP" = "401" ] && echo "Metrics auth OK" || (echo "Metrics returned $HTTP, expected 401"; exit 1)
+
+      - name: Landing page returns 200
+        run: |
+          HTTP=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "${{ inputs.app_url }}/")
+          [ "$HTTP" = "200" ] && echo "Landing OK" || (echo "Landing returned $HTTP"; exit 1)
+
+      - name: Discover page returns 200
+        run: |
+          HTTP=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "${{ inputs.app_url }}/discover")
+          [ "$HTTP" = "200" ] && echo "Discover OK" || (echo "Discover returned $HTTP"; exit 1)
+
+      - name: Security headers present
+        run: |
+          HEADERS=$(curl -sI --max-time 10 "${{ inputs.app_url }}/")
+          echo "$HEADERS" | grep -qi "strict-transport-security" && echo "HSTS OK"
+          echo "$HEADERS" | grep -qi "x-frame-options" && echo "X-Frame-Options OK"
+          echo "$HEADERS" | grep -qi "content-security-policy" && echo "CSP OK"
+
+      - name: Sign-in page renders without 5xx
+        run: |
+          HTTP=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "${{ inputs.app_url }}/sign-in")
+          [ "$HTTP" = "200" ] && echo "Sign-in OK" || (echo "Sign-in returned $HTTP"; exit 1)
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Smoke tests FAILED for ${{ inputs.environment }} at ${{ inputs.app_url }}"
+          echo "::error::Manual rollback may be required. Check OPERATIONS.md rollback procedure."

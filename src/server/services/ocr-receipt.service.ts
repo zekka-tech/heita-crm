@@ -3,6 +3,7 @@ import { TextractClient, AnalyzeExpenseCommand } from "@aws-sdk/client-textract"
 import { appendTraceHeaders } from "@/lib/tracing";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { recalculateTier } from "@/server/services/loyalty.service";
 
 type OcrResult = {
   total: number | null;
@@ -324,6 +325,8 @@ export async function approveOcrReceipt(
         where: { id: membership.id },
         data: { pointsBalance: { increment: points } }
       });
+
+      await recalculateTier(tx, { membershipId: membership.id, actorUserId: staffUserId });
     }
 
     await tx.ocrReceipt.update({
@@ -336,7 +339,7 @@ export async function approveOcrReceipt(
         transactionId: transaction?.id ?? null
       }
     });
-  });
+  }, { maxWait: 5_000, timeout: 20_000 });
 
   logger.info({ receiptId, staffUserId }, "ocr.receipt.approved");
 }

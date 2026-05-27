@@ -32,3 +32,26 @@ jobs:
           BACKUP_S3_URI: ${{ secrets.BACKUP_S3_URI }}
           BACKUP_PREFIX: heita-crm
         run: bash ./scripts/backup-postgres.sh
+
+      - name: Enforce 30-day retention
+        env:
+          BACKUP_S3_URI: ${{ secrets.BACKUP_S3_URI }}
+          BACKUP_AWS_REGION: ${{ secrets.BACKUP_AWS_REGION }}
+        run: |
+          # Parse bucket and prefix from S3 URI (s3://bucket/prefix)
+          BUCKET=$(echo "$BACKUP_S3_URI" | sed 's|s3://||' | cut -d/ -f1)
+          PREFIX=$(echo "$BACKUP_S3_URI" | sed 's|s3://[^/]*/||')
+          CUTOFF=$(date -d "30 days ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -v -30d +%Y-%m-%dT%H:%M:%SZ)
+
+          echo "Removing backups older than $CUTOFF from s3://$BUCKET/$PREFIX"
+
+          aws s3api list-objects-v2 \
+            --bucket "$BUCKET" \
+            --prefix "$PREFIX" \
+            --query "Contents[?LastModified<='$CUTOFF'].Key" \
+            --output text | tr '\t' '\n' | grep -v '^$' | while read -r KEY; do
+              echo "Deleting $KEY"
+              aws s3 rm "s3://$BUCKET/$KEY"
+          done
+
+          echo "Retention cleanup complete."

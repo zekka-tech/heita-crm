@@ -52,10 +52,11 @@ export default async function handler(
     transactions: history.transactions
   });
 
+  const safeSlug = businessSlug.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 64);
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${businessSlug}-receipt-history.csv"`
+    `attachment; filename="${safeSlug}-receipt-history.csv"`
   );
   return res.status(200).send(csv);
 }
