@@ -225,8 +225,8 @@ describe("sendDueEventReminders", () => {
       }
     ]);
     prisma.membership.findMany.mockResolvedValue([
-      { userId: "user_a" },
-      { userId: "user_b" }
+      { userId: "user_a", businessId: "biz_1" },
+      { userId: "user_b", businessId: "biz_1" }
     ]);
     sendNotification.mockResolvedValue({ id: "notif_1" });
 
@@ -270,8 +270,8 @@ describe("sendDueEventReminders", () => {
       }
     ]);
     prisma.membership.findMany.mockResolvedValue([
-      { userId: "user_a" },
-      { userId: "user_b" }
+      { userId: "user_a", businessId: "biz_1" },
+      { userId: "user_b", businessId: "biz_1" }
     ]);
     sendNotification
       .mockResolvedValueOnce({ id: "notif_1" })

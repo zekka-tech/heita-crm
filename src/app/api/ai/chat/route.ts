@@ -69,7 +69,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: "businessSlug or businessId is required." }, { status: 400 });
   }
 
-  // Resolve business
+  // Resolve business and verify caller is staff of that business (IDOR prevention)
   let business: { id: string; name: string } | null = null;
   try {
     if (bodyBusinessId) {
@@ -92,6 +92,15 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: "Business not found." }, { status: 404 });
   }
 
+  // Only staff members of this business may use its AI workspace
+  const staffMember = await prisma.staffMember.findUnique({
+    where: { businessId_userId: { businessId: business.id, userId } },
+    select: { id: true }
+  });
+  if (!staffMember) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const businessId = business.id;
 
   // Resolve or create AI workspace + session
@@ -107,19 +116,23 @@ export async function POST(request: NextRequest): Promise<Response> {
     });
 
     if (sessionId) {
-      // Load existing session messages
+      // Load only the most recent MAX_HISTORY turns — the RAG pipeline discards older context
+      const MAX_HISTORY = 12;
       const existingSession = await prisma.aiChatSession.findFirst({
         where: { id: sessionId, businessId },
         include: {
           messages: {
-            orderBy: { createdAt: "asc" }
+            orderBy: { createdAt: "desc" },
+            take: MAX_HISTORY,
+            select: { role: true, content: true }
           }
         }
       });
 
       if (existingSession) {
         resolvedSessionId = existingSession.id;
-        priorMessages = existingSession.messages.map((msg) => ({
+        // Messages were fetched newest-first; reverse to restore chronological order
+        priorMessages = [...existingSession.messages].reverse().map((msg) => ({
           role: msg.role as "user" | "assistant" | "system",
           content: msg.content
         }));

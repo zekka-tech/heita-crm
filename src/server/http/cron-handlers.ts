@@ -10,6 +10,9 @@ import { expireEligiblePoints } from "@/server/services/loyalty.service";
 const STALE_OTP_HOURS = 24;
 const STALE_WEBHOOK_DAYS = 30;
 const HARD_DELETE_DAYS = 30;
+// POPIA: privacy policy states WhatsApp messages are deleted after 30 days
+const WHATSAPP_MESSAGE_RETENTION_DAYS = 30;
+const HARD_DELETE_BATCH = 100;
 
 function isAuthorized(request: Request): boolean {
   const provided =
@@ -125,42 +128,95 @@ export async function handleHardDeleteExpiredUsers(request: Request) {
 
   const cutoff = new Date(Date.now() - HARD_DELETE_DAYS * 24 * 60 * 60 * 1000);
 
-  const expiredUsers = await prisma.user.findMany({
-    where: {
-      deletedAt: { lt: cutoff }
-    },
-    select: { id: true }
-  });
-
   let deleted = 0;
+  let cursor: string | undefined;
 
-  for (const { id: userId } of expiredUsers) {
-    try {
-      await prisma.$transaction(
-        async (tx) => {
-          // Delete child rows first for tables that may not have cascade rules.
-          await tx.otpCode.deleteMany({ where: { userId } });
-          await tx.pushSubscription.deleteMany({ where: { userId } });
-          await tx.userConsent.deleteMany({ where: { userId } });
-          await tx.notification.deleteMany({ where: { userId } });
+  // Cursor-paginated to avoid loading all expired users into memory at once
+  do {
+    const batch = await prisma.user.findMany({
+      where: { deletedAt: { lt: cutoff } },
+      select: { id: true },
+      take: HARD_DELETE_BATCH,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+    });
 
-          // AiChatSession → AiChatMessage has Cascade on sessionId; deleting
-          // sessions removes their messages automatically.
-          await tx.aiChatSession.deleteMany({ where: { userId } });
+    if (batch.length === 0) break;
 
-          // Finally hard-delete the User skeleton.
-          await tx.user.delete({ where: { id: userId } });
-        },
-        { maxWait: 10_000, timeout: 30_000 }
-      );
+    for (const { id: userId } of batch) {
+      try {
+        await prisma.$transaction(
+          async (tx) => {
+            // Delete child rows first for tables that may not have cascade rules.
+            await tx.otpCode.deleteMany({ where: { userId } });
+            await tx.pushSubscription.deleteMany({ where: { userId } });
+            await tx.userConsent.deleteMany({ where: { userId } });
+            await tx.notification.deleteMany({ where: { userId } });
 
-      deleted += 1;
-    } catch (err) {
-      logger.error({ userId, err }, "cron.hard_delete_users.row_error");
+            // AiChatSession → AiChatMessage has Cascade on sessionId; deleting
+            // sessions removes their messages automatically.
+            await tx.aiChatSession.deleteMany({ where: { userId } });
+
+            await tx.user.delete({ where: { id: userId } });
+          },
+          { maxWait: 10_000, timeout: 30_000 }
+        );
+        deleted += 1;
+      } catch (err) {
+        logger.error({ userId, err }, "cron.hard_delete_users.row_error");
+      }
     }
-  }
 
-  logger.info({ deleted, total: expiredUsers.length }, "cron.hard_delete_users.completed");
+    cursor = batch[batch.length - 1]?.id;
+  } while (true);
+
+  logger.info({ deleted }, "cron.hard_delete_users.completed");
 
   return NextResponse.json({ ok: true, job: "hard-delete-users", deleted });
+}
+
+/**
+ * Purge WhatsApp messages older than WHATSAPP_MESSAGE_RETENTION_DAYS.
+ *
+ * POPIA requires that personal data is not held longer than necessary.
+ * Our privacy policy states WhatsApp message content is deleted after 30 days.
+ * Cursor-paginated to avoid loading all rows into memory.
+ */
+export async function handlePurgeWhatsappMessagesCron(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const idempKey = `cron:purge-whatsapp:${new Date().toISOString().slice(0, 10)}`;
+  if (await checkIdempotency(idempKey, 86_400)) {
+    return NextResponse.json({ ok: true, cached: true });
+  }
+
+  const cutoff = new Date(
+    Date.now() - WHATSAPP_MESSAGE_RETENTION_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  let totalDeleted = 0;
+  let cursor: string | undefined;
+
+  do {
+    const batch = await prisma.message.findMany({
+      where: {
+        channel: "WHATSAPP",
+        createdAt: { lt: cutoff }
+      },
+      select: { id: true },
+      take: HARD_DELETE_BATCH,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+    });
+
+    if (batch.length === 0) break;
+
+    const ids = batch.map((m) => m.id);
+    const { count } = await prisma.message.deleteMany({ where: { id: { in: ids } } });
+    totalDeleted += count;
+    cursor = batch[batch.length - 1]?.id;
+  } while (true);
+
+  logger.info({ totalDeleted, cutoff }, "cron.purge_whatsapp_messages.completed");
+  return NextResponse.json({ ok: true, job: "purge-whatsapp-messages", totalDeleted });
 }

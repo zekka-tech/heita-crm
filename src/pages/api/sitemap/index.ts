@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
+import { BusinessCategory } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 
 const BASE_URL =
@@ -19,17 +21,7 @@ function urlEntry(
   </url>`;
 }
 
-const CATEGORIES = [
-  "RETAIL",
-  "FOOD_BEVERAGE",
-  "HEALTH_BEAUTY",
-  "AUTOMOTIVE",
-  "EDUCATION",
-  "ENTERTAINMENT",
-  "SERVICES",
-  "TECHNOLOGY",
-  "OTHER"
-];
+const CATEGORIES = Object.values(BusinessCategory);
 
 export default async function handler(
   _req: NextApiRequest,

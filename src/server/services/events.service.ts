@@ -300,11 +300,21 @@ export async function sendDueEventReminders(
   let totalRecipients = 0;
   let totalFailures = 0;
 
+  // Batch-fetch all memberships for all due events in one query to avoid N+1
+  const allBusinessIds = [...new Set(dueEvents.map((e) => e.businessId))];
+  const allMemberships = await prisma.membership.findMany({
+    where: { businessId: { in: allBusinessIds }, isActive: true },
+    select: { userId: true, businessId: true }
+  });
+  const membershipsByBusiness = new Map<string, { userId: string }[]>();
+  for (const m of allMemberships) {
+    const list = membershipsByBusiness.get(m.businessId) ?? [];
+    list.push({ userId: m.userId });
+    membershipsByBusiness.set(m.businessId, list);
+  }
+
   for (const event of dueEvents) {
-    const memberships = await prisma.membership.findMany({
-      where: { businessId: event.businessId, isActive: true },
-      select: { userId: true }
-    });
+    const memberships = membershipsByBusiness.get(event.businessId) ?? [];
 
     const results = await Promise.allSettled(
       memberships.map((membership) =>

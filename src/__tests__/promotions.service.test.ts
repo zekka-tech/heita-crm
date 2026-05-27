@@ -128,10 +128,12 @@ describe("promotions service", () => {
         targetTierIds: ["tier_gold"],
         business: { id: "biz_1", slug: "acme", name: "Acme" }
       });
-      prisma.membership.findMany.mockResolvedValue([
-        { id: "m1", userId: "u1" },
-        { id: "m2", userId: "u2" }
-      ]);
+      prisma.membership.findMany
+        .mockResolvedValueOnce([
+          { id: "m1", userId: "u1" },
+          { id: "m2", userId: "u2" }
+        ])
+        .mockResolvedValue([]);
       sendNotification.mockResolvedValue(null);
       prisma.promotion.update.mockResolvedValue({});
 
@@ -140,14 +142,16 @@ describe("promotions service", () => {
         actorUserId: "user_1"
       });
 
-      expect(prisma.membership.findMany).toHaveBeenCalledWith({
-        where: {
-          businessId: "biz_1",
-          isActive: true,
-          tierId: { in: ["tier_gold"] }
-        },
-        select: { id: true, userId: true }
-      });
+      expect(prisma.membership.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            businessId: "biz_1",
+            isActive: true,
+            tierId: { in: ["tier_gold"] }
+          }),
+          select: { id: true, userId: true }
+        })
+      );
       expect(sendNotification).toHaveBeenCalledTimes(2);
       expect(sendNotification).toHaveBeenCalledWith({
         userId: "u1",
@@ -175,11 +179,13 @@ describe("promotions service", () => {
         targetTierIds: [],
         business: { id: "biz_1", slug: "acme", name: "Acme" }
       });
-      prisma.membership.findMany.mockResolvedValue([
-        { id: "m1", userId: "u1" },
-        { id: "m2", userId: "u2" },
-        { id: "m3", userId: "u3" }
-      ]);
+      prisma.membership.findMany
+        .mockResolvedValueOnce([
+          { id: "m1", userId: "u1" },
+          { id: "m2", userId: "u2" },
+          { id: "m3", userId: "u3" }
+        ])
+        .mockResolvedValue([]);
       sendNotification.mockResolvedValue(null);
       prisma.promotion.update.mockResolvedValue({});
 
@@ -188,13 +194,15 @@ describe("promotions service", () => {
         actorUserId: "user_1"
       });
 
-      expect(prisma.membership.findMany).toHaveBeenCalledWith({
-        where: {
-          businessId: "biz_1",
-          isActive: true
-        },
-        select: { id: true, userId: true }
-      });
+      expect(prisma.membership.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            businessId: "biz_1",
+            isActive: true
+          }),
+          select: { id: true, userId: true }
+        })
+      );
       expect(sendNotification).toHaveBeenCalledTimes(3);
       expect(result.recipientCount).toBe(3);
     });
@@ -213,10 +221,12 @@ describe("promotions service", () => {
         targetTierIds: [],
         business: { id: "biz_1", slug: "acme", name: "Acme" }
       });
-      prisma.membership.findMany.mockResolvedValue([
-        { id: "m1", userId: "u1" },
-        { id: "m2", userId: "u2" }
-      ]);
+      prisma.membership.findMany
+        .mockResolvedValueOnce([
+          { id: "m1", userId: "u1" },
+          { id: "m2", userId: "u2" }
+        ])
+        .mockResolvedValue([]);
       sendNotification
         .mockResolvedValueOnce(null)
         .mockRejectedValueOnce(new Error("push failed"));

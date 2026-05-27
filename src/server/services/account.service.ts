@@ -25,6 +25,11 @@ export async function recordConsent(input: {
   });
 }
 
+// Max rows per collection to prevent OOM on accounts with large history.
+// Exports are capped at 10 000 rows per type; users needing full exports
+// should contact support for a managed CSV dump.
+const EXPORT_ROW_CAP = 10_000;
+
 export async function exportAccountData(userId: string) {
   const [user, memberships, loyaltyTransactions, aiChatMessages, messages, notifications, consents] =
     await Promise.all([
@@ -41,39 +46,34 @@ export async function exportAccountData(userId: string) {
           business: true,
           tier: true
         },
-        orderBy: { joinedAt: "asc" }
+        orderBy: { joinedAt: "asc" },
+        take: EXPORT_ROW_CAP
       }),
       prisma.loyaltyTransaction.findMany({
         where: {
           OR: [
             { userId },
-            {
-              membership: {
-                userId
-              }
-            }
+            { membership: { userId } }
           ]
         },
-        orderBy: { createdAt: "asc" }
+        orderBy: { createdAt: "asc" },
+        take: EXPORT_ROW_CAP
       }),
       prisma.aiChatMessage.findMany({
-        where: {
-          session: {
-            userId
-          }
-        },
-        include: {
-          session: true
-        },
-        orderBy: { createdAt: "asc" }
+        where: { session: { userId } },
+        include: { session: true },
+        orderBy: { createdAt: "asc" },
+        take: EXPORT_ROW_CAP
       }),
       prisma.message.findMany({
         where: { userId },
-        orderBy: { createdAt: "asc" }
+        orderBy: { createdAt: "asc" },
+        take: EXPORT_ROW_CAP
       }),
       prisma.notification.findMany({
         where: { userId },
-        orderBy: { createdAt: "asc" }
+        orderBy: { createdAt: "asc" },
+        take: EXPORT_ROW_CAP
       }),
       prisma.userConsent.findMany({
         where: { userId },

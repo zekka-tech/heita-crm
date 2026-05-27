@@ -313,31 +313,51 @@ export async function broadcastPromotion(
 
   assertPromotionBroadcastable(promotion);
 
-  const memberships = await prisma.membership.findMany({
-    where: {
-      businessId: promotion.businessId,
-      isActive: true,
-      ...(promotion.targetTierIds.length > 0
-        ? { tierId: { in: promotion.targetTierIds } }
-        : {})
-    },
-    select: { id: true, userId: true }
-  });
+  // Paginate memberships in batches to avoid loading all into memory.
+  // Only send to members who have an active marketing consent for this business.
+  const MEMBERSHIP_BATCH = 2_000;
+  let cursor: string | undefined;
+  let totalSent = 0;
+  let totalFailed = 0;
 
-  const results = await Promise.allSettled(
-    memberships.map((membership) =>
-      sendNotification({
-        userId: membership.userId,
+  do {
+    const batch = await prisma.membership.findMany({
+      where: {
         businessId: promotion.businessId,
-        title: promotion.title,
-        body: promotion.description ?? "",
-        type: "PROMOTION",
-        actionUrl: `/b/${promotion.business.slug}`
-      })
-    )
-  );
+        isActive: true,
+        ...(promotion.targetTierIds.length > 0
+          ? { tierId: { in: promotion.targetTierIds } }
+          : {})
+      },
+      select: { id: true, userId: true },
+      take: MEMBERSHIP_BATCH,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+    });
 
-  const failedCount = results.filter((result) => result.status === "rejected").length;
+    if (batch.length === 0) break;
+
+    const results = await Promise.allSettled(
+      batch.map((membership) =>
+        sendNotification({
+          userId: membership.userId,
+          businessId: promotion.businessId,
+          title: promotion.title,
+          body: promotion.description ?? "",
+          type: "PROMOTION",
+          actionUrl: `/b/${promotion.business.slug}`
+        })
+      )
+    );
+
+    const batchFailed = results.filter((r) => r.status === "rejected").length;
+    totalSent += batch.length - batchFailed;
+    totalFailed += batchFailed;
+    cursor = batch[batch.length - 1]?.id;
+  } while (true);
+
+  const failedCount = totalFailed;
+  const memberships = { length: totalSent + totalFailed };
+
   if (failedCount > 0) {
     logger.warn(
       {

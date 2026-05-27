@@ -45,9 +45,6 @@ const nextConfig: NextConfig = {
     "csv-parse",
     "web-push"
   ],
-  eslint: {
-    ignoreDuringBuilds: true
-  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "*.amazonaws.com" },

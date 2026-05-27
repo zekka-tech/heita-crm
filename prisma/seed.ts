@@ -1,5 +1,6 @@
 async function main() {
-  console.log("Seed placeholder: add demo businesses, tiers, rewards, and staff users here.");
+  // TODO: seed demo businesses, tiers, rewards, and staff users for local dev
+  process.stdout.write("Seed placeholder: implement seeding in prisma/seed.ts\n");
 }
 
 main().catch((error) => {
