@@ -1,12 +1,17 @@
 import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
+import { Breadcrumb } from "@/components/shared/breadcrumb";
 
 export const metadata = { title: "Terms of Service — Heita" };
 
 export default function TermsPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-8">
+      <Breadcrumb
+        crumbs={[{ label: "Home", href: "/" }, { label: "Terms of Service" }]}
+        className="mb-6"
+      />
       <header className="mb-8 space-y-2">
         <p className="eyebrow">Legal</p>
         <h1 className="font-display text-3xl font-extrabold tracking-tight">Terms of Service</h1>

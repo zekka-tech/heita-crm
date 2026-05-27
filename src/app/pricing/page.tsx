@@ -4,6 +4,7 @@ import { Check, MessageSquareQuote, Shield, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Breadcrumb } from "@/components/shared/breadcrumb";
 import { businessPlans, formatPlanLimit, formatZar } from "@/lib/billing";
 
 export const metadata: Metadata = {
@@ -36,6 +37,10 @@ const differentiators = [
 export default function PricingPage() {
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
+      <Breadcrumb
+        crumbs={[{ label: "Home", href: "/" }, { label: "Pricing" }]}
+        className="mb-4"
+      />
       <section className="surface-hero px-6 py-10 sm:px-10 sm:py-14">
         <p className="eyebrow text-white/80">Pricing</p>
         <h1 className="mt-3 max-w-3xl font-display text-4xl font-extrabold tracking-tight sm:text-5xl">

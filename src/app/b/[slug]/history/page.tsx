@@ -6,6 +6,7 @@ import { TransactionType } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
+import { Breadcrumb } from "@/components/shared/breadcrumb";
 import { isBuildPhase } from "@/lib/build-phase";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +70,14 @@ export default async function BusinessReceiptHistoryPage({
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
+      <Breadcrumb
+        crumbs={[
+          { label: "Discover", href: "/discover" },
+          { label: history.membership.business.name, href: `/b/${slug}` },
+          { label: t("title") }
+        ]}
+        className="mb-4"
+      />
       <div className="grid gap-5">
         <Card variant="hero" className="px-6 py-8 sm:px-10">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">

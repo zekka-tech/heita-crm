@@ -9,6 +9,7 @@ import { CsrfField } from "@/components/security/csrf-field";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
+import { Breadcrumb } from "@/components/shared/breadcrumb";
 import { isBuildPhase } from "@/lib/build-phase";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,14 @@ export default async function BusinessJoinPage({
 
   return (
     <main className="px-4 py-6 sm:px-8">
+      <Breadcrumb
+        crumbs={[
+          { label: "Discover", href: "/discover" },
+          { label: business.name, href: `/b/${business.slug}` },
+          { label: "Join" }
+        ]}
+        className="mb-4"
+      />
       <Card variant="surface" className="mx-auto max-w-2xl space-y-6">
         <header className="space-y-3">
           <Chip variant="primary" size="sm">

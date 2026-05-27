@@ -6,6 +6,7 @@ import { Calendar, Download, MapPin } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
+import { Breadcrumb } from "@/components/shared/breadcrumb";
 import { resolveLocale } from "@/i18n/locale";
 import { prisma } from "@/lib/prisma";
 
@@ -36,6 +37,14 @@ export default async function BusinessEventsPage({
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
+      <Breadcrumb
+        crumbs={[
+          { label: "Discover", href: "/discover" },
+          { label: business.name, href: `/b/${slug}` },
+          { label: t("eyebrow") }
+        ]}
+        className="mb-4"
+      />
       <Card variant="hero" className="px-6 py-7 sm:px-10">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
           {business.name} · {t("eyebrow")}

@@ -8,6 +8,7 @@ import { RewardCard } from "@/components/loyalty/reward-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
+import { Breadcrumb } from "@/components/shared/breadcrumb";
 import { isBuildPhase } from "@/lib/build-phase";
 import { describeTierPerks } from "@/lib/loyalty";
 
@@ -71,6 +72,14 @@ export default async function BusinessRewardsPage({
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
+      <Breadcrumb
+        crumbs={[
+          { label: "Discover", href: "/discover" },
+          { label: business.name, href: `/b/${slug}` },
+          { label: "Rewards" }
+        ]}
+        className="mb-4"
+      />
       <Card variant="hero" className="px-6 py-8 sm:px-10">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
           {business.name} · Rewards
