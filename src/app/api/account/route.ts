@@ -1,15 +1,24 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
+import { NotificationPreferencesSchema } from "@/lib/notification-preferences";
 import {
   softDeleteAccount,
   updateAccountProfile
 } from "@/server/services/account.service";
 
 export const dynamic = "force-dynamic";
+
+const UpdateAccountSchema = z.object({
+  name: z.string().trim().min(1).max(100).nullable().optional(),
+  email: z.string().trim().email().nullable().optional(),
+  preferredAiMode: z.string().trim().min(1).max(50).nullable().optional(),
+  notificationPreferences: NotificationPreferencesSchema.nullable().optional()
+});
 
 /**
  * PATCH /api/account
@@ -29,32 +38,28 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     return csrfFailure as NextResponse;
   }
 
-  let body: {
-    name?: string | null;
-    email?: string | null;
-    preferredAiMode?: string | null;
-    notificationPreferences?: unknown;
-  };
-
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  const parsed = UpdateAccountSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid account update." }, { status: 400 });
   }
 
   try {
     const updated = await updateAccountProfile({
       userId,
-      name: body.name,
-      email: body.email,
-      preferredAiMode: body.preferredAiMode,
-      notificationPreferences: body.notificationPreferences as
-        | import("@/lib/notification-preferences").NotificationPreferences
-        | null
-        | undefined
+      name: parsed.data.name ?? undefined,
+      email: parsed.data.email ?? undefined,
+      preferredAiMode: parsed.data.preferredAiMode ?? undefined,
+      notificationPreferences: parsed.data.notificationPreferences ?? undefined
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({ ok: true, user: { id: updated.id, name: updated.name, email: updated.email } });
   } catch (err) {
     logger.error({ err }, "account.patch.error");
     return NextResponse.json({ error: "Internal server error." }, { status: 500 });
