@@ -74,7 +74,7 @@ export default async function CategoryPage({
     category: normalized as BusinessCategory,
     province,
     city: sp.city ?? null
-  });
+  }).catch(() => []);
 
   const label = formatEnumLabel(normalized);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://heita.co.za";

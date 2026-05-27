@@ -88,7 +88,7 @@ export default async function BusinessLandingPage({
       },
       loyaltyTiers: { orderBy: { minPoints: "asc" } }
     }
-  });
+  }).catch(() => null);
 
   if (!business) {
     notFound();

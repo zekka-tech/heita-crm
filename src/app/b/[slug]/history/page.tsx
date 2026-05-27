@@ -57,7 +57,7 @@ export default async function BusinessReceiptHistoryPage({
     type,
     dateFrom: resolvedSearchParams.from ? new Date(resolvedSearchParams.from) : null,
     dateTo: resolvedSearchParams.to ? new Date(resolvedSearchParams.to) : null
-  });
+  }).catch(() => null);
 
   if (!history) {
     redirect(`/b/${slug}`);

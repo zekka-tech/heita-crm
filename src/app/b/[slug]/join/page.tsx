@@ -36,7 +36,7 @@ export default async function BusinessJoinPage({
   const session = await auth();
   const business = await prisma.business.findFirst({
     where: { slug, deletedAt: null }
-  });
+  }).catch(() => null);
 
   if (!business) notFound();
 

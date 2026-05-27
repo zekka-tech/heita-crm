@@ -41,7 +41,7 @@ export default async function BusinessRewardsPage({
         orderBy: { pointsCost: "asc" }
       }
     }
-  });
+  }).catch(() => null);
 
   if (!business) {
     notFound();

@@ -26,7 +26,7 @@ export default async function BusinessEventsPage({
     include: {
       events: { orderBy: { startsAt: "asc" } }
     }
-  });
+  }).catch(() => null);
 
   if (!business) notFound();
 
