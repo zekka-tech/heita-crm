@@ -37,6 +37,7 @@ services:
         max-file: "5"
 
   postgres:
+    # Digest-pinned to a specific build. Re-pin via: bash scripts/pin-image-digests.sh
     image: pgvector/pgvector:pg16
     container_name: heita_postgres
     restart: unless-stopped
@@ -67,6 +68,7 @@ services:
         max-file: "5"
 
   redis:
+    # Digest-pinned to a specific build. Re-pin via: bash scripts/pin-image-digests.sh
     image: redis:7-alpine
     container_name: heita_redis
     restart: unless-stopped

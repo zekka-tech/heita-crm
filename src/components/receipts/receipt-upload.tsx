@@ -1,16 +1,24 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Camera, CheckCircle, Loader2, Receipt, Upload } from "lucide-react";
+import { Camera, CheckCircle, ClipboardCopy, Loader2, Receipt, Upload, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+
+type OcrFeedback = {
+  receiptId: string;
+  pointsToAward: number | null;
+  detectedTotal: number | null;
+  detectedBusiness: string | null;
+  confidence: "high" | "medium" | "low";
+};
 
 type UploadState =
   | { kind: "idle" }
   | { kind: "uploading" }
   | { kind: "processing" }
-  | { kind: "done"; pointsToAward: number | null }
+  | { kind: "done"; feedback: OcrFeedback }
   | { kind: "error"; message: string };
 
 type Props = {
@@ -21,6 +29,7 @@ type Props = {
 export function ReceiptUpload({ businessId, uploadEndpoint = "/api/upload" }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<UploadState>({ kind: "idle" });
+  const [copied, setCopied] = useState(false);
 
   async function handleFile(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -35,7 +44,6 @@ export function ReceiptUpload({ businessId, uploadEndpoint = "/api/upload" }: Pr
 
     setState({ kind: "uploading" });
 
-    // Get presigned upload URL
     let imageUrl: string;
     try {
       const presignResp = await fetch(uploadEndpoint, {
@@ -67,7 +75,6 @@ export function ReceiptUpload({ businessId, uploadEndpoint = "/api/upload" }: Pr
 
     setState({ kind: "processing" });
 
-    // Submit for OCR
     try {
       const resp = await fetch("/api/receipts/submit", {
         method: "POST",
@@ -80,14 +87,38 @@ export function ReceiptUpload({ businessId, uploadEndpoint = "/api/upload" }: Pr
         throw new Error((data as { error?: string }).error ?? "Processing failed.");
       }
 
-      const { pointsToAward } = (await resp.json()) as { pointsToAward: number | null };
-      setState({ kind: "done", pointsToAward });
+      const result = (await resp.json()) as {
+        receiptId: string;
+        pointsToAward: number | null;
+        ocrResult: {
+          total: number | null;
+          businessName: string | null;
+          confidence: "high" | "medium" | "low";
+        };
+      };
+
+      setState({
+        kind: "done",
+        feedback: {
+          receiptId: result.receiptId,
+          pointsToAward: result.pointsToAward,
+          detectedTotal: result.ocrResult.total,
+          detectedBusiness: result.ocrResult.businessName,
+          confidence: result.ocrResult.confidence
+        }
+      });
     } catch (err) {
       setState({
         kind: "error",
         message: err instanceof Error ? err.message : "Receipt processing failed."
       });
     }
+  }
+
+  async function copyReceiptId(id: string) {
+    await navigator.clipboard.writeText(id).catch(() => undefined);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
@@ -156,32 +187,122 @@ export function ReceiptUpload({ businessId, uploadEndpoint = "/api/upload" }: Pr
       )}
 
       {state.kind === "done" && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex flex-col items-center gap-3 py-6 text-center"
-        >
-          <CheckCircle className="h-10 w-10 text-green-500" aria-hidden="true" />
-          <p className="font-semibold text-ink">Receipt submitted!</p>
-          <p className="text-sm text-ink-muted">
-            {state.pointsToAward !== null
-              ? `Your ${state.pointsToAward} points are pending staff approval.`
-              : "A staff member will review your receipt and award points shortly."}
-          </p>
-          <Button variant="secondary" onClick={() => setState({ kind: "idle" })}>
-            Submit another
-          </Button>
-        </div>
+        <ReceiptSuccessFeedback
+          feedback={state.feedback}
+          copied={copied}
+          onCopy={copyReceiptId}
+          onReset={() => { setState({ kind: "idle" }); setCopied(false); }}
+        />
       )}
 
       {state.kind === "error" && (
         <div role="alert" className="space-y-3">
-          <p className="text-sm text-red-600">{state.message}</p>
+          <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
+            <p className="text-sm text-red-700">{state.message}</p>
+          </div>
           <Button variant="secondary" onClick={() => setState({ kind: "idle" })}>
             Try again
           </Button>
         </div>
       )}
     </Card>
+  );
+}
+
+function ReceiptSuccessFeedback({
+  feedback,
+  copied,
+  onCopy,
+  onReset
+}: {
+  feedback: OcrFeedback;
+  copied: boolean;
+  onCopy: (id: string) => Promise<void>;
+  onReset: () => void;
+}) {
+  const { receiptId, pointsToAward, detectedTotal, detectedBusiness, confidence } = feedback;
+
+  return (
+    <div role="status" aria-live="polite" className="space-y-4">
+      <div className="flex flex-col items-center gap-2 py-4 text-center">
+        <CheckCircle className="h-10 w-10 text-green-500" aria-hidden="true" />
+        <p className="font-display text-lg font-semibold text-ink">Receipt submitted!</p>
+        <p className="text-sm text-ink-muted">
+          {pointsToAward !== null
+            ? `${pointsToAward} points are pending staff approval.`
+            : "A staff member will review your receipt and award points shortly."}
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-line bg-surface-elevated divide-y divide-line">
+        {detectedBusiness && (
+          <div className="flex items-center justify-between px-4 py-3 text-sm">
+            <span className="text-ink-muted">Store detected</span>
+            <span className="font-medium text-ink">{detectedBusiness}</span>
+          </div>
+        )}
+        {detectedTotal !== null && (
+          <div className="flex items-center justify-between px-4 py-3 text-sm">
+            <span className="text-ink-muted">Total detected</span>
+            <span className="font-medium text-ink">R{detectedTotal.toFixed(2)}</span>
+          </div>
+        )}
+        {pointsToAward !== null && (
+          <div className="flex items-center justify-between px-4 py-3 text-sm">
+            <span className="text-ink-muted">Points pending</span>
+            <span className="font-semibold text-primary-action">{pointsToAward} pts</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between px-4 py-3 text-sm">
+          <span className="text-ink-muted">Scan quality</span>
+          <ConfidenceBadge confidence={confidence} />
+        </div>
+        <div className="flex items-center justify-between gap-2 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-xs text-ink-muted">Receipt ID</p>
+            <p className="truncate font-mono text-xs text-ink">{receiptId}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void onCopy(receiptId)}
+            className="shrink-0 rounded-lg p-2 text-ink-muted transition-colors hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label="Copy receipt ID"
+          >
+            <ClipboardCopy className="h-4 w-4" aria-hidden="true" />
+            {copied && <span className="sr-only">Copied!</span>}
+          </button>
+        </div>
+      </div>
+
+      {confidence === "low" && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          The image was hard to read clearly. For faster approval, keep receipts flat and well-lit.
+        </p>
+      )}
+
+      <p className="text-center text-xs text-ink-subtle">
+        Save your Receipt ID if you need to follow up with staff.
+      </p>
+
+      <Button variant="secondary" className="w-full" onClick={onReset}>
+        Submit another receipt
+      </Button>
+    </div>
+  );
+}
+
+function ConfidenceBadge({ confidence }: { confidence: "high" | "medium" | "low" }) {
+  const styles = {
+    high: "bg-green-100 text-green-800",
+    medium: "bg-amber-100 text-amber-800",
+    low: "bg-red-100 text-red-800"
+  } as const;
+  const labels = { high: "Clear", medium: "Partial", low: "Unclear" } as const;
+
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${styles[confidence]}`}>
+      {labels[confidence]}
+    </span>
   );
 }
