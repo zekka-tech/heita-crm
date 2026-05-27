@@ -36,6 +36,18 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
         xh: `${appUrl}/categories/${category}`,
         af: `${appUrl}/categories/${category}`
       }
+    },
+    openGraph: {
+      type: "website",
+      title: `${label} businesses in South Africa`,
+      description: `Browse ${label} businesses on Heita — earn loyalty points, redeem rewards, and chat via WhatsApp.`,
+      siteName: "Heita",
+      images: [{ url: `${appUrl}/opengraph-image` }]
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${label} businesses in South Africa`,
+      description: `Browse ${label} businesses on Heita — earn loyalty points, redeem rewards, and chat via WhatsApp.`
     }
   };
 }

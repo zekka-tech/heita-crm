@@ -74,7 +74,12 @@ services:
     restart: unless-stopped
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --requirepass "${REDIS_PASSWORD:?required}"
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass "${REDIS_PASSWORD:?required}"
+      --maxmemory 384mb
+      --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping"]
       interval: 10s

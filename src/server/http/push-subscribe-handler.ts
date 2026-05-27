@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { csrfFailureResponse } from "@/lib/csrf";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { authenticateRequestUser } from "@/lib/request-auth";
 
 const PushSubscriptionSchema = z.object({
@@ -20,6 +21,18 @@ export async function handlePushSubscribe(request: Request) {
   const session = await authenticateRequestUser(request.headers);
   if (!session?.userId) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+
+  const rl = await enforceRateLimit({
+    identifier: `push_subscribe:${session.userId}`,
+    windowSeconds: 60,
+    max: 10
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests." },
+      { status: 429, headers: rateLimitHeaders(rl) }
+    );
   }
 
   let body: unknown;
@@ -59,6 +72,18 @@ export async function handlePushUnsubscribe(request: Request) {
   const session = await authenticateRequestUser(request.headers);
   if (!session?.userId) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+
+  const rl = await enforceRateLimit({
+    identifier: `push_unsubscribe:${session.userId}`,
+    windowSeconds: 60,
+    max: 10
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests." },
+      { status: 429, headers: rateLimitHeaders(rl) }
+    );
   }
 
   let body: unknown;

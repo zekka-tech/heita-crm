@@ -162,6 +162,20 @@ export async function handleYocoWebhook(payload: {
       data: { status: "PAST_DUE" }
     });
     logger.warn({ businessId, planId }, "billing.subscription.past_due");
+  } else if (type === "subscription.cancelled") {
+    await prisma.$transaction(async (tx) => {
+      await tx.businessSubscription.updateMany({
+        where: { businessId, status: { in: ["ACTIVE", "TRIALING", "PAST_DUE"] } },
+        data: { status: "CANCELLED" }
+      });
+      await tx.business.update({
+        where: { id: businessId },
+        data: { planId: "FREE" }
+      });
+    });
+    logger.info({ businessId, planId }, "billing.subscription.cancelled");
+  } else {
+    logger.debug({ type, businessId }, "yoco.webhook.unhandled_event");
   }
 }
 

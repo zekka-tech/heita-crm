@@ -83,6 +83,9 @@ function applySecurityHeaders(response: NextResponse, nonce: string): void {
   response.headers.set("Content-Security-Policy", buildCsp(nonce));
   // x-nonce lets Server Components read the nonce for <Script nonce={nonce}>
   response.headers.set("x-nonce", nonce);
+  // Isolates the browsing context to prevent cross-origin window references
+  // (Spectre-class side-channel attacks via SharedArrayBuffer etc.)
+  response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
 }
 
 function decoratePageResponse(

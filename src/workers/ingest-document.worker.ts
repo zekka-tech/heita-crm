@@ -20,7 +20,10 @@ export function startDocumentIngestionWorker() {
     connection: redis,
     concurrency: 2,
     stalledInterval: 30_000,
-    maxStalledCount: 2
+    maxStalledCount: 2,
+    // Lock expires after 5 min without renewal; combined with maxStalledCount=2
+    // this limits total hung-job wall time to ~10 min before the job is failed.
+    lockDuration: 5 * 60 * 1000
   });
 
   worker.on("completed", (job) => {

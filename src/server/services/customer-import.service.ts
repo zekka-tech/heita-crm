@@ -33,7 +33,7 @@ function parseImportRows(sourceCsv: string): ImportRow[] {
   }) as Record<string, string>[];
 
   return records.map((record) => ({
-    name: record.name ?? record.Name ?? "",
+    name: sanitizeCsvField(record.name ?? record.Name ?? ""),
     phone: record.phone ?? record.Phone ?? record.msisdn ?? "",
     openingPoints:
       record.openingPoints ??
@@ -41,8 +41,15 @@ function parseImportRows(sourceCsv: string): ImportRow[] {
       record.points ??
       record.balance ??
       "0",
-    tier: record.tier ?? record.Tier ?? ""
+    tier: sanitizeCsvField(record.tier ?? record.Tier ?? "")
   }));
+}
+
+// Prefix formula-injection characters to prevent spreadsheet formula execution
+// when staff export customer data to Excel/Google Sheets.
+const CSV_FORMULA_CHARS = /^[=+\-@\t\r]/;
+function sanitizeCsvField(value: string): string {
+  return CSV_FORMULA_CHARS.test(value) ? `'${value}` : value;
 }
 
 function parseOpeningPoints(raw: string | undefined) {

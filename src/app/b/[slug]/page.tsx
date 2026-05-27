@@ -52,6 +52,14 @@ export async function generateMetadata({ params }: BusinessLandingPageProps) {
       }
     },
     openGraph: {
+      type: "website",
+      title: business.name,
+      description: desc,
+      siteName: "Heita",
+      images: [{ url: `${appUrl}/api/og/${slug}` }]
+    },
+    twitter: {
+      card: "summary_large_image",
       title: business.name,
       description: desc,
       images: [`${appUrl}/api/og/${slug}`]

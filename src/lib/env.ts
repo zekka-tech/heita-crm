@@ -14,10 +14,16 @@ const envSchema = z
     WHATSAPP_ACCESS_TOKEN: z.string().optional(),
     WHATSAPP_VERIFY_TOKEN: z.string().optional(),
     ANTHROPIC_API_KEY: z.string().optional(),
+    DEEPSEEK_API_KEY: z.string().optional(),
     OLLAMA_BASE_URL: z.string().optional(),
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.coerce.number().int().min(1).max(20).default(5),
     CIRCUIT_BREAKER_COOLDOWN_MS: z.coerce.number().int().min(1000).max(300_000).default(60_000),
-    METRICS_BEARER_TOKEN: z.string().optional()
+    METRICS_BEARER_TOKEN: z.string().optional(),
+    CRON_SECRET: z.string().optional(),
+    AWS_ACCESS_KEY_ID: z.string().optional(),
+    AWS_SECRET_ACCESS_KEY: z.string().optional(),
+    VAPID_PRIVATE_KEY: z.string().optional(),
+    VAPID_SUBJECT: z.string().optional()
   })
   .superRefine((data, ctx) => {
     const isProduction = data.NODE_ENV === "production";
@@ -68,6 +74,40 @@ const envSchema = z
         path: ["METRICS_BEARER_TOKEN"]
       });
     }
+
+    if (isProduction && !data.CRON_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "CRON_SECRET is required in production to authenticate scheduled job requests.",
+        path: ["CRON_SECRET"]
+      });
+    }
+
+    const hasObjectStorage = Boolean(data.AWS_ACCESS_KEY_ID || data.AWS_SECRET_ACCESS_KEY);
+    if (isProduction && data.AWS_ACCESS_KEY_ID && !data.AWS_SECRET_ACCESS_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "AWS_SECRET_ACCESS_KEY is required when AWS_ACCESS_KEY_ID is set.",
+        path: ["AWS_SECRET_ACCESS_KEY"]
+      });
+    }
+    if (isProduction && !data.AWS_ACCESS_KEY_ID && data.AWS_SECRET_ACCESS_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "AWS_ACCESS_KEY_ID is required when AWS_SECRET_ACCESS_KEY is set.",
+        path: ["AWS_ACCESS_KEY_ID"]
+      });
+    }
+
+    if (data.VAPID_PRIVATE_KEY && !data.VAPID_SUBJECT) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "VAPID_SUBJECT (mailto: or https: contact) is required when VAPID_PRIVATE_KEY is set.",
+        path: ["VAPID_SUBJECT"]
+      });
+    }
+
+    void hasObjectStorage;
   });
 
 type ParsedEnv = z.infer<typeof envSchema>;

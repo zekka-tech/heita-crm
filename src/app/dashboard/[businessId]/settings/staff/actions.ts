@@ -5,10 +5,20 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
+import { prisma } from "@/lib/prisma";
 import {
   createStaffInvite,
   revokeStaffInvite
 } from "@/server/services/staff-invite.service";
+
+async function requireStaffAccess(userId: string, businessId: string) {
+  const member = await prisma.staffMember.findUnique({
+    where: { businessId_userId: { businessId, userId } },
+    select: { role: true }
+  });
+  if (!member) throw new Error("Access denied.");
+  return member;
+}
 
 export async function createInviteAction(formData: FormData) {
   await requireCsrfFormData(formData);
@@ -19,6 +29,8 @@ export async function createInviteAction(formData: FormData) {
   if (!session?.user?.id) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/settings/staff`);
   }
+
+  await requireStaffAccess(session.user.id, businessId);
 
   const email = String(formData.get("email") ?? "").trim() || null;
   const phone = String(formData.get("phone") ?? "").trim() || null;
@@ -49,6 +61,8 @@ export async function revokeInviteAction(formData: FormData) {
   if (!session?.user?.id) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/settings/staff`);
   }
+
+  await requireStaffAccess(session.user.id, businessId);
 
   await revokeStaffInvite({
     inviteId,
