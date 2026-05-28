@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { createBusinessWithDefaults } from "@/server/services/business.service";
 
 export async function createBusinessAction(formData: FormData) {
@@ -15,6 +16,15 @@ export async function createBusinessAction(formData: FormData) {
 
   if (!userId) {
     redirect("/sign-in?callbackUrl=/onboard");
+  }
+
+  const rl = await enforceRateLimit({
+    identifier: `onboard:create-business:${userId}`,
+    windowSeconds: 3600,
+    max: 5
+  });
+  if (!rl.allowed) {
+    throw new Error("You've reached the maximum number of businesses. Try again later.");
   }
 
   const name = String(formData.get("name") ?? "").trim();

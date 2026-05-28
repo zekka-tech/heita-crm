@@ -1,4 +1,6 @@
+import { Job } from "bullmq";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { getIngestionDlq } from "@/lib/ai/ingestion-queue";
 import { getCustomerImportDlq } from "@/lib/customer-import-queue";
@@ -50,4 +52,48 @@ export async function GET(request: Request) {
       "customer-import-dlq": importJobs.length
     }
   });
+}
+
+const RetryBodySchema = z.object({
+  queue: z.enum(["document-ingestion-dlq", "customer-import-dlq"]),
+  jobId: z.string().min(1)
+});
+
+export async function POST(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  const parsed = RetryBodySchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const { queue: queueName, jobId } = parsed.data;
+
+  const dlq = queueName === "document-ingestion-dlq" ? getIngestionDlq() : getCustomerImportDlq();
+  if (!dlq) {
+    return NextResponse.json({ error: "Queue unavailable." }, { status: 503 });
+  }
+
+  const job: Job | undefined = await Job.fromId(dlq, jobId);
+  if (!job) {
+    return NextResponse.json({ error: "Job not found." }, { status: 404 });
+  }
+
+  const failed = await job.isFailed();
+  if (!failed) {
+    return NextResponse.json({ error: "Job is not in a failed state." }, { status: 400 });
+  }
+
+  await job.retry("failed");
+
+  return NextResponse.json({ ok: true, jobId });
 }

@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { ArrowRight, Plus, Search, Sparkles } from "lucide-react";
 
 import { BusinessCard } from "@/components/business/business-card";
+import { PushPermissionNudge } from "@/components/account/push-permission-nudge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
@@ -87,6 +88,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </Button>
         </div>
       </Card>
+
+      {memberships.length > 0 ? <PushPermissionNudge /> : null}
 
       <Card variant="surface">
         <form className="flex flex-wrap items-center gap-3">

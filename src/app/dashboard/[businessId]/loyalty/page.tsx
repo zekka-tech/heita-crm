@@ -3,20 +3,19 @@ import { Gift, Plus, Receipt, Users } from "lucide-react";
 
 import {
   createRewardAction,
-  earnPointsAction,
   queueCustomerImportAction,
-  refundTransactionAction,
-  redeemPointsAction,
   requestStaffStepUpAction,
   updateTierPerksAction,
   verifyStaffStepUpAction
 } from "@/app/dashboard/[businessId]/loyalty/actions";
+import { EarnPointsForm } from "@/app/dashboard/[businessId]/loyalty/earn-points-form";
+import { RedeemPointsForm } from "@/app/dashboard/[businessId]/loyalty/redeem-points-form";
+import { RefundTransactionForm } from "@/app/dashboard/[businessId]/loyalty/refund-transaction-form";
 import { CsrfField } from "@/components/security/csrf-field";
-import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
-import { Input, Select, Textarea } from "@/components/ui/input";
+import { Input, Textarea } from "@/components/ui/input";
 export const dynamic = "force-dynamic";
 import { isBuildPhase } from "@/lib/build-phase";
 import { describeTierPerks } from "@/lib/loyalty";
@@ -167,34 +166,11 @@ export default async function LoyaltyDashboardPage({
               <Plus className="h-5 w-5 text-success" />
               <h2 className="section-title">Issue points</h2>
             </header>
-            <form action={earnPointsAction} className="grid gap-3">
-              <CsrfField />
-              <input type="hidden" name="businessId" value={business.id} />
-              <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
-              <Select name="membershipId" label="Customer" defaultValue="" required>
-                <option value="" disabled>
-                  Select a member
-                </option>
-                {business.memberships.map((membership) => (
-                  <option key={membership.id} value={membership.id}>
-                    {membership.user.phone ?? membership.user.name ?? membership.user.id}{" "}
-                    · {membership.pointsBalance} pts
-                  </option>
-                ))}
-              </Select>
-              <Input
-                name="points"
-                type="number"
-                min={1}
-                placeholder="Points to add"
-                label="Points"
-                required
-              />
-              <Input name="description" label="Description" placeholder="e.g. In-store purchase" />
-              <SubmitButton variant="primary">
-                Issue points
-              </SubmitButton>
-            </form>
+            <EarnPointsForm
+              businessId={business.id}
+              memberships={business.memberships}
+              csrfField={<CsrfField />}
+            />
           </Card>
 
           <Card variant="surface" className="space-y-4">
@@ -202,38 +178,11 @@ export default async function LoyaltyDashboardPage({
               <Receipt className="h-5 w-5 text-warning" />
               <h2 className="section-title">Redeem manually</h2>
             </header>
-            <form action={redeemPointsAction} className="grid gap-3">
-              <CsrfField />
-              <input type="hidden" name="businessId" value={business.id} />
-              <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
-              <Select name="membershipId" label="Customer" defaultValue="" required>
-                <option value="" disabled>
-                  Select a member
-                </option>
-                {business.memberships.map((membership) => (
-                  <option key={membership.id} value={membership.id}>
-                    {membership.user.phone ?? membership.user.name ?? membership.user.id}{" "}
-                    · {membership.pointsBalance} pts
-                  </option>
-                ))}
-              </Select>
-              <Input
-                name="points"
-                type="number"
-                min={1}
-                placeholder="Points to redeem"
-                label="Points"
-                required
-              />
-              <Input
-                name="description"
-                label="Description"
-                placeholder="e.g. Manual staff redemption"
-              />
-              <SubmitButton variant="danger">
-                Redeem points
-              </SubmitButton>
-            </form>
+            <RedeemPointsForm
+              businessId={business.id}
+              memberships={business.memberships}
+              csrfField={<CsrfField />}
+            />
           </Card>
 
           <Card variant="surface" className="space-y-4">
@@ -493,19 +442,11 @@ export default async function LoyaltyDashboardPage({
                                 {transaction.pointsDelta}
                               </Chip>
                               {!["REFUND", "EXPIRY"].includes(transaction.type) ? (
-                                <form action={refundTransactionAction}>
-                                  <CsrfField />
-                                  <input type="hidden" name="businessId" value={business.id} />
-                                  <input type="hidden" name="transactionId" value={transaction.id} />
-                                  <input
-                                    type="hidden"
-                                    name="idempotencyKey"
-                                    value={crypto.randomUUID()}
-                                  />
-                                  <SubmitButton variant="secondary" size="sm">
-                                    Refund
-                                  </SubmitButton>
-                                </form>
+                                <RefundTransactionForm
+                                  businessId={business.id}
+                                  transactionId={transaction.id}
+                                  csrfField={<CsrfField />}
+                                />
                               ) : null}
                             </div>
                           </div>

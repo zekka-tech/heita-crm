@@ -27,7 +27,9 @@
     "docker:setup": "bash ./docker/setup-models.sh",
     "worker:dev": "tsx watch src/workers/index.ts",
     "vapid:generate": "node -e \"const wp=require('web-push');console.log(JSON.stringify(wp.generateVAPIDKeys(),null,2))\"",
-    "ci": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "ci": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "bundle-check": "bundlesize",
+    "lighthouse": "lhci autorun"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
@@ -86,6 +88,28 @@
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
     "vitest": "^4.1.7",
-    "vitest-axe": "^0.1.0"
-  }
+    "vitest-axe": "^0.1.0",
+    "bundlesize": "^0.18.2",
+    "@lhci/cli": "^0.14.0"
+  },
+  "bundlesize": [
+    {
+      "path": ".next/static/chunks/pages/_app-*.js",
+      "maxSize": "250 kB"
+    },
+    {
+      "path": ".next/static/chunks/main-*.js",
+      "maxSize": "250 kB"
+    },
+    {
+      "path": ".next/static/chunks/*.js",
+      "maxSize": "250 kB",
+      "compression": "gzip"
+    },
+    {
+      "path": ".next/static/chunks/framework-*.js",
+      "maxSize": "500 kB",
+      "compression": "gzip"
+    }
+  ]
 }
