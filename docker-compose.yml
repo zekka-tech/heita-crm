@@ -21,7 +21,7 @@ services:
     image: redis:7-alpine
     container_name: heita_redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - heita_redis_data:/data
     healthcheck:

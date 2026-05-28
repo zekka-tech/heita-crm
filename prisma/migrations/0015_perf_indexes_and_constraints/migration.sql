@@ -1,3 +1,4 @@
+-- prisma-migrate-no-transaction
 -- Composite indexes for high-cardinality queries
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "Membership_businessId_isActive_idx"

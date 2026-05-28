@@ -1,3 +1,4 @@
+-- prisma-migrate-no-transaction
 -- Migration: 0016_perf_hnsw_and_missing_indexes
 --
 -- Addresses performance audit findings:
