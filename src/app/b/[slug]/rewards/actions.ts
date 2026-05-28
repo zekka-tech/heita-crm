@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { redeemPoints } from "@/server/services/loyalty.service";
 
@@ -19,6 +20,15 @@ export async function redeemRewardAction(formData: FormData) {
 
   if (!userId) {
     redirect(`/sign-in?callbackUrl=/b/${slug}/rewards`);
+  }
+
+  const rl = await enforceRateLimit({
+    identifier: `reward:redeem:${userId}`,
+    windowSeconds: 60,
+    max: 10
+  });
+  if (!rl.allowed) {
+    throw new Error("Too many redemption attempts. Please wait a moment and try again.");
   }
 
   const membership = await prisma.membership.findUnique({
