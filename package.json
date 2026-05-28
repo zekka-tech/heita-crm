@@ -46,7 +46,7 @@
     "@trpc/client": "^11.17.0",
     "@trpc/server": "^11.17.0",
     "@trpc/tanstack-react-query": "^11.17.0",
-    "bullmq": "^5.63.1",
+    "bullmq": "^5.77.6",
     "clsx": "^2.1.1",
     "csv-parse": "^6.1.0",
     "ioredis": "^5.6.1",
