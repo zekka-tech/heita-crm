@@ -1,16 +1,19 @@
--- prisma-migrate-no-transaction
 -- Composite indexes for high-cardinality queries
+-- Note: CONCURRENTLY removed — Prisma 7 wraps every migration in a transaction
+-- and CREATE INDEX CONCURRENTLY cannot run inside a transaction block.
+-- These indexes are non-unique and safe to build transactionally on a live table
+-- (they briefly lock on the index build, which is acceptable at deploy time).
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "Membership_businessId_isActive_idx"
+CREATE INDEX IF NOT EXISTS "Membership_businessId_isActive_idx"
   ON "Membership"("businessId", "isActive");
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "LoyaltyTransaction_businessId_membershipId_idx"
+CREATE INDEX IF NOT EXISTS "LoyaltyTransaction_businessId_membershipId_idx"
   ON "LoyaltyTransaction"("businessId", "membershipId");
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "StaffMember_businessId_idx"
+CREATE INDEX IF NOT EXISTS "StaffMember_businessId_idx"
   ON "StaffMember"("businessId");
 
-CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "StaffInvite_businessId_email_pending_uniq"
+CREATE UNIQUE INDEX IF NOT EXISTS "StaffInvite_businessId_email_pending_uniq"
   ON "StaffInvite"("businessId", "email")
   WHERE "status" = 'PENDING' AND "email" IS NOT NULL;
 
