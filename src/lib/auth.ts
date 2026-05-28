@@ -170,6 +170,33 @@ const providers: NonNullable<NextAuthConfig["providers"]> = [
   })
 ];
 
+if (process.env.NODE_ENV !== "production") {
+  providers.push(
+    Credentials({
+      id: "dev-bypass",
+      name: "Dev Bypass",
+      credentials: {
+        userId: { label: "User ID", type: "text" }
+      },
+      async authorize(credentials) {
+        const userId = String(credentials?.userId ?? "").trim();
+        if (!userId) return null;
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user || user.deletedAt) return null;
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          image: user.image,
+          phone: user.phone,
+          phoneVerifiedAt: (user.phoneVerifiedAt ?? new Date()).toISOString(),
+          sessionVersion: user.sessionVersion
+        };
+      }
+    })
+  );
+}
+
 if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
   providers.push(
     Google({

@@ -6,6 +6,7 @@ import { DeleteAccountButton } from "@/components/account/delete-account-button"
 import { NotificationPreferencesCard } from "@/components/account/notification-preferences-card";
 import { ProfileSettings } from "@/components/account/profile-settings";
 import { PushSubscriptionCard } from "@/components/account/push-subscription-card";
+import { SignOutButtonForm } from "@/components/auth/sign-out-button-form";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
@@ -39,32 +40,40 @@ export default async function ProfilePage() {
 
   return (
     <section className="grid gap-5">
-      <Card variant="hero" className="flex items-center gap-5 px-6 py-7 sm:px-8">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-2xl font-display font-bold">
-          <UserRound className="h-7 w-7" />
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-            {t("eyebrow")}
-          </p>
-          <h1 className="mt-2 font-display text-2xl font-extrabold">
-            {user.name ?? t("defaultName")}
-          </h1>
-          <div className="mt-2 flex flex-wrap gap-2 text-sm text-white/80">
-            {user.phone ? (
-              <span className="inline-flex items-center gap-1">
-                <Phone className="h-3.5 w-3.5" />
-                {user.phone}
-              </span>
-            ) : null}
-            {user.email ? (
-              <span className="inline-flex items-center gap-1">
-                <Mail className="h-3.5 w-3.5" />
-                {user.email}
-              </span>
-            ) : null}
+      <Card variant="hero" className="flex items-start justify-between gap-4 px-6 py-7 sm:px-8">
+        <div className="flex items-center gap-5">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-2xl font-display font-bold">
+            <UserRound className="h-7 w-7" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
+              {t("eyebrow")}
+            </p>
+            <h1 className="mt-2 font-display text-2xl font-extrabold">
+              {user.name ?? t("defaultName")}
+            </h1>
+            <div className="mt-2 flex flex-wrap gap-2 text-sm text-white/80">
+              {user.phone ? (
+                <span className="inline-flex items-center gap-1">
+                  <Phone className="h-3.5 w-3.5" />
+                  {user.phone}
+                </span>
+              ) : null}
+              {user.email ? (
+                <span className="inline-flex items-center gap-1">
+                  <Mail className="h-3.5 w-3.5" />
+                  {user.email}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
+        <SignOutButtonForm
+          className="relative z-10 shrink-0"
+          variant="secondary"
+          buttonClassName="!border-slate-950 !bg-slate-900 !text-white hover:!bg-slate-800"
+          label="Log out"
+        />
       </Card>
 
       <Card variant="surface" className="space-y-4">

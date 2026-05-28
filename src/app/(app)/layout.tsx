@@ -9,7 +9,7 @@ export default function CustomerAppLayout({
   return (
     <>
       <main className="px-4 pb-28 pt-6 sm:px-8">
-        <div className="mb-4 flex justify-end">
+        <div className="mb-4 flex items-center justify-end gap-2">
           <LanguageSwitcher />
         </div>
         {children}
