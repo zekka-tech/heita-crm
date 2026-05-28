@@ -214,11 +214,19 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
 
       <section className="mt-6">
         <Card variant="surface" className="space-y-3">
-          <header className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-primary-action" />
-            <h2 className="font-display text-base font-semibold text-ink">
-              {t("activityAtGlance")}
-            </h2>
+          <header className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-primary-action" />
+              <h2 className="font-display text-base font-semibold text-ink">
+                {t("activityAtGlance")}
+              </h2>
+            </div>
+            <Link
+              href={`/dashboard/${businessId}/analytics` as Route}
+              className="text-sm font-medium text-primary-action hover:underline"
+            >
+              {t("viewFullAnalytics")} →
+            </Link>
           </header>
           <p className="text-sm text-ink-muted">
             {t("activitySummary", {

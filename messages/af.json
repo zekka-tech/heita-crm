@@ -212,7 +212,8 @@
     "redemptionRate": "Afloskoers",
     "repliesSent30d": "Antwoorde gestuur (30d)",
     "promotions": "Promosies",
-    "events": "Geleenthede"
+    "events": "Geleenthede",
+    "viewFullAnalytics": "Sien volledige analise"
   },
   "promotions": {
     "title": "Promosies",

@@ -26,6 +26,7 @@ const ITEMS: NavItem[] = [
   { segment: "loyalty", label: "Loyalty", icon: Gift },
   { segment: "customers", label: "Members", icon: Users },
   { segment: "messages", label: "Messages", icon: MessageSquare },
+  { segment: "analytics", label: "Analytics", icon: BarChart2 },
   { segment: "ai-workspace", label: "AI", icon: Sparkles },
   { segment: "settings", label: "Settings", icon: Settings }
 ];
@@ -125,15 +126,6 @@ export function DashboardSidebarNav({ businessId }: Props) {
         );
       })}
 
-      <div className="mt-auto pt-4">
-        <Link
-          href={`/dashboard/${businessId}/analytics` as Route}
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-muted transition-colors hover:bg-surface-elevated hover:text-ink"
-        >
-          <BarChart2 className="h-4 w-4 shrink-0" aria-hidden />
-          Analytics
-        </Link>
-      </div>
     </aside>
   );
 }

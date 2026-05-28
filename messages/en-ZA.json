@@ -212,7 +212,8 @@
     "redemptionRate": "Redemption rate",
     "repliesSent30d": "Replies sent (30d)",
     "promotions": "Promotions",
-    "events": "Events"
+    "events": "Events",
+    "viewFullAnalytics": "View full analytics"
   },
   "promotions": {
     "title": "Promotions",
