@@ -100,7 +100,7 @@ export async function enforceRateLimit(
       resetInSeconds
     };
   } catch (err) {
-    if (opts.failClosed && process.env.NODE_ENV === "production") {
+    if (opts.failClosed) {
       logger.error(
         { identifier: opts.identifier, err },
         "rate_limit.redis_error_fail_closed"

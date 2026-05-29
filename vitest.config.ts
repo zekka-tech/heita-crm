@@ -30,10 +30,17 @@ export default defineConfig({
         "src/lib/logger.ts",
         "src/lib/billing.ts",
         "src/lib/csrf.ts",
+        "src/lib/turnstile.ts",
         "src/server/services/loyalty.service.ts",
         "src/server/services/referral.service.ts",
         "src/server/services/customer-import.service.ts",
-        "src/server/http/webhook-handlers.ts"
+        "src/server/services/billing.service.ts",
+        "src/server/services/receipt-history.service.ts",
+        "src/server/http/webhook-handlers.ts",
+        "src/server/http/metrics-handler.ts",
+        "src/server/http/cron-handlers.ts",
+        "src/app/api/webhooks/yoco/route.ts",
+        "src/app/api/account/route.ts"
       ],
       thresholds: {
         lines: 80,

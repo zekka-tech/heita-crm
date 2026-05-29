@@ -17,7 +17,7 @@ groups:
       - alert: HighP99Latency
         expr: |
           histogram_quantile(0.99,
-            sum(rate(heita_http_duration_seconds_bucket[5m])) by (le, route)
+            sum(rate(heita_http_request_duration_seconds_bucket[5m])) by (le, route)
           ) > 0.5
         for: 5m
         labels:
@@ -27,7 +27,7 @@ groups:
           description: "Route {{ $labels.route }} P99 is {{ $value | humanizeDuration }}."
 
       - alert: DlqDepthCritical
-        expr: heita_dlq_jobs_total > 100
+        expr: heita_dlq_pending_jobs > 100
         for: 1m
         labels:
           severity: critical
@@ -51,7 +51,7 @@ groups:
           description: "{{ $value | humanizePercentage }} 5xx rate — trending up."
 
       - alert: AuthFailureSpike
-        expr: rate(heita_auth_attempts_total{result="failure"}[5m]) > 10
+        expr: rate(heita_auth_attempts_total{status="failure"}[5m]) > 10
         for: 3m
         labels:
           severity: warning
@@ -60,7 +60,7 @@ groups:
           description: "{{ $value | humanize }} failed auth attempts/s — possible credential stuffing."
 
       - alert: LoyaltyTransactionFailures
-        expr: rate(heita_loyalty_events_total{event_type="error"}[5m]) > 1
+        expr: rate(heita_loyalty_events_total{type="error"}[5m]) > 1
         for: 2m
         labels:
           severity: warning
@@ -75,10 +75,10 @@ groups:
           severity: warning
         annotations:
           summary: "BullMQ job failure rate elevated"
-          description: "{{ $value | humanize }} failed jobs/s in queue {{ $labels.queue_name }}."
+          description: "{{ $value | humanize }} failed jobs/s in queue {{ $labels.queue }}."
 
       - alert: AiChatErrors
-        expr: rate(heita_ai_requests_total{status="error"}[10m]) > 2
+        expr: rate(heita_ai_chat_requests_total{status="error"}[10m]) > 2
         for: 5m
         labels:
           severity: warning
@@ -87,7 +87,7 @@ groups:
           description: "{{ $value | humanize }} AI errors/s — check Ollama/Anthropic availability."
 
       - alert: WebhookProcessingErrors
-        expr: rate(heita_webhook_events_total{result="error"}[5m]) > 1
+        expr: rate(heita_webhook_events_total{status="error"}[5m]) > 1
         for: 3m
         labels:
           severity: warning
@@ -108,7 +108,7 @@ groups:
           description: "Prometheus cannot scrape the /api/metrics endpoint."
 
       - alert: DlqDepthElevated
-        expr: heita_dlq_jobs_total > 10
+        expr: heita_dlq_pending_jobs > 10
         for: 10m
         labels:
           severity: warning

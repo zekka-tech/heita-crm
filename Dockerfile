@@ -8,7 +8,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
-RUN npm ci --prefer-offline --no-audit --progress=false
+RUN --mount=type=cache,target=/root/.npm npm ci --prefer-offline --no-audit --progress=false
 
 FROM node:${NODE_VERSION}-alpine AS builder
 WORKDIR /app
@@ -41,7 +41,7 @@ USER nextjs
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
+  CMD wget -qO- http://127.0.0.1:3000/api/health/live || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "server.js"]
