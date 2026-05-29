@@ -6,7 +6,8 @@ import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProfileSettings } from "@/components/account/profile-settings";
-import { generateCsrfToken, CSRF_COOKIE } from "@/lib/csrf";
+
+vi.mock("@/hooks/use-csrf-token", () => ({ useCsrfToken: () => "test-csrf-token-valid-32chars-xx" }));
 
 const messages = {
   profileSettings: {
@@ -32,7 +33,6 @@ describe("ProfileSettings", () => {
 
   beforeEach(() => {
     vi.stubGlobal("fetch", fetchMock);
-    document.cookie = `${CSRF_COOKIE}=${generateCsrfToken()}; path=/`;
   });
 
   afterEach(() => {

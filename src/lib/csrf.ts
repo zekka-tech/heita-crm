@@ -1,4 +1,5 @@
-export const CSRF_COOKIE = "heita-csrf";
+// __Host- prefix enforces Secure + Path=/ + no Domain — prevents subdomain cookie shadowing
+export const CSRF_COOKIE = "__Host-heita-csrf";
 export const CSRF_HEADER = "x-heita-csrf";
 export const CSRF_FORM_FIELD = "_csrf";
 

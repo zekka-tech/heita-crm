@@ -31,7 +31,15 @@ const _logger = pino({
       "*.email",
       "*.to",
       "*.contactPhone",
-      "*.phoneNumber"
+      "*.phoneNumber",
+      "*.imageUrl",
+      "*.url",
+      "*.body",
+      "*.acceptUrl",
+      "*.metadata.contactPhone",
+      "req.headers.x-yoco-signature",
+      "req.headers.x-heita-signature",
+      "req.headers.x-cron-secret"
     ],
     censor: "[redacted]"
   },

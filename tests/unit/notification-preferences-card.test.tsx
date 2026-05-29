@@ -6,7 +6,8 @@ import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NotificationPreferencesCard } from "@/components/account/notification-preferences-card";
-import { CSRF_COOKIE, generateCsrfToken } from "@/lib/csrf";
+
+vi.mock("@/hooks/use-csrf-token", () => ({ useCsrfToken: () => "test-csrf-token-valid-32chars-xx" }));
 
 const messages = {
   notificationPreferences: {
@@ -36,7 +37,6 @@ describe("NotificationPreferencesCard", () => {
 
   beforeEach(() => {
     vi.stubGlobal("fetch", fetchMock);
-    document.cookie = `${CSRF_COOKIE}=${generateCsrfToken()}; path=/`;
   });
 
   afterEach(() => {

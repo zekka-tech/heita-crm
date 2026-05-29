@@ -17,9 +17,19 @@ export async function POST(request: NextRequest) {
 
   const rawBody = await request.text();
   const signature = request.headers.get("x-yoco-signature") ?? undefined;
+  const timestampHeader = request.headers.get("x-yoco-timestamp");
 
   if (!signature) {
     return NextResponse.json({ error: "Missing signature." }, { status: 401 });
+  }
+
+  // Reject replayed webhooks: timestamp must be within 5 minutes of now
+  if (timestampHeader !== null) {
+    const ts = Number(timestampHeader);
+    if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) {
+      logger.warn({ timestamp: timestampHeader }, "yoco.webhook.replay_detected");
+      return NextResponse.json({ error: "Request timestamp out of range." }, { status: 401 });
+    }
   }
 
   const expected = crypto

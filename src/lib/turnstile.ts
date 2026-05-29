@@ -32,7 +32,8 @@ export async function verifyTurnstileToken(
 ): Promise<TurnstileVerifyResult> {
   if (!turnstileConfigured()) {
     if (process.env.NODE_ENV === "production") {
-      logger.warn("turnstile.not_configured_in_production — bot protection disabled");
+      logger.error("turnstile.not_configured — rejecting request to enforce bot protection");
+      return { ok: false, reason: "turnstile-not-configured" };
     }
     return { ok: true, action: "bypass-dev" };
   }

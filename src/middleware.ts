@@ -7,7 +7,7 @@ import {
   generateCsrfToken,
   isValidCsrfToken
 } from "@/lib/csrf";
-import { deploymentReadOnlyEnabled, env } from "@/lib/env";
+import { deploymentReadOnlyEnabled } from "@/lib/env";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 
 const { auth } = NextAuth(authBaseConfig);
@@ -71,8 +71,8 @@ function ensureCsrfCookie(response: NextResponse, existing: string | undefined):
   response.cookies.set(CSRF_COOKIE, token, {
     httpOnly: false,
     sameSite: "lax",
-    // secure must only be true in production so localhost dev works without HTTPS
-    secure: env.NODE_ENV === "production",
+    // __Host- prefix requires Secure=true always (Chromium allows Secure on http://localhost)
+    secure: true,
     path: "/",
     maxAge: 60 * 60 * 24 * 7
   });

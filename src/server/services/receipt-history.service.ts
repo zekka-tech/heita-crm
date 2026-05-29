@@ -83,7 +83,12 @@ export function formatReceiptHistoryCsv(input: {
   return `${rows
     .map((row) =>
       row
-        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .map((value) => {
+          const str = String(value);
+          // Prefix formula-injection characters per OWASP CSV injection guidance
+          const safe = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+          return `"${safe.replace(/"/g, '""')}"`;
+        })
         .join(",")
     )
     .join("\n")}\n`;

@@ -11,6 +11,8 @@ type RateLimitOptions = {
   identifier: string;
   windowSeconds: number;
   max: number;
+  /** When true, a Redis error in production returns denied rather than falling back to memory. */
+  failClosed?: boolean;
 };
 
 const memoryStore = new Map<string, { count: number; resetAt: number }>();
@@ -98,6 +100,13 @@ export async function enforceRateLimit(
       resetInSeconds
     };
   } catch (err) {
+    if (opts.failClosed && process.env.NODE_ENV === "production") {
+      logger.error(
+        { identifier: opts.identifier, err },
+        "rate_limit.redis_error_fail_closed"
+      );
+      return { allowed: false, remaining: 0, resetInSeconds: 60 };
+    }
     logger.warn(
       { identifier: opts.identifier, err },
       "rate_limit.redis_error_using_memory_fallback"

@@ -24,7 +24,8 @@ const envSchema = z
     AWS_SECRET_ACCESS_KEY: z.string().optional(),
     VAPID_PRIVATE_KEY: z.string().optional(),
     VAPID_SUBJECT: z.string().optional(),
-    OTLP_ENDPOINT: z.string().url().optional()
+    OTLP_ENDPOINT: z.string().url().optional(),
+    TURNSTILE_SECRET_KEY: z.string().optional()
   })
   .superRefine((data, ctx) => {
     const isProduction = data.NODE_ENV === "production";
@@ -81,6 +82,14 @@ const envSchema = z
         code: z.ZodIssueCode.custom,
         message: "CRON_SECRET is required in production to authenticate scheduled job requests.",
         path: ["CRON_SECRET"]
+      });
+    }
+
+    if (isProduction && !data.TURNSTILE_SECRET_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "TURNSTILE_SECRET_KEY is required in production to enforce bot protection on OTP endpoints.",
+        path: ["TURNSTILE_SECRET_KEY"]
       });
     }
 

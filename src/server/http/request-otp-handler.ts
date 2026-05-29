@@ -99,7 +99,8 @@ export async function handleRequestOtp(request: Request) {
   const ipLimit = await enforceRateLimit({
     identifier: `otp:ip:${ip}`,
     windowSeconds: 3600,
-    max: OTP_PER_IP_PER_HOUR
+    max: OTP_PER_IP_PER_HOUR,
+    failClosed: true
   });
   if (!ipLimit.allowed) {
     observeHttpRoute({
@@ -123,7 +124,8 @@ export async function handleRequestOtp(request: Request) {
   const burstLimit = await enforceRateLimit({
     identifier: `otp:phone-burst:${phone}`,
     windowSeconds: 60,
-    max: OTP_PER_PHONE_PER_MINUTE
+    max: OTP_PER_PHONE_PER_MINUTE,
+    failClosed: true
   });
   if (!burstLimit.allowed) {
     observeHttpRoute({
@@ -147,7 +149,8 @@ export async function handleRequestOtp(request: Request) {
   const phoneLimit = await enforceRateLimit({
     identifier: `otp:phone:${phone}`,
     windowSeconds: 3600,
-    max: OTP_PER_PHONE_PER_HOUR
+    max: OTP_PER_PHONE_PER_HOUR,
+    failClosed: true
   });
   if (!phoneLimit.allowed) {
     observeHttpRoute({

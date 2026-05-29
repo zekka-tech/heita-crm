@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { metricsContentType, renderMetrics } from "@/lib/metrics";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
+import { constantTimeEqual } from "@/lib/security";
 
 export async function handleMetricsRequest(request: Request) {
   const requestId = resolveRequestId(request.headers);
@@ -15,7 +16,7 @@ export async function handleMetricsRequest(request: Request) {
     );
   }
 
-  if (expected && token !== expected) {
+  if (expected && !constantTimeEqual(token ?? "", expected)) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401, headers: { [requestIdHeader]: requestId } }
