@@ -39,6 +39,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
   const business = await prisma.business.findFirst({
     where: {
       id: businessId,
+      deletedAt: null,
       staffMembers: { some: { userId: session.user.id } }
     },
     include: {

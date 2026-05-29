@@ -51,6 +51,7 @@ export default async function EventsDashboardPage({
   const business = await prisma.business.findFirst({
     where: {
       id: businessId,
+      deletedAt: null,
       staffMembers: { some: { userId: session.user.id } }
     },
     select: { id: true, name: true }

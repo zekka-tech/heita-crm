@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle, Loader2, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,7 +39,7 @@ export function ReceiptReviewActions({ receiptId, businessId, suggestedPoints }:
       }
       router.refresh();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Action failed.");
+      toast.error(err instanceof Error ? err.message : "Action failed.");
     } finally {
       setSubmitting(false);
     }

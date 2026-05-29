@@ -41,6 +41,7 @@ export default async function AnalyticsPage({
   const business = await prisma.business.findFirst({
     where: {
       id: businessId,
+      deletedAt: null,
       staffMembers: { some: { userId: session.user.id } }
     },
     select: { id: true, name: true }

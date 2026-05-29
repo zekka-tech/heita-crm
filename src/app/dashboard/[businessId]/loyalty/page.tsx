@@ -50,6 +50,7 @@ export default async function LoyaltyDashboardPage({
   const business = await prisma.business.findFirst({
     where: {
       id: businessId,
+      deletedAt: null,
       staffMembers: { some: { userId: session.user.id } }
     },
     include: {

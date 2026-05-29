@@ -25,6 +25,7 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
   const business = await prisma.business.findFirst({
     where: {
       id: businessId,
+      deletedAt: null,
       staffMembers: { some: { userId: session.user.id } }
     },
     include: {
