@@ -95,17 +95,23 @@ export default async function BusinessLandingPage({
   }
 
   const session = await auth();
-  const membership = session?.user?.id
-    ? await prisma.membership.findUnique({
-        where: {
-          businessId_userId: {
-            businessId: business.id,
-            userId: session.user.id
-          }
-        },
-        include: { tier: true }
-      })
-    : null;
+  const userId = session?.user?.id ?? null;
+
+  const [membership, staffMember] = await Promise.all([
+    userId
+      ? prisma.membership.findUnique({
+          where: { businessId_userId: { businessId: business.id, userId } },
+          include: { tier: true }
+        })
+      : null,
+    userId
+      ? prisma.staffMember.findUnique({
+          where: { businessId_userId: { businessId: business.id, userId } },
+          select: { id: true }
+        })
+      : null
+  ]);
+  const isStaff = Boolean(staffMember);
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
@@ -192,12 +198,14 @@ export default async function BusinessLandingPage({
                       })}
                 </Link>
               </Button>
-              <Button asChild variant="secondary" size="lg">
-                <Link href={`/b/${slug}/chat` as Route}>
-                  <MessageSquare className="h-4 w-4" />
-                  {t("talkToTeam")}
-                </Link>
-              </Button>
+              {isStaff ? (
+                <Button asChild variant="secondary" size="lg">
+                  <Link href={`/b/${slug}/chat` as Route}>
+                    <MessageSquare className="h-4 w-4" />
+                    {t("talkToTeam")}
+                  </Link>
+                </Button>
+              ) : null}
             </div>
             {business.addressLine1 || business.suburb || business.city ? (
               <p className="mt-4 inline-flex items-center gap-2 text-sm text-white/75">

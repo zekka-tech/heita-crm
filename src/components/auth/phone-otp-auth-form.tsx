@@ -2,6 +2,7 @@
 
 import { useCallback, useState, useTransition } from "react";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ArrowRight, ShieldCheck, Smartphone } from "lucide-react";
 
@@ -45,6 +46,8 @@ export function PhoneOtpAuthForm({
 }: PhoneOtpAuthFormProps) {
   const t = useTranslations("auth");
   const csrfToken = useCsrfToken();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams?.get("callbackUrl") ?? "/home";
 
   const resolveOauthError = () => {
     if (!oauthError) return null;
@@ -120,7 +123,7 @@ export function PhoneOtpAuthForm({
         mode,
         acceptTerms: acceptTerms ? "true" : "false",
         redirect: false,
-        redirectTo: "/home"
+        redirectTo: callbackUrl
       }).then((result) => {
         if (!result?.ok || result.error) {
           setStatus({
@@ -130,7 +133,7 @@ export function PhoneOtpAuthForm({
           return;
         }
 
-        window.location.href = result.url ?? "/home";
+        window.location.href = result.url ?? callbackUrl;
       });
     });
   };
@@ -158,7 +161,7 @@ export function PhoneOtpAuthForm({
           <Button
             variant="secondary"
             type="button"
-            onClick={() => void signIn("google", { redirectTo: "/home" })}
+            onClick={() => void signIn("google", { redirectTo: callbackUrl })}
           >
             {t("continueGoogle")}
           </Button>
@@ -167,7 +170,7 @@ export function PhoneOtpAuthForm({
           <Button
             variant="secondary"
             type="button"
-            onClick={() => void signIn("apple", { redirectTo: "/home" })}
+            onClick={() => void signIn("apple", { redirectTo: callbackUrl })}
           >
             {t("continueApple")}
           </Button>

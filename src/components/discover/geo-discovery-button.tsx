@@ -31,32 +31,13 @@ export function GeoDiscoveryButton({ currentPath = "/discover" }: Props) {
 
         try {
           const resp = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`,
-            {
-              headers: { "User-Agent": "HeitaCRM/1.0 (heita.co.za)" }
-            }
+            `/api/geocode/reverse?lat=${latitude.toFixed(6)}&lon=${longitude.toFixed(6)}`
           );
 
           if (!resp.ok) throw new Error("Reverse geocoding failed.");
 
-          const data = (await resp.json()) as {
-            address?: {
-              suburb?: string;
-              city?: string;
-              town?: string;
-              village?: string;
-              municipality?: string;
-            };
-          };
-
-          const addr = data.address ?? {};
-          const locality =
-            addr.suburb ??
-            addr.city ??
-            addr.town ??
-            addr.village ??
-            addr.municipality ??
-            null;
+          const data = (await resp.json()) as { locality?: string | null };
+          const locality = data.locality ?? null;
 
           if (!locality) {
             setError("Could not determine your area. Please type a city name instead.");

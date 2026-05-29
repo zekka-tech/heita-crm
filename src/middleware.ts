@@ -166,7 +166,13 @@ export default auth((request) => {
   }
 
   if (isAuthenticated && isAuthRoute) {
-    const response = NextResponse.redirect(new URL("/home", request.nextUrl));
+    const rawCallback = request.nextUrl.searchParams.get("callbackUrl");
+    // Only honour same-origin paths — prevent open-redirect via callbackUrl
+    const safeCallback =
+      rawCallback && rawCallback.startsWith("/") && !rawCallback.startsWith("//")
+        ? rawCallback
+        : "/home";
+    const response = NextResponse.redirect(new URL(safeCallback, request.nextUrl));
     const token = ensureCsrfCookie(response, incomingCsrf);
     return decoratePageResponse(response, requestId, token, nonce);
   }

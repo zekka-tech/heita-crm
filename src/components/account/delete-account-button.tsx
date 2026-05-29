@@ -51,18 +51,28 @@ export function DeleteAccountButton() {
   }
 
   return (
-    <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 space-y-3">
-      <p className="text-sm font-medium text-danger">
-        Are you absolutely sure? This will permanently delete your account and all associated data.
-        This action cannot be undone.
+    <div
+      role="alertdialog"
+      aria-modal="false"
+      aria-labelledby="delete-account-heading"
+      aria-describedby="delete-account-description"
+      className="rounded-xl border border-danger/30 bg-danger/5 p-4 space-y-3"
+    >
+      <p id="delete-account-heading" className="text-sm font-medium text-danger">
+        Are you absolutely sure?
       </p>
-      {error && <p className="text-sm text-danger">{error}</p>}
+      <p id="delete-account-description" className="text-sm text-ink-muted">
+        This will permanently delete your account and all associated data. This action cannot be
+        undone.
+      </p>
+      {error && <p className="text-sm text-danger" role="alert">{error}</p>}
       <div className="flex gap-3">
         <Button
           variant="secondary"
           size="sm"
           onClick={() => { setOpen(false); setError(null); }}
           disabled={loading}
+          autoFocus
         >
           Cancel
         </Button>

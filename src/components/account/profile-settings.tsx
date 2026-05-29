@@ -51,29 +51,6 @@ export function ProfileSettings({
     });
   };
 
-  const deleteAccount = () => {
-    const confirmed = window.confirm(t("confirmDelete"));
-
-    if (!confirmed) {
-      return;
-    }
-
-    startTransition(async () => {
-      const response = await fetch("/api/account", {
-        method: "DELETE",
-        headers: appendCsrfHeader(undefined, csrfToken)
-      });
-
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        setStatus(payload?.error ?? t("deleteError"));
-        return;
-      }
-
-      window.location.href = "/";
-    });
-  };
-
   const downloadAccountData = () => {
     startTransition(async () => {
       setStatus(null);
@@ -134,9 +111,6 @@ export function ProfileSettings({
           disabled={isPending || !csrfToken}
         >
           {t("downloadData")}
-        </Button>
-        <Button type="button" variant="danger" onClick={deleteAccount} disabled={isPending || !csrfToken}>
-          {t("deleteAccount")}
         </Button>
       </div>
       {status ? <p className="text-sm text-ink-muted" aria-live="polite" role="status">{status}</p> : null}
