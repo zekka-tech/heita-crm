@@ -1,4 +1,4 @@
-import { Job, Queue } from "bullmq";
+import { Job, Queue, type ConnectionOptions } from "bullmq";
 
 import { logger } from "@/lib/logger";
 import { getQueueRedis } from "@/lib/redis";
@@ -12,8 +12,10 @@ type DocumentIngestionJob = {
 };
 
 declare global {
-  var __heitaDocumentQueue__: Queue<DocumentIngestionJob> | undefined;
-  var __heitaDocumentDlq__: Queue | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  var __heitaDocumentQueue__: Queue<DocumentIngestionJob, any, string, any, any, any> | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  var __heitaDocumentDlq__: Queue<any, any, string, any, any, any> | undefined;
 }
 
 export function getDocumentIngestionQueue() {
@@ -26,7 +28,7 @@ export function getDocumentIngestionQueue() {
     global.__heitaDocumentQueue__ = new Queue<DocumentIngestionJob>(
       DOCUMENT_INGESTION_QUEUE,
       {
-        connection: redis,
+        connection: redis as unknown as ConnectionOptions,
         defaultJobOptions: {
           removeOnComplete: 100,
           removeOnFail: 500,
@@ -51,7 +53,7 @@ export function getIngestionDlq() {
 
   if (!global.__heitaDocumentDlq__) {
     global.__heitaDocumentDlq__ = new Queue(DOCUMENT_INGESTION_DLQ, {
-      connection: redis,
+      connection: redis as unknown as ConnectionOptions,
       defaultJobOptions: { removeOnComplete: 100, removeOnFail: false }
     });
   }

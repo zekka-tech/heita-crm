@@ -3,7 +3,6 @@ import type { Route } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
-  BarChart2,
   MessageSquare,
   TrendingDown,
   TrendingUp,

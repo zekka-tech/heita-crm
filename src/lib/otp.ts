@@ -7,6 +7,7 @@ import { getRedis } from "@/lib/redis";
 import { constantTimeEqual } from "@/lib/security";
 
 const OTP_TTL_SECONDS = 600;
+const MAX_OTP_ATTEMPTS = 5;
 
 function getOtpSecret(): string {
   const secret = process.env.AUTH_SECRET;
@@ -97,6 +98,9 @@ export async function verifyOtpAttempt(input: {
       const cachedHash = await redis.get(`otp:${input.purpose}:${input.phone}`);
 
       if (cachedHash && !constantTimeEqual(cachedHash, expectedHash)) {
+        // Fast-path reject: Redis confirms wrong code without a DB round-trip.
+        // The rate limiter (per-phone + per-IP) is the primary brute-force
+        // guard; the DB attempt counter catches cases where Redis is bypassed.
         return false;
       }
     } catch {
@@ -114,11 +118,40 @@ export async function verifyOtpAttempt(input: {
     orderBy: { createdAt: "desc" }
   });
 
-  if (!otpRecord || !constantTimeEqual(otpRecord.codeHash, expectedHash)) {
+  if (!otpRecord) {
     return false;
   }
 
-  // Atomic consume: only one concurrent request wins; the loser sees count=0.
+  // Lock out the code after MAX_OTP_ATTEMPTS failed attempts so brute-force
+  // has a hard ceiling even if the per-phone rate limiter is bypassed.
+  if (otpRecord.attemptCount >= MAX_OTP_ATTEMPTS) {
+    // Consume the code to prevent further attempts.
+    await prisma.otpCode.update({
+      where: { id: otpRecord.id },
+      data: { consumedAt: new Date() }
+    });
+    return false;
+  }
+
+  if (!constantTimeEqual(otpRecord.codeHash, expectedHash)) {
+    // Wrong code — increment attempt counter.
+    const updated = await prisma.otpCode.updateMany({
+      where: { id: otpRecord.id, consumedAt: null },
+      data: {
+        attemptCount: { increment: 1 },
+        // Consume and lock out if this was the last allowed attempt.
+        ...(otpRecord.attemptCount + 1 >= MAX_OTP_ATTEMPTS
+          ? { consumedAt: new Date() }
+          : {})
+      }
+    });
+    if (updated.count === 0) {
+      // Concurrent consume beat us — code is gone.
+    }
+    return false;
+  }
+
+  // Correct code — atomic consume: only one concurrent request wins.
   const consumed = await prisma.otpCode.updateMany({
     where: { id: otpRecord.id, consumedAt: null },
     data: { consumedAt: new Date() }

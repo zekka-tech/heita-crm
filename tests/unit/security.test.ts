@@ -123,9 +123,11 @@ describe("getClientIp — trusted proxy validation", () => {
     expect(getClientIp(headers)).toBe("5.6.7.8");
   });
 
-  it("trusts x-forwarded-for when TRUSTED_PROXY_IPS is not set (open trust, backward-compatible)", () => {
+  it("ignores x-forwarded-for when TRUSTED_PROXY_IPS is not set (safe default)", () => {
+    // When no trusted proxies are configured, XFF is untrusted — return x-real-ip
+    // directly to prevent IP spoofing via forged XFF headers.
     const headers = makeHeaders("1.2.3.4", "10.0.0.1");
-    expect(getClientIp(headers)).toBe("1.2.3.4");
+    expect(getClientIp(headers)).toBe("10.0.0.1");
   });
 
   it("falls back to 0.0.0.0 when no IP headers are present", () => {

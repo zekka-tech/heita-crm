@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { streamRagAnswer, type ChatTurn } from "@/lib/ai/rag";
+import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
@@ -25,6 +26,9 @@ function sseFrame(event: string, data: unknown): string {
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
+  const csrfFailure = await csrfFailureResponse(request);
+  if (csrfFailure) return csrfFailure;
+
   const session = await auth();
   const userId = session?.user?.id;
 

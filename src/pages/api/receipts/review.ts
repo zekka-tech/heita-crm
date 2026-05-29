@@ -54,7 +54,7 @@ export default async function handler(
 
     try {
       if (action === "approve") {
-        await approveOcrReceipt(receiptId, session.userId, overridePoints);
+        await approveOcrReceipt(receiptId, session.userId, businessId, overridePoints);
       } else {
         await rejectOcrReceipt(receiptId, session.userId);
       }

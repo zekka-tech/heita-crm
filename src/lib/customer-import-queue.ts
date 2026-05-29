@@ -1,4 +1,4 @@
-import { Job, Queue, Worker } from "bullmq";
+import { Job, Queue, Worker, type ConnectionOptions } from "bullmq";
 
 import { logger } from "@/lib/logger";
 import { incrementQueueJobMetric } from "@/lib/metrics";
@@ -13,8 +13,10 @@ type CustomerImportJob = {
 };
 
 declare global {
-  var __heitaCustomerImportQueue__: Queue<CustomerImportJob> | undefined;
-  var __heitaCustomerImportDlq__: Queue | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  var __heitaCustomerImportQueue__: Queue<CustomerImportJob, any, string, any, any, any> | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  var __heitaCustomerImportDlq__: Queue<any, any, string, any, any, any> | undefined;
 }
 
 export function getCustomerImportQueue() {
@@ -27,7 +29,7 @@ export function getCustomerImportQueue() {
     global.__heitaCustomerImportQueue__ = new Queue<CustomerImportJob>(
       CUSTOMER_IMPORT_QUEUE,
       {
-        connection: redis,
+        connection: redis as unknown as ConnectionOptions,
         defaultJobOptions: {
           removeOnComplete: 100,
           removeOnFail: 500,
@@ -52,7 +54,7 @@ export function getCustomerImportDlq() {
 
   if (!global.__heitaCustomerImportDlq__) {
     global.__heitaCustomerImportDlq__ = new Queue(CUSTOMER_IMPORT_DLQ, {
-      connection: redis,
+      connection: redis as unknown as ConnectionOptions,
       defaultJobOptions: { removeOnComplete: 100, removeOnFail: false }
     });
   }
@@ -122,7 +124,7 @@ export function startCustomerImportWorker() {
     CUSTOMER_IMPORT_QUEUE,
     handleCustomerImportJob,
     {
-      connection: redis,
+      connection: redis as unknown as ConnectionOptions,
       concurrency: 1,
       lockDuration: 5 * 60 * 1000,
       stalledInterval: 30_000,

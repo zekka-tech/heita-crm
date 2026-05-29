@@ -63,7 +63,7 @@ function mockPendingReceipt() {
 describe("approveOcrReceipt", () => {
   it("awards points and recalculates tier on approval", async () => {
     mockPendingReceipt();
-    await approveOcrReceipt("rcpt1", "staff1");
+    await approveOcrReceipt("rcpt1", "staff1", "biz1");
     expect(mockTx.loyaltyTransaction.create).toHaveBeenCalledOnce();
     expect(recalculateTier).toHaveBeenCalledWith(mockTx, {
       membershipId: "mem1",
@@ -73,7 +73,7 @@ describe("approveOcrReceipt", () => {
 
   it("writes an audit log after approval", async () => {
     mockPendingReceipt();
-    await approveOcrReceipt("rcpt1", "staff1");
+    await approveOcrReceipt("rcpt1", "staff1", "biz1");
     expect(recordStaffAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({ action: "OCR_RECEIPT_APPROVED", targetId: "rcpt1" })
     );
@@ -82,7 +82,7 @@ describe("approveOcrReceipt", () => {
   it("skips creating a duplicate loyalty transaction when one already exists", async () => {
     mockPendingReceipt();
     mockTx.loyaltyTransaction.findFirst.mockResolvedValue({ id: "txn_existing" });
-    await approveOcrReceipt("rcpt1", "staff1");
+    await approveOcrReceipt("rcpt1", "staff1", "biz1");
     expect(mockTx.loyaltyTransaction.create).not.toHaveBeenCalled();
     expect(mockTx.ocrReceipt.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "APPROVED" }) })
@@ -91,12 +91,12 @@ describe("approveOcrReceipt", () => {
 
   it("throws when receipt is not found", async () => {
     prisma.ocrReceipt.findUnique.mockResolvedValue(null);
-    await expect(approveOcrReceipt("missing", "staff1")).rejects.toThrow("not found");
+    await expect(approveOcrReceipt("missing", "staff1", "biz1")).rejects.toThrow("not found");
   });
 
   it("throws when receipt is already approved", async () => {
-    prisma.ocrReceipt.findUnique.mockResolvedValue({ id: "rcpt1", status: "APPROVED" });
-    await expect(approveOcrReceipt("rcpt1", "staff1")).rejects.toThrow("APPROVED");
+    prisma.ocrReceipt.findUnique.mockResolvedValue({ id: "rcpt1", businessId: "biz1", status: "APPROVED" });
+    await expect(approveOcrReceipt("rcpt1", "staff1", "biz1")).rejects.toThrow("APPROVED");
   });
 });
 

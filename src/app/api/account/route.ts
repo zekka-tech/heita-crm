@@ -59,7 +59,15 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       notificationPreferences: parsed.data.notificationPreferences ?? undefined
     });
 
-    return NextResponse.json({ ok: true, user: { id: updated.id, name: updated.name, email: updated.email } });
+    return NextResponse.json({
+      ok: true,
+      user: {
+        id: updated.id,
+        name: updated.name,
+        email: updated.email,
+        notificationPreferences: updated.notificationPreferences
+      }
+    });
   } catch (err) {
     logger.error({ err }, "account.patch.error");
     return NextResponse.json({ error: "Internal server error." }, { status: 500 });

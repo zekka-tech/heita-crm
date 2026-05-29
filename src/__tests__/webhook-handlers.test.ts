@@ -215,7 +215,9 @@ describe("handleAfricasTalkingWebhook", () => {
     const req = makeRequest("https://example.com/api/webhooks/africas-talking", {
       method: "POST",
       headers: {
-        "x-forwarded-for": "196.201.214.50",
+        // AT connects directly; use x-real-ip (not XFF) since getClientIp
+        // no longer honours X-Forwarded-For when TRUSTED_PROXY_IPS is unset.
+        "x-real-ip": "196.201.214.50",
         "x-at-shared-secret": AT_SECRET,
         "x-at-signature": hmac
       },

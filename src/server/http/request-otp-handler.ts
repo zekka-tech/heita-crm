@@ -26,6 +26,14 @@ const OTP_PER_PHONE_PER_MINUTE = 1;
 const EXPOSE_DEV_OTP =
   process.env.NODE_ENV !== "production" && process.env.E2E_EXPOSE_DEV_OTP === "1";
 
+// Generic response returned in every case where a code would be sent.
+// Using identical text and status for both "account found" and "not found"
+// paths prevents phone-number enumeration via response body or status code.
+const GENERIC_OTP_SENT_BODY = {
+  ok: true,
+  message: "If your number is registered we have sent you a verification code."
+};
+
 export async function handleRequestOtp(request: Request) {
   const startedAt = Date.now();
   const requestId = resolveRequestId(request.headers);
@@ -86,63 +94,8 @@ export async function handleRequestOtp(request: Request) {
     );
   }
 
-  const turnstile = await verifyTurnstileToken({
-    token: parsed.data.turnstileToken,
-    remoteIp: ip,
-    action: parsed.data.mode
-  });
-  if (!turnstile.ok) {
-    observeHttpRoute({
-      route: "/api/auth/request-otp",
-      method: "POST",
-      status: 403,
-      durationMs: Date.now() - startedAt
-    });
-    return NextResponse.json(
-      { error: "Anti-abuse check failed. Refresh the page and try again." },
-      { status: 403, headers: { [requestIdHeader]: requestId } }
-    );
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { phone },
-    select: {
-      id: true,
-      phoneVerifiedAt: true,
-      deletedAt: true
-    }
-  });
-
-  const isActiveVerified = Boolean(user?.phoneVerifiedAt && !user.deletedAt);
-  const mode = parsed.data.mode as AuthOtpMode;
-  const otpPurpose = getOtpPurposeForMode(mode);
-
-  if (mode === "sign-in") {
-    if (!isActiveVerified) {
-      observeHttpRoute({
-        route: "/api/auth/request-otp",
-        method: "POST",
-        status: 404,
-        durationMs: Date.now() - startedAt
-      });
-      return NextResponse.json(
-        { error: "No verified account exists for this number yet. Create an account first." },
-        { status: 404, headers: { [requestIdHeader]: requestId } }
-      );
-    }
-  } else if (isActiveVerified) {
-    observeHttpRoute({
-      route: "/api/auth/request-otp",
-      method: "POST",
-      status: 409,
-      durationMs: Date.now() - startedAt
-    });
-    return NextResponse.json(
-      { error: "An account already exists for this number. Sign in instead." },
-      { status: 409, headers: { [requestIdHeader]: requestId } }
-    );
-  }
-
+  // Apply rate limits BEFORE the user lookup so they cannot be used as a
+  // timing oracle to determine whether a phone is registered.
   const ipLimit = await enforceRateLimit({
     identifier: `otp:ip:${ip}`,
     windowSeconds: 3600,
@@ -215,6 +168,59 @@ export async function handleRequestOtp(request: Request) {
     );
   }
 
+  // Turnstile bot check (after rate limits so we don't burn Turnstile quota
+  // on already-rate-limited IPs).
+  const turnstile = await verifyTurnstileToken({
+    token: parsed.data.turnstileToken,
+    remoteIp: ip,
+    action: parsed.data.mode
+  });
+  if (!turnstile.ok) {
+    observeHttpRoute({
+      route: "/api/auth/request-otp",
+      method: "POST",
+      status: 403,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "Anti-abuse check failed. Refresh the page and try again." },
+      { status: 403, headers: { [requestIdHeader]: requestId } }
+    );
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { phone },
+    select: {
+      id: true,
+      phoneVerifiedAt: true,
+      deletedAt: true
+    }
+  });
+
+  const isActiveVerified = Boolean(user?.phoneVerifiedAt && !user.deletedAt);
+  const mode = parsed.data.mode as AuthOtpMode;
+  const otpPurpose = getOtpPurposeForMode(mode);
+
+  // Determine if this request is valid for the requested mode.
+  // If not, we return the same generic 200 response as a success to prevent
+  // enumeration — the user will not receive an SMS.
+  const shouldSendCode =
+    (mode === "sign-in" && isActiveVerified) ||
+    (mode === "sign-up" && !isActiveVerified);
+
+  if (!shouldSendCode) {
+    // Return generic response without revealing account existence.
+    observeHttpRoute({
+      route: "/api/auth/request-otp",
+      method: "POST",
+      status: 200,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(GENERIC_OTP_SENT_BODY, {
+      headers: { [requestIdHeader]: requestId }
+    });
+  }
+
   const { code, expiresAt } = await issueOtpCode({
     phone,
     purpose: otpPurpose
@@ -245,8 +251,8 @@ export async function handleRequestOtp(request: Request) {
 
   return NextResponse.json(
     {
-      ok: true,
-      message: `Verification code sent. It expires at ${expiresAt.toISOString()}.`,
+      ...GENERIC_OTP_SENT_BODY,
+      expiresAt: expiresAt.toISOString(),
       devCode: EXPOSE_DEV_OTP ? code : undefined
     },
     {

@@ -2,6 +2,8 @@ import * as Sentry from "@sentry/nextjs";
 
 import { SENTRY_COMMON, buildSentryBeforeSend } from "@/lib/sentry-config";
 
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
+
 if (SENTRY_COMMON.enabled) {
   Sentry.init({
     ...SENTRY_COMMON,
@@ -12,7 +14,6 @@ if (SENTRY_COMMON.enabled) {
     replaysOnErrorSampleRate: Number(
       process.env.NEXT_PUBLIC_SENTRY_REPLAY_ERROR_SAMPLE_RATE ?? "0.5"
     ),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    beforeSend: buildSentryBeforeSend() as any
+    beforeSend: buildSentryBeforeSend() as NonNullable<Parameters<typeof Sentry.init>[0]["beforeSend"]>
   });
 }

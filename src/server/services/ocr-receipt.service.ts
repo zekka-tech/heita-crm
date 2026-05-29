@@ -3,6 +3,7 @@ import { TextractClient, AnalyzeExpenseCommand } from "@aws-sdk/client-textract"
 import { appendTraceHeaders } from "@/lib/tracing";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { assertOwnedStorageUrl } from "@/lib/security";
 import { recalculateTier } from "@/server/services/loyalty.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
@@ -131,6 +132,9 @@ async function ocrWithTextract(imageUrl: string): Promise<OcrResult> {
     throw new Error("AWS credentials not set for Textract fallback");
   }
 
+  // Guard against SSRF: only fetch from Heita's own storage buckets.
+  assertOwnedStorageUrl(imageUrl);
+
   // Download the image bytes
   const imgResp = await fetch(imageUrl, { signal: AbortSignal.timeout(20_000) });
   if (!imgResp.ok) throw new Error(`Failed to fetch image for Textract: ${imgResp.status}`);
@@ -237,32 +241,35 @@ export async function submitOcrReceipt(input: {
   return { receiptId: receipt.id, ocrResult, pointsToAward };
 }
 
+const MAX_OVERRIDE_POINTS = 50_000;
+
 export async function approveOcrReceipt(
   receiptId: string,
   staffUserId: string,
+  businessId: string,
   overridePoints?: number
 ) {
-  // Re-read the receipt inside the transaction to protect against concurrent
-  // approval attempts. Wrapping the status check and all writes in a single
-  // $transaction provides serialization: if two calls race, the second will
-  // observe status !== "PENDING_REVIEW" and bail out safely. We do a quick
-  // pre-flight check outside the transaction first to avoid acquiring a DB
-  // connection for obviously invalid calls (e.g. already approved).
+  // Clamp override to a safe maximum to prevent runaway point grants.
+  const clampedOverride =
+    overridePoints !== undefined
+      ? Math.min(Math.max(0, Math.round(overridePoints)), MAX_OVERRIDE_POINTS)
+      : undefined;
+
+  // Pre-flight check to avoid acquiring a tx for obviously invalid calls.
   const preCheck = await prisma.ocrReceipt.findUnique({
     where: { id: receiptId },
-    select: { id: true, status: true }
+    select: { id: true, status: true, businessId: true }
   });
 
   if (!preCheck) throw new Error("Receipt not found.");
+  // Tenant isolation: the receipt must belong to the asserted business.
+  if (preCheck.businessId !== businessId) throw new Error("Receipt not found.");
   if (preCheck.status !== "PENDING_REVIEW") {
     throw new Error(`Cannot approve receipt in status: ${preCheck.status}`);
   }
 
   await prisma.$transaction(async (tx) => {
     // Re-fetch inside the transaction for authoritative, serialised status check.
-    // This is the idempotency guard: if a concurrent request already committed
-    // an APPROVED update, we will see status !== "PENDING_REVIEW" here and
-    // abort without creating a duplicate loyalty transaction.
     const receipt = await tx.ocrReceipt.findUnique({
       where: { id: receiptId },
       select: {
@@ -271,12 +278,14 @@ export async function approveOcrReceipt(
     });
 
     if (!receipt) throw new Error("Receipt not found.");
+    // Re-assert tenant isolation inside the transaction.
+    if (receipt.businessId !== businessId) throw new Error("Receipt not found.");
     if (receipt.status !== "PENDING_REVIEW") {
       // Already approved or rejected by a concurrent request — nothing to do.
       return;
     }
 
-    const points = overridePoints ?? receipt.pointsToAward ?? 0;
+    const points = clampedOverride ?? receipt.pointsToAward ?? 0;
 
     const membership = await tx.membership.findFirst({
       where: { businessId: receipt.businessId, userId: receipt.userId }

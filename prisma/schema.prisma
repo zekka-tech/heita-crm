@@ -75,18 +75,20 @@ model VerificationToken {
 }
 
 model OtpCode {
-  id         String     @id @default(cuid())
-  userId     String?
-  phone      String
-  codeHash   String
-  purpose    OtpPurpose
-  channel    MessageChannel
-  expiresAt  DateTime
-  consumedAt DateTime?
-  createdAt  DateTime   @default(now())
-  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id           String         @id @default(cuid())
+  userId       String?
+  phone        String
+  codeHash     String
+  purpose      OtpPurpose
+  channel      MessageChannel
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  attemptCount Int            @default(0)
+  createdAt    DateTime       @default(now())
+  user         User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([phone, purpose])
+  @@index([expiresAt])
 }
 
 model Business {

@@ -1,4 +1,4 @@
-import { Worker } from "bullmq";
+import { Worker, type ConnectionOptions } from "bullmq";
 
 import {
   DOCUMENT_INGESTION_QUEUE,
@@ -6,7 +6,7 @@ import {
   moveIngestionJobToDlq
 } from "@/lib/ai/ingestion-queue";
 import { logger } from "@/lib/logger";
-import { incrementDlqMovedCounter, incrementQueueJobMetric } from "@/lib/metrics";
+import { incrementQueueJobMetric } from "@/lib/metrics";
 import { getQueueRedis } from "@/lib/redis";
 
 export function startDocumentIngestionWorker() {
@@ -17,7 +17,7 @@ export function startDocumentIngestionWorker() {
   }
 
   const worker = new Worker(DOCUMENT_INGESTION_QUEUE, handleDocumentIngestionJob, {
-    connection: redis,
+    connection: redis as unknown as ConnectionOptions,
     concurrency: 2,
     stalledInterval: 30_000,
     maxStalledCount: 2,

@@ -9,7 +9,6 @@ import {
   updateEventAction
 } from "@/app/dashboard/[businessId]/events/actions";
 import { CsrfField } from "@/components/security/csrf-field";
-import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";

@@ -154,7 +154,7 @@ export async function updateAccountProfile(input: {
           ? (normalizedPreferences as Prisma.InputJsonValue)
           : undefined
     },
-    select: { id: true, name: true, email: true, image: true, updatedAt: true }
+    select: { id: true, name: true, email: true, image: true, updatedAt: true, notificationPreferences: true }
   });
 
   logger.info({ userId: input.userId, changedFields }, "account.profile.updated");
