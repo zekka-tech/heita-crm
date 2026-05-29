@@ -1,4 +1,4 @@
-import { Prisma, PromotionType, StaffRole } from "@prisma/client";
+import { ConsentType, Prisma, PromotionType, StaffRole } from "@prisma/client";
 
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
@@ -316,6 +316,17 @@ export async function broadcastPromotion(
 
   assertPromotionBroadcastable(promotion);
 
+  // Atomically claim the broadcast slot — prevents two concurrent callers from
+  // both passing assertPromotionBroadcastable and double-sending.
+  const broadcastAt = new Date();
+  const claimed = await prisma.promotion.updateMany({
+    where: { id: promotion.id, broadcastAt: null },
+    data: { broadcastAt }
+  });
+  if (claimed.count === 0) {
+    throw new Error("This promotion has already been broadcast.");
+  }
+
   // Paginate memberships in batches to avoid loading all into memory.
   // Only send to members who have an active marketing consent for this business.
   const MEMBERSHIP_BATCH = 2_000;
@@ -330,7 +341,16 @@ export async function broadcastPromotion(
         isActive: true,
         ...(promotion.targetTierIds.length > 0
           ? { tierId: { in: promotion.targetTierIds } }
-          : {})
+          : {}),
+        user: {
+          consents: {
+            some: {
+              type: ConsentType.WHATSAPP_MARKETING,
+              businessId: promotion.businessId,
+              revokedAt: null
+            }
+          }
+        }
       },
       select: { id: true, userId: true },
       take: MEMBERSHIP_BATCH,
@@ -373,15 +393,10 @@ export async function broadcastPromotion(
     );
   }
 
-  const broadcastAt = new Date();
-
   await prisma.$transaction(async (tx) => {
     await tx.promotion.update({
       where: { id: promotion.id },
-      data: {
-        broadcastAt,
-        broadcastSentBy: input.actorUserId
-      }
+      data: { broadcastSentBy: input.actorUserId }
     });
 
     await recordStaffAuditLog(
@@ -434,6 +449,24 @@ export async function redeemPromotionCode(input: RedeemPromotionCodeInput) {
 
   if (!promotion) {
     throw new Error("This promotion code is not currently active.");
+  }
+
+  try {
+    await prisma.promotionRedemption.create({
+      data: {
+        promotionId: promotion.id,
+        userId: input.userId,
+        businessId: input.businessId
+      }
+    });
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      throw new Error("You have already redeemed this promotion code.");
+    }
+    throw err;
   }
 
   return promotion;

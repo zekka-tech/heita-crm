@@ -20,7 +20,9 @@ export function usePwaInstall() {
     };
 
     const onControllerChange = () => {
-      window.location.reload();
+      // Signal the banner to offer a manual refresh rather than reloading
+      // mid-session, which would discard unsaved form state.
+      setUpdateWaiting(true);
     };
 
     navigator.serviceWorker?.addEventListener("controllerchange", onControllerChange);

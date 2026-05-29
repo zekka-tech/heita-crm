@@ -11,7 +11,8 @@ const prisma = {
     findFirst: vi.fn(),
     findUniqueOrThrow: vi.fn(),
     create: vi.fn(),
-    update: vi.fn()
+    update: vi.fn(),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 })
   },
   membership: {
     findMany: vi.fn()
@@ -240,12 +241,14 @@ describe("promotions service", () => {
         actorUserId: "user_1"
       });
 
+      // broadcastAt is now set atomically via updateMany (double-broadcast guard)
+      expect(prisma.promotion.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: "promo_3" }) })
+      );
+      // The $transaction update sets broadcastSentBy only
       expect(prisma.promotion.update).toHaveBeenCalledWith({
         where: { id: "promo_3" },
-        data: expect.objectContaining({
-          broadcastSentBy: "user_1",
-          broadcastAt: expect.any(Date)
-        })
+        data: { broadcastSentBy: "user_1" }
       });
       expect(prisma.staffAuditLog.create).toHaveBeenCalledWith({
         data: expect.objectContaining({

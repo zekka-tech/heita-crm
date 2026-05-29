@@ -31,9 +31,10 @@ model User {
   aiChatSessions    AiChatSession[]
   loyaltyEvents     LoyaltyTransaction[]
   messages          Message[]
-  consents          UserConsent[]
-  aiTokenUsages     AiTokenUsage[]
-  staffAuditLogs    StaffAuditLog[]      @relation("StaffAuditActor")
+  consents              UserConsent[]
+  promotionRedemptions  PromotionRedemption[]
+  aiTokenUsages         AiTokenUsage[]
+  staffAuditLogs        StaffAuditLog[]      @relation("StaffAuditActor")
   referralCodesOwned ReferralCode[]
   importRuns        CustomerImportRun[]  @relation("CustomerImportActor")
   ocrReceipts       OcrReceipt[]
@@ -133,6 +134,7 @@ model Business {
   messages              Message[]
   loyaltyTransactions   LoyaltyTransaction[]
   consents              UserConsent[]
+  promotionRedemptions  PromotionRedemption[]
   staffInvites          StaffInvite[]
   aiTokenUsages         AiTokenUsage[]
   staffAuditLogs        StaffAuditLog[]
@@ -356,7 +358,7 @@ model Reward {
 }
 
 model Promotion {
-  id              String         @id @default(cuid())
+  id              String                 @id @default(cuid())
   businessId      String
   title           String
   description     String?
@@ -365,17 +367,32 @@ model Promotion {
   endsAt          DateTime
   imageUrl        String?
   code            String?
-  targetTierIds   String[]       @default([])
+  targetTierIds   String[]               @default([])
   broadcastAt     DateTime?
   broadcastSentBy String?
-  isActive        Boolean        @default(true)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  isActive        Boolean                @default(true)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  business        Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  redemptions     PromotionRedemption[]
 
   @@unique([businessId, code], name: "Promotion_businessId_code_key")
   @@index([businessId, startsAt, endsAt])
   @@index([businessId, isActive, endsAt])
+}
+
+model PromotionRedemption {
+  id          String    @id @default(cuid())
+  promotionId String
+  userId      String
+  businessId  String
+  redeemedAt  DateTime  @default(now())
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([promotionId, userId])
+  @@index([businessId, redeemedAt])
 }
 
 model Event {
