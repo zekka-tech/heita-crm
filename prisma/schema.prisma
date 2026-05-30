@@ -196,6 +196,8 @@ model Membership {
 
   @@unique([businessId, userId])
   @@index([userId])
+  @@index([userId, isActive])
+  @@index([businessId, joinedAt])
   @@index([referredByCodeId])
 }
 
@@ -433,6 +435,7 @@ model Message {
   attachments    MessageAttachment[]
 
   @@index([businessId, channel, createdAt])
+  @@index([businessId, direction, createdAt])
   @@index([businessId, contactPhone, createdAt])
   @@index([businessId, readByStaffAt])
   @@index([userId])
@@ -461,6 +464,7 @@ model LoyaltyTransaction {
   expiryTarget   LoyaltyTransaction? @relation("ExpirySource")
 
   @@index([businessId, createdAt])
+  @@index([businessId, type, createdAt])
   @@index([membershipId, createdAt])
   @@index([expiresAt])
 }

@@ -5,6 +5,9 @@ import { Sparkles } from "lucide-react";
 import { BusinessCard } from "@/components/business/business-card";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
+import { auth } from "@/lib/auth";
+import { resolveLocale } from "@/i18n/locale";
+import { prisma } from "@/lib/prisma";
 import { isBuildPhase } from "@/lib/build-phase";
 
 export const metadata = { title: "Wallet" };
@@ -15,14 +18,11 @@ export default async function WalletPage() {
     return <section className="grid gap-5" />;
   }
 
-  const [{ auth }, { resolveLocale }, { prisma }] = await Promise.all([
-    import("@/lib/auth"),
-    import("@/i18n/locale"),
-    import("@/lib/prisma")
+  const [session, locale, t] = await Promise.all([
+    auth(),
+    resolveLocale(),
+    getTranslations("wallet")
   ]);
-  const session = await auth();
-  const locale = await resolveLocale();
-  const t = await getTranslations("wallet");
 
   if (!session?.user?.id) {
     redirect("/sign-in?callbackUrl=/wallet");
@@ -30,10 +30,23 @@ export default async function WalletPage() {
 
   const memberships = await prisma.membership.findMany({
     where: { userId: session.user.id, isActive: true },
-    include: {
-      business: true,
-      tier: true,
+    select: {
+      id: true,
+      pointsBalance: true,
+      business: {
+        select: { name: true, slug: true, category: true }
+      },
+      tier: {
+        select: { name: true }
+      },
       transactions: {
+        select: {
+          id: true,
+          pointsDelta: true,
+          type: true,
+          description: true,
+          createdAt: true
+        },
         orderBy: { createdAt: "desc" },
         take: 5
       }

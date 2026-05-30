@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { resolveLocale } from "@/i18n/locale";
+import { getUserMemberships } from "@/lib/query-cache";
 import { discoverBusinesses } from "@/server/services/discovery.service";
 
 export const metadata = { title: "Home" };
@@ -31,11 +31,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     redirect("/sign-in?callbackUrl=/home");
   }
 
-  const memberships = await prisma.membership.findMany({
-    where: { userId: session.user.id, isActive: true },
-    include: { business: true, tier: true },
-    orderBy: { joinedAt: "desc" }
-  });
+  const memberships = await getUserMemberships(session.user.id);
 
   const totalPoints = memberships.reduce(
     (sum, membership) => sum + membership.pointsBalance,

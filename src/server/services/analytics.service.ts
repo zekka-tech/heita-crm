@@ -1,5 +1,6 @@
 import { TransactionType } from "@prisma/client";
 
+import { withAnalyticsCache } from "@/lib/data-cache";
 import { prisma } from "@/lib/prisma";
 
 type WeeklyBucket = {
@@ -32,7 +33,7 @@ function bucketLabel(key: string) {
   });
 }
 
-export async function getBusinessDashboardAnalytics(input: {
+async function _getBusinessDashboardAnalytics(input: {
   businessId: string;
   weeks?: number;
 }) {
@@ -132,66 +133,36 @@ export async function getBusinessDashboardAnalytics(input: {
     }
   }
 
+  // 30d KPIs are computed from the already-fetched transaction/message arrays
+  // (which cover the full `weeks` window, always ≥ 30 days). This avoids 4
+  // extra DB round-trips per dashboard load.
   const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const [issued30d, redeemed30d, inbound30d, outbound30d] = await Promise.all([
-    prisma.loyaltyTransaction.aggregate({
-      where: {
-        businessId: input.businessId,
-        createdAt: {
-          gte: last30
-        },
-        type: {
-          in: [
-            TransactionType.EARN,
-            TransactionType.SIGNUP_BONUS,
-            TransactionType.ADJUSTMENT,
-            TransactionType.REFUND
-          ]
-        },
-        pointsDelta: {
-          gt: 0
-        }
-      },
-      _sum: {
-        pointsDelta: true
-      }
-    }),
-    prisma.loyaltyTransaction.aggregate({
-      where: {
-        businessId: input.businessId,
-        createdAt: {
-          gte: last30
-        },
-        type: {
-          in: [TransactionType.REDEEM, TransactionType.EXPIRY]
-        }
-      },
-      _sum: {
-        pointsDelta: true
-      }
-    }),
-    prisma.message.count({
-      where: {
-        businessId: input.businessId,
-        createdAt: {
-          gte: last30
-        },
-        direction: "INBOUND"
-      }
-    }),
-    prisma.message.count({
-      where: {
-        businessId: input.businessId,
-        createdAt: {
-          gte: last30
-        },
-        direction: "OUTBOUND"
-      }
-    })
+  const EARN_TYPES = new Set<TransactionType>([
+    TransactionType.EARN,
+    TransactionType.SIGNUP_BONUS,
+    TransactionType.ADJUSTMENT,
+    TransactionType.REFUND
+  ]);
+  const REDEEM_TYPES = new Set<TransactionType>([
+    TransactionType.REDEEM,
+    TransactionType.EXPIRY
   ]);
 
-  const pointsIssued30d = issued30d._sum.pointsDelta ?? 0;
-  const pointsRedeemed30d = Math.abs(redeemed30d._sum.pointsDelta ?? 0);
+  let pointsIssued30d = 0;
+  let pointsRedeemed30d = 0;
+  let inbound30d = 0;
+  let outbound30d = 0;
+
+  for (const tx of transactions) {
+    if (tx.createdAt < last30) continue;
+    if (EARN_TYPES.has(tx.type) && tx.pointsDelta > 0) pointsIssued30d += tx.pointsDelta;
+    if (REDEEM_TYPES.has(tx.type)) pointsRedeemed30d += Math.abs(tx.pointsDelta);
+  }
+  for (const msg of messages) {
+    if (msg.createdAt < last30) continue;
+    if (msg.direction === "INBOUND") inbound30d += 1;
+    else outbound30d += 1;
+  }
 
   return {
     series: [...bucketMap.values()],
@@ -204,4 +175,18 @@ export async function getBusinessDashboardAnalytics(input: {
       outbound30d
     }
   };
+}
+
+export function getBusinessDashboardAnalytics(input: {
+  businessId: string;
+  weeks?: number;
+}) {
+  // Cache only for the default 8-week window (dashboard view).
+  // Custom-week calls (e.g. analytics page with date range) bypass the cache.
+  if (!input.weeks || input.weeks === 8) {
+    return withAnalyticsCache(input.businessId, () =>
+      _getBusinessDashboardAnalytics(input)
+    );
+  }
+  return _getBusinessDashboardAnalytics(input);
 }

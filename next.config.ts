@@ -42,11 +42,30 @@ const nextConfig: NextConfig = {
     "@prisma/adapter-pg",
     "@aws-sdk/client-s3",
     "@aws-sdk/s3-request-presigner",
+    "@aws-sdk/client-textract",
     "pdf-parse",
     "mammoth",
     "csv-parse",
     "web-push"
   ],
+  experimental: {
+    // Tree-shake icon and component libraries so only imported members are bundled.
+    optimizePackageImports: [
+      "lucide-react",
+      "next-intl",
+      "@radix-ui/react-dialog",
+      "@radix-ui/react-dropdown-menu",
+      "@radix-ui/react-select",
+      "@radix-ui/react-tabs",
+      "@radix-ui/react-toast"
+    ]
+  },
+  compiler: isProd
+    ? {
+        // Strip console.log calls in production; keep warn/error for observability.
+        removeConsole: { exclude: ["warn", "error"] }
+      }
+    : {},
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "*.amazonaws.com" },

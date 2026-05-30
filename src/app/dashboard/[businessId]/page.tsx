@@ -1,4 +1,5 @@
 import type { Route } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
@@ -29,8 +30,10 @@ type DashboardPageProps = {
 
 export default async function DashboardPage({ params }: DashboardPageProps) {
   const { businessId } = await params;
-  const session = await auth();
-  const t = await getTranslations("dashboard");
+  const [session, t] = await Promise.all([
+    auth(),
+    getTranslations("dashboard")
+  ]);
 
   if (!session?.user?.id) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}`);
@@ -42,12 +45,24 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
       deletedAt: null,
       staffMembers: { some: { userId: session.user.id } }
     },
-    include: {
-      qrCodes: { orderBy: { createdAt: "asc" }, take: 1 },
-      joinLinks: { orderBy: { createdAt: "asc" }, take: 1 },
-      memberships: { select: { id: true, joinedAt: true, pointsBalance: true } },
-      rewards: { select: { id: true } },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      whatsappPhoneNumber: true,
+      qrCodes: {
+        select: { token: true },
+        orderBy: { createdAt: "asc" },
+        take: 1
+      },
+      joinLinks: {
+        select: { token: true },
+        orderBy: { createdAt: "asc" },
+        take: 1
+      },
+      memberships: { select: { joinedAt: true, pointsBalance: true } },
       events: {
+        select: { id: true, title: true, startsAt: true },
         where: { startsAt: { gte: new Date() } },
         orderBy: { startsAt: "asc" },
         take: 3
@@ -72,7 +87,6 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const primaryQr = business.qrCodes[0] ?? null;
   const primaryLink = business.joinLinks[0] ?? null;
-  const analytics = await getBusinessDashboardAnalytics({ businessId });
 
   const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const recentMembers = business.memberships.filter(
@@ -85,6 +99,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
+      {/* Hero — renders immediately */}
       <Card variant="hero" className="px-6 py-8 sm:px-10">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -132,13 +147,10 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         </div>
       </Card>
 
+      {/* Fast metrics from business._count — renders immediately */}
       <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Metric icon={Users} label={t("members")} value={business._count.memberships} />
-        <Metric
-          icon={Sparkles}
-          label={t("new30d")}
-          value={recentMembers}
-        />
+        <Metric icon={Sparkles} label={t("new30d")} value={recentMembers} />
         <Metric icon={Gift} label={t("activeRewards")} value={business._count.rewards} />
         <Metric
           icon={LineChart}
@@ -147,7 +159,10 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         />
       </section>
 
-      {(business._count.rewards === 0 || business._count.documents === 0 || business._count.staffMembers <= 1 || !business.whatsappPhoneNumber) ? (
+      {(business._count.rewards === 0 ||
+        business._count.documents === 0 ||
+        business._count.staffMembers <= 1 ||
+        !business.whatsappPhoneNumber) ? (
         <Card variant="surface" className="mt-6 space-y-3">
           <header>
             <h2 className="section-title">{t("setupChecklist")}</h2>
@@ -211,9 +226,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
             <div className="rounded-xl border border-line bg-surface-elevated p-4">
               <p className="metric-label">{t("primaryJoinLink")}</p>
               <p className="mt-2 break-all text-sm text-ink">
-                {primaryLink
-                  ? `${baseUrl}/join/${primaryLink.token}`
-                  : t("notConfigured")}
+                {primaryLink ? `${baseUrl}/join/${primaryLink.token}` : t("notConfigured")}
               </p>
             </div>
             <div className="rounded-xl border border-line bg-surface-elevated p-4">
@@ -258,69 +271,136 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         </Card>
       </section>
 
+      {/* Analytics section streams in independently — skeleton shown until ready */}
       <section className="mt-6">
-        <Card variant="surface" className="space-y-3">
-          <header className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-primary-action" />
-              <h2 className="font-display text-base font-semibold text-ink">
-                {t("activityAtGlance")}
-              </h2>
-            </div>
-            <Link
-              href={`/dashboard/${businessId}/analytics` as Route}
-              className="text-sm font-medium text-primary-action hover:underline"
-            >
-              {t("viewFullAnalytics")} →
-            </Link>
-          </header>
-          <p className="text-sm text-ink-muted">
-            {t("activitySummary", {
-              messages: business._count.messages,
-              transactions: business._count.loyaltyTransactions
-            })}
-          </p>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="grid gap-2">
-              <p className="metric-label">{t("weeklyMemberGrowth")}</p>
-              <Sparkline
-                values={analytics.series.map((bucket) => bucket.memberJoins)}
-                labels={analytics.series.map((bucket) => bucket.label)}
-                colorClassName="bg-primary"
-              />
-            </div>
-            <div className="grid gap-2">
-              <p className="metric-label">{t("weeklyConversationVolume")}</p>
-              <Sparkline
-                values={analytics.series.map(
-                  (bucket) => bucket.messagesInbound + bucket.messagesOutbound
-                )}
-                labels={analytics.series.map((bucket) => bucket.label)}
-                colorClassName="bg-accent"
-              />
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <MiniMetric
-              label={t("pointsIssued30d")}
-              value={analytics.kpis.pointsIssued30d.toLocaleString()}
-            />
-            <MiniMetric
-              label={t("pointsRedeemed30d")}
-              value={analytics.kpis.pointsRedeemed30d.toLocaleString()}
-            />
-            <MiniMetric
-              label={t("redemptionRate")}
-              value={`${Math.round(analytics.kpis.redemptionRate30d * 100)}%`}
-            />
-            <MiniMetric
-              label={t("repliesSent30d")}
-              value={analytics.kpis.outbound30d.toLocaleString()}
-            />
-          </div>
-        </Card>
+        <Suspense fallback={<AnalyticsSkeleton businessId={businessId} t={t} messageCount={business._count.messages} txCount={business._count.loyaltyTransactions} />}>
+          <AnalyticsSection businessId={businessId} messageCount={business._count.messages} txCount={business._count.loyaltyTransactions} />
+        </Suspense>
       </section>
     </main>
+  );
+}
+
+async function AnalyticsSection({
+  businessId,
+  messageCount,
+  txCount
+}: {
+  businessId: string;
+  messageCount: number;
+  txCount: number;
+}) {
+  const [analytics, t] = await Promise.all([
+    getBusinessDashboardAnalytics({ businessId }),
+    getTranslations("dashboard")
+  ]);
+
+  return (
+    <Card variant="surface" className="space-y-3">
+      <header className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="h-5 w-5 text-primary-action" />
+          <h2 className="font-display text-base font-semibold text-ink">
+            {t("activityAtGlance")}
+          </h2>
+        </div>
+        <Link
+          href={`/dashboard/${businessId}/analytics` as Route}
+          className="text-sm font-medium text-primary-action hover:underline"
+        >
+          {t("viewFullAnalytics")} →
+        </Link>
+      </header>
+      <p className="text-sm text-ink-muted">
+        {t("activitySummary", { messages: messageCount, transactions: txCount })}
+      </p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-2">
+          <p className="metric-label">{t("weeklyMemberGrowth")}</p>
+          <Sparkline
+            values={analytics.series.map((b) => b.memberJoins)}
+            labels={analytics.series.map((b) => b.label)}
+            colorClassName="bg-primary"
+          />
+        </div>
+        <div className="grid gap-2">
+          <p className="metric-label">{t("weeklyConversationVolume")}</p>
+          <Sparkline
+            values={analytics.series.map((b) => b.messagesInbound + b.messagesOutbound)}
+            labels={analytics.series.map((b) => b.label)}
+            colorClassName="bg-accent"
+          />
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MiniMetric
+          label={t("pointsIssued30d")}
+          value={analytics.kpis.pointsIssued30d.toLocaleString()}
+        />
+        <MiniMetric
+          label={t("pointsRedeemed30d")}
+          value={analytics.kpis.pointsRedeemed30d.toLocaleString()}
+        />
+        <MiniMetric
+          label={t("redemptionRate")}
+          value={`${Math.round(analytics.kpis.redemptionRate30d * 100)}%`}
+        />
+        <MiniMetric
+          label={t("repliesSent30d")}
+          value={analytics.kpis.outbound30d.toLocaleString()}
+        />
+      </div>
+    </Card>
+  );
+}
+
+function AnalyticsSkeleton({
+  businessId,
+  t,
+  messageCount,
+  txCount
+}: {
+  businessId: string;
+  t: Awaited<ReturnType<typeof getTranslations<"dashboard">>>;
+  messageCount: number;
+  txCount: number;
+}) {
+  return (
+    <Card variant="surface" className="space-y-3">
+      <header className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="h-5 w-5 text-primary-action" />
+          <h2 className="font-display text-base font-semibold text-ink">
+            {t("activityAtGlance")}
+          </h2>
+        </div>
+        <Link
+          href={`/dashboard/${businessId}/analytics` as Route}
+          className="text-sm font-medium text-primary-action hover:underline"
+        >
+          {t("viewFullAnalytics")} →
+        </Link>
+      </header>
+      <p className="text-sm text-ink-muted">
+        {t("activitySummary", { messages: messageCount, transactions: txCount })}
+      </p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {[0, 1].map((i) => (
+          <div key={i} className="grid gap-2">
+            <div className="h-4 w-32 animate-pulse rounded bg-surface-elevated" />
+            <div className="h-40 animate-pulse rounded-xl bg-surface-elevated" />
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="rounded-xl border border-line bg-surface-elevated px-4 py-3">
+            <div className="h-3 w-20 animate-pulse rounded bg-surface" />
+            <div className="mt-2 h-6 w-12 animate-pulse rounded bg-surface" />
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -353,11 +433,7 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Sparkline(input: {
-  values: number[];
-  labels: string[];
-  colorClassName: string;
-}) {
+function Sparkline(input: { values: number[]; labels: string[]; colorClassName: string }) {
   const max = Math.max(...input.values, 1);
 
   return (
