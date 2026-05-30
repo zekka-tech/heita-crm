@@ -4,11 +4,15 @@ services:
   app:
     # Pull the pre-built, CI-tested image from GHCR. Never add a build: block
     # here — building on the VPS bypasses Trivy scanning and Cosign signing.
-    image: ghcr.io/zekka-tech/heita-crm:latest
+    image: ghcr.io/zekka-tech/heita-crm:${HEITA_IMAGE_TAG:-latest}
     container_name: heita_app
     restart: unless-stopped
     networks:
+      # heita_internal: reach postgres/redis (isolated, no egress)
+      # heita_edge: outbound internet (Anthropic, Meta, Africa's Talking, R2)
+      #             and inbound from the caddy reverse proxy
       - heita_internal
+      - heita_edge
     depends_on:
       postgres:
         condition: service_healthy
@@ -16,8 +20,11 @@ services:
         condition: service_healthy
     env_file:
       - .env.production
+    # Bound to loopback only — never expose the app directly. Public traffic
+    # arrives via the caddy service (TLS) or, if you front it with a host-level
+    # Nginx/Caddy instead, that proxy connects to 127.0.0.1:3000.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     read_only: true
     cap_drop:
       - ALL
@@ -43,6 +50,62 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
+
+  # One-shot migration runner. The app's standalone runtime image has `prisma`
+  # pruned (it is a devDependency), so migrations run from a clean Node image
+  # with the prisma/ folder mounted. Not started by `up` — it lives behind the
+  # `migrate` profile and is invoked explicitly by scripts/deploy.sh:
+  #   docker compose -f docker-compose.prod.yml --profile migrate run --rm migrate
+  migrate:
+    image: node:22.12.0-alpine
+    container_name: heita_migrate
+    profiles:
+      - migrate
+    restart: "no"
+    working_dir: /app
+    networks:
+      - heita_internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.production
+    volumes:
+      - ./prisma:/app/prisma:ro
+    # DATABASE_URL must resolve to the `postgres` service over heita_internal,
+    # e.g. postgresql://heita:...@postgres:5432/heita
+    command: ["npx", "--yes", "prisma@7", "migrate", "deploy", "--schema=prisma/schema.prisma"]
+
+  # TLS-terminating reverse proxy. Sits on heita_edge and forwards to app:3000.
+  # Cloudflare proxies DNS in front of this; set CADDY_TLS_MODE to match your
+  # Cloudflare SSL/TLS mode (see Caddyfile + docs/DEPLOYMENT.md).
+  caddy:
+    image: caddy:2-alpine
+    container_name: heita_caddy
+    restart: unless-stopped
+    networks:
+      - heita_edge
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - .env.production
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   # Vector log shipper — tails json-file logs from the app container and
   # forwards structured JSON to the configured sink (Loki, Elasticsearch, etc).
@@ -145,8 +208,16 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  caddy_data:
+  caddy_config:
 
 networks:
+  # Isolated data plane — postgres, redis, app, migrate. No route to the
+  # internet, so the database and cache are unreachable from outside the host.
   heita_internal:
     driver: bridge
     internal: true
+  # Edge plane — app + caddy. Provides the app's outbound internet access and
+  # carries inbound proxied traffic. NOT internal.
+  heita_edge:
+    driver: bridge

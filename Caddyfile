@@ -1,0 +1,40 @@
+# Heita CRM — reverse proxy for the Docker Compose (VPS) deployment.
+#
+# DOMAIN and ACME_EMAIL are read from .env.production via the caddy service's
+# env_file. Cloudflare sits in front of this proxy for DNS/CDN.
+#
+# Cloudflare SSL/TLS mode → what to do here:
+#   • "Full (strict)"  → install a Cloudflare Origin Certificate on the host and
+#                        point Caddy at it (see the commented tls block below).
+#                        This is the recommended production setup.
+#   • "Full"           → let Caddy obtain its own Let's Encrypt cert (default
+#                        config below). Works with Cloudflare proxy ON.
+#   • DNS-only (grey)  → default config below; Caddy gets a public LE cert.
+#
+# Do NOT use Cloudflare "Flexible" — it leaves the origin hop unencrypted.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Trust Cloudflare's forwarded client IP so rate-limiting / logging see the
+	# real visitor address rather than the Cloudflare edge.
+	# (Caddy resolves X-Forwarded-For from these trusted ranges.)
+
+	reverse_proxy app:3000 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	# --- Cloudflare Origin Certificate (Full strict) -------------------------
+	# Place the cert/key on the host, mount them into the caddy service, then
+	# replace the automatic HTTPS above by uncommenting:
+	#
+	#   tls /etc/caddy/origin.pem /etc/caddy/origin-key.pem
+	#
+	# and add to the caddy service volumes in docker-compose.prod.yml:
+	#   - ./docker/caddy/origin.pem:/etc/caddy/origin.pem:ro
+	#   - ./docker/caddy/origin-key.pem:/etc/caddy/origin-key.pem:ro
+}
