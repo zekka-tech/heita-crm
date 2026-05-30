@@ -103,13 +103,18 @@ describe("approveOcrReceipt", () => {
 describe("rejectOcrReceipt", () => {
   it("updates status to REJECTED and writes audit log", async () => {
     prisma.ocrReceipt.update.mockResolvedValue({});
-    prisma.ocrReceipt.findUnique.mockResolvedValue({ businessId: "biz1" });
-    await rejectOcrReceipt("rcpt1", "staff1");
+    prisma.ocrReceipt.findUnique.mockResolvedValue({ id: "rcpt1", businessId: "biz1", status: "PENDING_REVIEW" });
+    await rejectOcrReceipt("rcpt1", "staff1", "biz1");
     expect(prisma.ocrReceipt.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "REJECTED" }) })
     );
     expect(recordStaffAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({ action: "OCR_RECEIPT_REJECTED", targetId: "rcpt1" })
     );
+  });
+
+  it("throws when receipt belongs to a different business", async () => {
+    prisma.ocrReceipt.findUnique.mockResolvedValue({ id: "rcpt1", businessId: "biz_other", status: "PENDING_REVIEW" });
+    await expect(rejectOcrReceipt("rcpt1", "staff1", "biz1")).rejects.toThrow("not found");
   });
 });

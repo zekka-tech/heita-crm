@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
+import { verifyCsrfNextApiRequest } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { authenticateRequestUser } from "@/lib/request-auth";
 import { requireRole } from "@/lib/staff";
@@ -35,6 +36,10 @@ export default async function handler(
   }
 
   if (req.method === "POST") {
+    if (!verifyCsrfNextApiRequest(req)) {
+      return res.status(403).json({ error: "CSRF validation failed." });
+    }
+
     const { receiptId, action, businessId, overridePoints } = req.body as {
       receiptId?: string;
       action?: "approve" | "reject";
@@ -56,7 +61,7 @@ export default async function handler(
       if (action === "approve") {
         await approveOcrReceipt(receiptId, session.userId, businessId, overridePoints);
       } else {
-        await rejectOcrReceipt(receiptId, session.userId);
+        await rejectOcrReceipt(receiptId, session.userId, businessId);
       }
       return res.status(200).json({ ok: true });
     } catch (err) {

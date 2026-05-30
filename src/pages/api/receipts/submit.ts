@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
+import { verifyCsrfNextApiRequest } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { authenticateRequestUser } from "@/lib/request-auth";
 import { assertOwnedStorageUrl } from "@/lib/security";
@@ -13,6 +14,10 @@ export default async function handler(
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed." });
+  }
+
+  if (!verifyCsrfNextApiRequest(req)) {
+    return res.status(403).json({ error: "CSRF validation failed." });
   }
 
   const session = await authenticateRequestUser(req.headers);

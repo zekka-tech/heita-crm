@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+
 import { ConsentChannel, ConsentType, Prisma } from "@prisma/client";
 
 import { sendEmail } from "@/lib/email";
@@ -106,6 +108,93 @@ export async function exportAccountData(userId: string) {
 
 const ALLOWED_AI_MODES = ["ollama", "anthropic"] as const;
 
+// --- Email verification helpers --------------------------------------------------
+
+const EMAIL_VERIFY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function emailVerifySecret(): string {
+  const s = process.env.AUTH_SECRET;
+  if (!s) throw new Error("AUTH_SECRET is not configured.");
+  return s;
+}
+
+function signEmailToken(userId: string, newEmail: string, expiresAt: number): string {
+  return createHmac("sha256", emailVerifySecret())
+    .update(`${userId}:${newEmail}:${expiresAt}`)
+    .digest("hex");
+}
+
+/** Queue a pending email-change and send a click-through verification link. */
+export async function initiateEmailChange(userId: string, newEmail: string) {
+  if (newEmail.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+    throw new Error("Provide a valid email address.");
+  }
+
+  const existing = await prisma.user.findFirst({
+    where: { email: newEmail, NOT: { id: userId } },
+    select: { id: true }
+  });
+  if (existing) {
+    // Respond identically to avoid email enumeration.
+    logger.warn({ userId }, "account.email.change.conflict");
+    return;
+  }
+
+  const expiresAt = Date.now() + EMAIL_VERIFY_TTL_MS;
+  const token = signEmailToken(userId, newEmail, expiresAt);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { pendingEmail: newEmail }
+  });
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const link = `${appUrl}/api/account/verify-email?userId=${encodeURIComponent(userId)}&email=${encodeURIComponent(newEmail)}&exp=${expiresAt}&token=${token}`;
+
+  await sendEmail({
+    to: newEmail,
+    subject: "Verify your new Heita email address",
+    text: `Click the link to verify your email address:\n\n${link}\n\nThis link expires in 24 hours.`,
+    html: `<p>Click <a href="${link}">here</a> to verify your new email address.</p><p>This link expires in 24 hours.</p>`
+  });
+
+  logger.info({ userId }, "account.email.change.initiated");
+}
+
+/** Confirm a pending email change given a signed verification token. */
+export async function confirmEmailChange(
+  userId: string,
+  newEmail: string,
+  exp: number,
+  token: string
+) {
+  if (Date.now() > exp) throw new Error("Verification link has expired.");
+
+  const expected = signEmailToken(userId, newEmail, exp);
+  const expectedBuf = Buffer.from(expected, "hex");
+  const tokenBuf = Buffer.from(token.length === expected.length ? token : "x".repeat(expected.length), "hex");
+  if (!timingSafeEqual(expectedBuf, tokenBuf)) {
+    throw new Error("Invalid verification token.");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, pendingEmail: true }
+  });
+  if (!user || user.pendingEmail !== newEmail) {
+    throw new Error("No pending email change matches this link.");
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { email: newEmail, pendingEmail: null }
+  });
+
+  logger.info({ userId }, "account.email.change.confirmed");
+}
+
+// ---------------------------------------------------------------------------------
+
 export async function updateAccountProfile(input: {
   userId: string;
   name?: string | null;
@@ -117,9 +206,8 @@ export async function updateAccountProfile(input: {
     throw new Error("Name must be 120 characters or fewer.");
   }
   if (input.email !== undefined && input.email !== null) {
-    if (input.email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) {
-      throw new Error("Provide a valid email address.");
-    }
+    // Email changes go through a verification flow — do not persist here.
+    throw new Error("Use initiateEmailChange to update the email address.");
   }
   if (
     input.preferredAiMode !== undefined &&
@@ -137,7 +225,6 @@ export async function updateAccountProfile(input: {
   const changedFields = (
     [
       input.name !== undefined && "name",
-      input.email !== undefined && "email",
       input.preferredAiMode !== undefined && "preferredAiMode",
       input.notificationPreferences !== undefined && "notificationPreferences"
     ] as const
@@ -147,7 +234,6 @@ export async function updateAccountProfile(input: {
     where: { id: input.userId },
     data: {
       name: input.name ?? undefined,
-      email: input.email ?? undefined,
       preferredAiMode: input.preferredAiMode ?? undefined,
       notificationPreferences:
         normalizedPreferences !== undefined

@@ -69,8 +69,10 @@ function ensureCsrfCookie(response: NextResponse, existing: string | undefined):
   }
   const token = generateCsrfToken();
   response.cookies.set(CSRF_COOKIE, token, {
+    // httpOnly must stay false: useCsrfToken() reads this via document.cookie
+    // to include it in the x-heita-csrf request header (double-submit pattern).
     httpOnly: false,
-    sameSite: "lax",
+    sameSite: "strict",
     // __Host- prefix requires Secure=true always (Chromium allows Secure on http://localhost)
     secure: true,
     path: "/",

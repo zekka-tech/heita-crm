@@ -368,7 +368,17 @@ export async function approveOcrReceipt(
   }
 }
 
-export async function rejectOcrReceipt(receiptId: string, staffUserId: string) {
+export async function rejectOcrReceipt(receiptId: string, staffUserId: string, businessId: string) {
+  const receipt = await prisma.ocrReceipt.findUnique({
+    where: { id: receiptId },
+    select: { id: true, businessId: true, status: true }
+  });
+  if (!receipt) throw new Error("Receipt not found.");
+  if (receipt.businessId !== businessId) throw new Error("Receipt not found.");
+  if (receipt.status !== "PENDING_REVIEW") {
+    throw new Error(`Cannot reject receipt in status: ${receipt.status}`);
+  }
+
   await prisma.ocrReceipt.update({
     where: { id: receiptId },
     data: { status: "REJECTED", reviewedAt: new Date(), reviewedBy: staffUserId }

@@ -164,9 +164,8 @@ export class CsrfError extends Error {
 }
 
 /**
- * Helper for API routes: returns a 403 response when the double-submit token
- * is missing or wrong, or null when the request is allowed through. Keeps the
- * shape consistent so every mutation route uses the same error envelope.
+ * Helper for App Router routes: returns a 403 response when the double-submit
+ * token is missing or wrong, or null when the request is allowed through.
  */
 export async function csrfFailureResponse(
   request: Request
@@ -181,4 +180,20 @@ export async function csrfFailureResponse(
       headers: { "Content-Type": "application/json" }
     }
   );
+}
+
+/**
+ * Helper for Pages Router API handlers: checks the double-submit CSRF token
+ * from `NextApiRequest`. Returns true if the check passed (caller proceeds),
+ * false if it failed (caller should return 403).
+ */
+export function verifyCsrfNextApiRequest(
+  req: { cookies: Partial<Record<string, string>>; headers: Record<string, string | string[] | undefined> }
+): boolean {
+  const cookie = req.cookies[CSRF_COOKIE] ?? null;
+  const header = (() => {
+    const h = req.headers[CSRF_HEADER];
+    return Array.isArray(h) ? (h[0] ?? null) : (h ?? null);
+  })();
+  return verifyCsrfTokenPair(cookie, header).ok;
 }

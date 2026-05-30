@@ -24,11 +24,16 @@ export function normalizeHeaderRecord(
 }
 
 export async function authenticateRequestUser(headers: Headers | Record<string, string | string[] | undefined>) {
+  const secret = env.AUTH_SECRET;
+  if (!secret) {
+    throw new Error("AUTH_SECRET is not configured. Set it in your environment.");
+  }
+
   const token = await getToken({
     req: {
       headers: normalizeHeaderRecord(headers)
     },
-    secret: env.AUTH_SECRET ?? "heita-dev-auth-secret"
+    secret
   });
 
   const userId = typeof token?.id === "string" ? token.id : null;

@@ -7,6 +7,7 @@ import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { NotificationPreferencesSchema } from "@/lib/notification-preferences";
 import {
+  initiateEmailChange,
   softDeleteAccount,
   updateAccountProfile
 } from "@/server/services/account.service";
@@ -51,10 +52,18 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
+    // Email changes go through a verification flow — handle separately.
+    if (parsed.data.email !== undefined && parsed.data.email !== null) {
+      await initiateEmailChange(userId, parsed.data.email);
+      return NextResponse.json({
+        ok: true,
+        emailVerification: "A verification link has been sent to your new email address."
+      });
+    }
+
     const updated = await updateAccountProfile({
       userId,
       name: parsed.data.name ?? undefined,
-      email: parsed.data.email ?? undefined,
       preferredAiMode: parsed.data.preferredAiMode ?? undefined,
       notificationPreferences: parsed.data.notificationPreferences ?? undefined
     });
