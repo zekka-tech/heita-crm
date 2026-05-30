@@ -35,6 +35,36 @@ groups:
           summary: "Dead-letter queue depth > 100"
           description: "{{ $value }} jobs in DLQ — investigate worker failures immediately."
 
+  - name: heita_crm_security
+    interval: 30s
+    rules:
+      - alert: OtpRequestSpike
+        expr: rate(heita_otp_requests_total[5m]) > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OTP request rate spike"
+          description: "{{ $value | humanize }} OTP requests/s — possible automated abuse or credential stuffing."
+
+      - alert: WebhookAuthFailureSpike
+        expr: rate(heita_webhook_auth_failures_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Webhook auth failure rate elevated"
+          description: "{{ $value | humanize }} auth failures/s on webhook {{ $labels.provider }} — possible replay or forged requests."
+
+      - alert: RedisErrorSpike
+        expr: rate(heita_redis_errors_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis error rate elevated"
+          description: "{{ $value | humanize }} Redis errors/s — rate limiting and OTP delivery may be degraded."
+
   - name: heita_crm_warning
     interval: 60s
     rules:

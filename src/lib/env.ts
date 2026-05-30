@@ -12,9 +12,16 @@ const envSchema = z
     // Auth
     AUTH_SECRET: z.string().optional(),
     NEXTAUTH_URL: z.string().url().optional(),
+    AUTH_GOOGLE_ID: z.string().optional(),
+    AUTH_GOOGLE_SECRET: z.string().optional(),
+    AUTH_APPLE_ID: z.string().optional(),
+    AUTH_APPLE_SECRET: z.string().optional(),
+    STAFF_INVITE_SECRET: z.string().optional(),
 
     // POS
     POS_SHARED_SECRET: z.string().optional(),
+    POS_RATE_LIMIT_PER_BUSINESS_PER_MINUTE: z.coerce.number().int().min(1).optional(),
+    POS_RATE_LIMIT_PER_BUSINESS_IP_PER_MINUTE: z.coerce.number().int().min(1).optional(),
 
     // WhatsApp / Meta
     WHATSAPP_APP_SECRET: z.string().optional(),
@@ -22,13 +29,14 @@ const envSchema = z
     WHATSAPP_VERIFY_TOKEN: z.string().optional(),
     WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
     WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().optional(),
+    WHATSAPP_API_VERSION: z.string().optional(),
 
     // AI providers
     ANTHROPIC_API_KEY: z.string().optional(),
     ANTHROPIC_MODEL: z.string().optional(),
     DEEPSEEK_API_KEY: z.string().optional(),
     OLLAMA_BASE_URL: z.string().optional(),
-    OLLAMA_MODEL: z.string().optional(),
+    OLLAMA_CHAT_MODEL: z.string().optional(),
     OLLAMA_EMBED_MODEL: z.string().optional(),
 
     // Circuit breaker
@@ -39,6 +47,8 @@ const envSchema = z
     METRICS_BEARER_TOKEN: z.string().optional(),
     OTLP_ENDPOINT: z.string().url().optional(),
     LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
+    SENTRY_ENVIRONMENT: z.string().optional(),
+    SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
 
     // Scheduled jobs
     CRON_SECRET: z.string().min(32).optional(),
@@ -51,6 +61,9 @@ const envSchema = z
     AWS_S3_BUCKET: z.string().optional(),
     R2_PUBLIC_URL: z.string().url().optional(),
     MINIO_ENDPOINT: z.string().optional(),
+    MINIO_ACCESS_KEY: z.string().optional(),
+    MINIO_SECRET_KEY: z.string().optional(),
+    MINIO_BUCKET: z.string().optional(),
 
     // Push notifications
     VAPID_PRIVATE_KEY: z.string().optional(),
@@ -62,6 +75,7 @@ const envSchema = z
     MALWARE_SCAN_REQUIRED: z.enum(["0", "1"]).optional(),
     CLAMAV_HOST: z.string().optional(),
     CLAMAV_PORT: z.coerce.number().int().optional(),
+    CLAMAV_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).optional(),
 
     // Redis
     REDIS_URL: z.string().optional(),
@@ -71,11 +85,12 @@ const envSchema = z
     EMAIL_FROM: z.string().optional(),
     EMAIL_SERVER_PASSWORD: z.string().optional(),
 
-    // Africa's Talking (SMS)
+    // Africa's Talking (SMS + webhooks)
     AT_API_KEY: z.string().optional(),
     AT_USERNAME: z.string().optional(),
     AT_SENDER_ID: z.string().optional(),
     AT_ALLOWLIST_IPS: z.string().optional(),
+    AT_WEBHOOK_SECRET: z.string().optional(),
 
     // Pusher (real-time)
     PUSHER_APP_ID: z.string().optional(),
@@ -92,6 +107,11 @@ const envSchema = z
 
     // Customer import (inline vs queued)
     CUSTOMER_IMPORT_INLINE: z.enum(["0", "1"]).optional(),
+    AI_INGEST_INLINE: z.enum(["0", "1"]).optional(),
+
+    // Process / runtime ops
+    SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60_000).optional(),
+    TRUSTED_PROXY_IPS: z.string().optional(),
 
     // Bot protection
     TURNSTILE_SECRET_KEY: z.string().optional(),
@@ -127,6 +147,14 @@ const envSchema = z
         code: z.ZodIssueCode.custom,
         message: "POS_SHARED_SECRET is required in production.",
         path: ["POS_SHARED_SECRET"]
+      });
+    }
+
+    if (isProduction && data.AT_API_KEY && !data.AT_WEBHOOK_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "AT_WEBHOOK_SECRET is required in production when AT_API_KEY is set — it authenticates Africa's Talking delivery callbacks.",
+        path: ["AT_WEBHOOK_SECRET"]
       });
     }
 
