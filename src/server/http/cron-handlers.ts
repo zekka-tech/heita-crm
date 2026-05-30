@@ -4,6 +4,7 @@ import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
 import { constantTimeEqual } from "@/lib/security";
+import { withSpan } from "@/lib/tracing";
 import { sendDueEventReminders } from "@/server/services/events.service";
 import { expireEligiblePoints } from "@/server/services/loyalty.service";
 
@@ -46,35 +47,37 @@ export async function handleCleanupOtpCron(request: Request) {
     return NextResponse.json({ ok: true, cached: true });
   }
 
-  const cutoffOtp = new Date(Date.now() - STALE_OTP_HOURS * 60 * 60 * 1000);
-  const cutoffWebhook = new Date(Date.now() - STALE_WEBHOOK_DAYS * 24 * 60 * 60 * 1000);
+  return withSpan("cron.cleanup_otp", { job: "cleanup-otp" }, async () => {
+    const cutoffOtp = new Date(Date.now() - STALE_OTP_HOURS * 60 * 60 * 1000);
+    const cutoffWebhook = new Date(Date.now() - STALE_WEBHOOK_DAYS * 24 * 60 * 60 * 1000);
 
-  const [otp, consents] = await Promise.all([
-    prisma.otpCode.deleteMany({
-      where: {
-        OR: [
-          { expiresAt: { lt: cutoffOtp } },
-          { consumedAt: { not: null, lt: cutoffOtp } }
-        ]
-      }
-    }),
-    prisma.userConsent.deleteMany({
-      where: {
-        revokedAt: { not: null, lt: cutoffWebhook }
-      }
-    })
-  ]);
+    const [otp, consents] = await Promise.all([
+      prisma.otpCode.deleteMany({
+        where: {
+          OR: [
+            { expiresAt: { lt: cutoffOtp } },
+            { consumedAt: { not: null, lt: cutoffOtp } }
+          ]
+        }
+      }),
+      prisma.userConsent.deleteMany({
+        where: {
+          revokedAt: { not: null, lt: cutoffWebhook }
+        }
+      })
+    ]);
 
-  logger.info(
-    { otp: otp.count, consents: consents.count },
-    "cron.cleanup_otp.completed"
-  );
+    logger.info(
+      { otp: otp.count, consents: consents.count },
+      "cron.cleanup_otp.completed"
+    );
 
-  return NextResponse.json({
-    ok: true,
-    deletedOtps: otp.count,
-    deletedConsents: consents.count,
-    timestamp: new Date().toISOString()
+    return NextResponse.json({
+      ok: true,
+      deletedOtps: otp.count,
+      deletedConsents: consents.count,
+      timestamp: new Date().toISOString()
+    });
   });
 }
 
@@ -88,8 +91,10 @@ export async function handleExpirePointsCron(request: Request) {
     return NextResponse.json({ ok: true, cached: true });
   }
 
-  const result = await expireEligiblePoints();
-  return NextResponse.json({ ok: true, job: "expire-points", result });
+  return withSpan("cron.expire_points", { job: "expire-points" }, async () => {
+    const result = await expireEligiblePoints();
+    return NextResponse.json({ ok: true, job: "expire-points", result });
+  });
 }
 
 export async function handleSendRemindersCron(request: Request) {
@@ -102,9 +107,11 @@ export async function handleSendRemindersCron(request: Request) {
     return NextResponse.json({ ok: true, cached: true });
   }
 
-  const result = await sendDueEventReminders();
-  logger.info(result, "cron.send_reminders.completed");
-  return NextResponse.json({ ok: true, job: "send-reminders", result });
+  return withSpan("cron.send_reminders", { job: "send-reminders" }, async () => {
+    const result = await sendDueEventReminders();
+    logger.info(result, "cron.send_reminders.completed");
+    return NextResponse.json({ ok: true, job: "send-reminders", result });
+  });
 }
 
 /**
@@ -219,4 +226,51 @@ export async function handlePurgeWhatsappMessagesCron(request: Request) {
 
   logger.info({ totalDeleted, cutoff }, "cron.purge_whatsapp_messages.completed");
   return NextResponse.json({ ok: true, job: "purge-whatsapp-messages", totalDeleted });
+}
+
+export async function handleBroadcastPromotionsCron(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const idempKey = `cron:broadcast-promotions:${new Date().toISOString().slice(0, 13)}`;
+  if (await checkIdempotency(idempKey, 7200)) {
+    return NextResponse.json({ ok: true, cached: true });
+  }
+
+  return withSpan("cron.broadcast_promotions", { job: "broadcast-promotions" }, async () => {
+    const now = new Date();
+    const due = await prisma.promotion.findMany({
+      where: {
+        isActive: true,
+        broadcastAt: null,
+        startsAt: { lte: now }
+      },
+      select: { id: true, businessId: true }
+    });
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const promotion of due) {
+      try {
+        // Atomic claim: updateMany where broadcastAt IS NULL prevents double-send
+        const claimed = await prisma.promotion.updateMany({
+          where: { id: promotion.id, broadcastAt: null },
+          data: { broadcastAt: now }
+        });
+        if (claimed.count === 0) {
+          // Already broadcast by another concurrent invocation
+          continue;
+        }
+        succeeded++;
+      } catch (error) {
+        failed++;
+        logger.error({ err: error, promotionId: promotion.id }, "cron.broadcast_promotions.item_failed");
+      }
+    }
+
+    logger.info({ total: due.length, succeeded, failed }, "cron.broadcast_promotions.completed");
+    return NextResponse.json({ ok: true, job: "broadcast-promotions", total: due.length, succeeded, failed });
+  });
 }

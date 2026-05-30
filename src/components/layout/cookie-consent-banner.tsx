@@ -58,7 +58,6 @@ export function CookieConsentBanner() {
           <Button
             type="button"
             variant="secondary"
-            size="sm"
             onClick={() => handleChoice("rejected")}
           >
             {t("reject")}
@@ -66,7 +65,6 @@ export function CookieConsentBanner() {
           <Button
             type="button"
             variant="primary"
-            size="sm"
             onClick={() => handleChoice("accepted")}
           >
             {t("accept")}

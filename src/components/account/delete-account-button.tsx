@@ -53,7 +53,7 @@ export function DeleteAccountButton() {
   return (
     <div
       role="alertdialog"
-      aria-modal="false"
+      aria-modal="true"
       aria-labelledby="delete-account-heading"
       aria-describedby="delete-account-description"
       className="rounded-xl border border-danger/30 bg-danger/5 p-4 space-y-3"

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getOtpPurposeForMode, type AuthOtpMode } from "@/lib/auth-intent";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
-import { observeHttpRoute } from "@/lib/metrics";
+import { incrementOtpMetric, observeHttpRoute } from "@/lib/metrics";
 import { issueOtpCode } from "@/lib/otp";
 import { normalizeZaPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +12,7 @@ import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 import { getClientIp } from "@/lib/security";
 import { sendOtpSms } from "@/lib/sms";
+import { withSpan } from "@/lib/tracing";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 
 const RequestOtpSchema = z.object({
@@ -35,6 +36,12 @@ const GENERIC_OTP_SENT_BODY = {
 };
 
 export async function handleRequestOtp(request: Request) {
+  return withSpan("otp.request", { "http.route": "/api/auth/request-otp" }, () =>
+    _handleRequestOtp(request)
+  );
+}
+
+async function _handleRequestOtp(request: Request) {
   const startedAt = Date.now();
   const requestId = resolveRequestId(request.headers);
   const ip = getClientIp(request.headers);
@@ -103,6 +110,7 @@ export async function handleRequestOtp(request: Request) {
     failClosed: true
   });
   if (!ipLimit.allowed) {
+    incrementOtpMetric("rate_limited");
     observeHttpRoute({
       route: "/api/auth/request-otp",
       method: "POST",
@@ -128,6 +136,7 @@ export async function handleRequestOtp(request: Request) {
     failClosed: true
   });
   if (!burstLimit.allowed) {
+    incrementOtpMetric("rate_limited");
     observeHttpRoute({
       route: "/api/auth/request-otp",
       method: "POST",
@@ -153,6 +162,7 @@ export async function handleRequestOtp(request: Request) {
     failClosed: true
   });
   if (!phoneLimit.allowed) {
+    incrementOtpMetric("rate_limited");
     observeHttpRoute({
       route: "/api/auth/request-otp",
       method: "POST",
@@ -213,6 +223,7 @@ export async function handleRequestOtp(request: Request) {
 
   if (!shouldSendCode) {
     // Return generic response without revealing account existence.
+    incrementOtpMetric("enumeration_guard");
     observeHttpRoute({
       route: "/api/auth/request-otp",
       method: "POST",
@@ -232,6 +243,7 @@ export async function handleRequestOtp(request: Request) {
   try {
     await sendOtpSms({ to: phone, code });
   } catch (error) {
+    incrementOtpMetric("send_failed");
     logger.error({ err: error, phone: phone.slice(-4) }, "otp.send_failed");
     observeHttpRoute({
       route: "/api/auth/request-otp",
@@ -245,6 +257,7 @@ export async function handleRequestOtp(request: Request) {
     );
   }
 
+  incrementOtpMetric("ok");
   observeHttpRoute({
     route: "/api/auth/request-otp",
     method: "POST",

@@ -8,6 +8,7 @@ import {
 import { runIdempotentOperation } from "@/lib/idempotency";
 import { logger } from "@/lib/logger";
 import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
+import { withSpan } from "@/lib/tracing";
 import { applyReferralRewardIfEligible } from "@/server/services/referral.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
@@ -212,6 +213,12 @@ function createEarnTransactionData(input: {
 }
 
 export async function earnPoints(input: EarnPointsInput) {
+  return withSpan("loyalty.earn_points", { "business.id": input.businessId, points: input.points }, () =>
+    _earnPoints(input)
+  );
+}
+
+async function _earnPoints(input: EarnPointsInput) {
   if (!Number.isFinite(input.points) || input.points <= 0) {
     throw new Error("Points to earn must be greater than zero.");
   }
@@ -307,6 +314,12 @@ export async function earnPoints(input: EarnPointsInput) {
 }
 
 export async function redeemPoints(input: RedeemPointsInput) {
+  return withSpan("loyalty.redeem_points", { "business.id": input.businessId }, () =>
+    _redeemPoints(input)
+  );
+}
+
+async function _redeemPoints(input: RedeemPointsInput) {
   return runIdempotentOperation({
     scope: `loyalty:redeem:${input.businessId}:${input.membershipId}`,
     key: input.idempotencyKey,
@@ -431,6 +444,12 @@ export async function redeemPoints(input: RedeemPointsInput) {
 }
 
 export async function refundTransaction(input: RefundTransactionInput) {
+  return withSpan("loyalty.refund_transaction", { "business.id": input.businessId, "transaction.id": input.transactionId }, () =>
+    _refundTransaction(input)
+  );
+}
+
+async function _refundTransaction(input: RefundTransactionInput) {
   return runIdempotentOperation({
     scope: `loyalty:refund:${input.businessId}:${input.transactionId}`,
     key: input.idempotencyKey,

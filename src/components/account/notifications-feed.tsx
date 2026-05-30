@@ -52,7 +52,7 @@ export function NotificationsFeed() {
   return (
     <ul className="grid gap-3">
       {notifications.map((notification) => (
-        <li key={notification.id}>
+        <li key={notification.id} aria-label={notification.title}>
           <Card variant="outline" className="flex items-start gap-3">
             <div
               className={`mt-1 flex h-9 w-9 items-center justify-center rounded-full ${notification.isRead ? "bg-line text-ink-subtle" : "bg-primary text-white"}`}

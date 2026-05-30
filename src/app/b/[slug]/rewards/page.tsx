@@ -181,7 +181,7 @@ export default async function BusinessRewardsPage({
                       </Button>
                     </form>
                   ) : (
-                    <Button asChild variant="primary" size="sm">
+                    <Button asChild variant="primary">
                       <Link
                         href={
                           session?.user?.id

@@ -8,7 +8,8 @@ vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
 }));
 vi.mock("@/lib/metrics", () => ({
-  observeHttpRoute: vi.fn()
+  observeHttpRoute: vi.fn(),
+  incrementWebhookAuthFailure: vi.fn()
 }));
 vi.mock("@/lib/request-context", () => ({
   requestIdHeader: "x-request-id",

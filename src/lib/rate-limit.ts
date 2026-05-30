@@ -1,4 +1,5 @@
 import { logger } from "@/lib/logger";
+import { incrementRedisError } from "@/lib/metrics";
 import { getRedis } from "@/lib/redis";
 
 export type RateLimitDecision = {
@@ -100,6 +101,7 @@ export async function enforceRateLimit(
       resetInSeconds
     };
   } catch (err) {
+    incrementRedisError();
     if (opts.failClosed) {
       logger.error(
         { identifier: opts.identifier, err },

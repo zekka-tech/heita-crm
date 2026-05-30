@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { logger } from "@/lib/logger";
-import { observeHttpRoute } from "@/lib/metrics";
+import { incrementWebhookAuthFailure, observeHttpRoute } from "@/lib/metrics";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 import {
   constantTimeEqual,
@@ -111,6 +111,7 @@ export async function handleWhatsappWebhook(request: Request) {
     appSecret
   });
   if (!verified) {
+    incrementWebhookAuthFailure("whatsapp");
     logger.warn({ signature: signatureHeader }, "whatsapp.webhook.invalid_signature");
     observeHttpRoute({
       route: "/api/webhooks/whatsapp",
@@ -198,6 +199,7 @@ export async function handleAfricasTalkingWebhook(request: Request) {
     .update(rawBody)
     .digest("hex");
   if (!constantTimeEqual(expectedAt, receivedHmac)) {
+    incrementWebhookAuthFailure("africas_talking");
     logger.warn({}, "africas_talking.webhook.invalid_hmac");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -207,6 +209,7 @@ export async function handleAfricasTalkingWebhook(request: Request) {
   if (timestampRaw !== null) {
     const timestampMs = Number(timestampRaw);
     if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > 5 * 60 * 1000) {
+      incrementWebhookAuthFailure("africas_talking");
       logger.warn({ timestamp: timestampRaw }, "africas_talking.webhook.replay_detected");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

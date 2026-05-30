@@ -118,6 +118,30 @@ const webhookEventsTotal = getOrCreateCounter(
   ["provider", "status"]
 );
 
+// ─── OTP / Auth / Bot ─────────────────────────────────────────────────────────
+
+const otpRequestsTotal = getOrCreateCounter(
+  "heita_otp_requests_total",
+  "OTP code request attempts",
+  ["result"]
+);
+
+const webhookAuthFailuresTotal = getOrCreateCounter(
+  "heita_webhook_auth_failures_total",
+  "Webhook HMAC or timestamp auth failures",
+  ["provider"]
+);
+
+const redisErrorsTotal = getOrCreateCounter(
+  "heita_redis_errors_total",
+  "Redis errors that caused fail-closed rate limiting"
+);
+
+const turnstileFailuresTotal = getOrCreateCounter(
+  "heita_turnstile_failures_total",
+  "Cloudflare Turnstile bot-check failures"
+);
+
 // ─── Queues ────────────────────────────────────────────────────────────────────
 
 const queueJobsTotal = getOrCreateCounter(
@@ -172,6 +196,22 @@ export function incrementPosMetric(status: string, businessId: string) {
 
 export function incrementAuthMetric(method: string, status: "success" | "failure") {
   authAttemptsTotal.inc({ method, status });
+}
+
+export function incrementOtpMetric(result: "ok" | "rate_limited" | "send_failed" | "enumeration_guard") {
+  otpRequestsTotal.inc({ result });
+}
+
+export function incrementWebhookAuthFailure(provider: string) {
+  webhookAuthFailuresTotal.inc({ provider });
+}
+
+export function incrementRedisError() {
+  redisErrorsTotal.inc();
+}
+
+export function incrementTurnstileFailure() {
+  turnstileFailuresTotal.inc();
 }
 
 export function incrementWebhookMetric(provider: string, status: string) {

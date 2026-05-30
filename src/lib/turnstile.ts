@@ -1,4 +1,5 @@
 import { logger } from "@/lib/logger";
+import { incrementTurnstileFailure } from "@/lib/metrics";
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
@@ -74,6 +75,7 @@ export async function verifyTurnstileToken(
     | null;
 
   if (!data?.success) {
+    incrementTurnstileFailure();
     return {
       ok: false,
       reason: data?.["error-codes"]?.join(",") ?? "rejected"

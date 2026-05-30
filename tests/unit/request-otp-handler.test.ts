@@ -33,7 +33,8 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/metrics", () => ({
-  observeHttpRoute: vi.fn()
+  observeHttpRoute: vi.fn(),
+  incrementOtpMetric: vi.fn()
 }));
 
 const mockEnforceRateLimit = vi.fn().mockResolvedValue({

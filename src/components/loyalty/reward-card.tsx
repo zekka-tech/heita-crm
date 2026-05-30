@@ -21,15 +21,16 @@ export function RewardCard({
   perkLabels,
   action
 }: RewardCardProps) {
+  const titleId = `reward-title-${reward.title.toLowerCase().replace(/\s+/g, "-").slice(0, 30)}`;
   return (
-    <article className="group flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 shadow-md transition hover:shadow-lg">
+    <article aria-labelledby={titleId} className="group flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 shadow-md transition hover:shadow-lg">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-accent-foreground">
             <Gift className="h-5 w-5" strokeWidth={2.2} />
           </div>
           <div>
-            <h3 className="font-display text-base font-semibold text-ink">
+            <h3 id={titleId} className="font-display text-base font-semibold text-ink">
               {reward.title}
             </h3>
             {reward.description ? (

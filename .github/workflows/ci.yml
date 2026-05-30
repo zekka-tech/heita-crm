@@ -262,7 +262,6 @@ jobs:
     timeout-minutes: 20
     if: github.event_name == 'pull_request'
     needs: quality
-    continue-on-error: true
     env:
       NEXT_TELEMETRY_DISABLED: "1"
       AUTH_SECRET: "ci-only-secret"

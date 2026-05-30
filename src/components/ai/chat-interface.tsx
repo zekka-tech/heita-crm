@@ -223,7 +223,9 @@ export function ChatInterface({
           submit();
         }}
       >
+        <label htmlFor="chat-input" className="sr-only">Message</label>
         <textarea
+          id="chat-input"
           value={input}
           onChange={(event) => setInput(event.target.value)}
           rows={1}
