@@ -8,24 +8,108 @@ const envSchema = z
     DATABASE_URL: z.string().min(1),
     DB_CONNECTION_LIMIT: z.coerce.number().int().min(1).max(100).default(10),
     DEPLOYMENT_READ_ONLY: z.enum(["0", "1"]).default("0"),
+
+    // Auth
     AUTH_SECRET: z.string().optional(),
+    NEXTAUTH_URL: z.string().url().optional(),
+
+    // POS
     POS_SHARED_SECRET: z.string().optional(),
+
+    // WhatsApp / Meta
     WHATSAPP_APP_SECRET: z.string().optional(),
     WHATSAPP_ACCESS_TOKEN: z.string().optional(),
     WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+    WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+    WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().optional(),
+
+    // AI providers
     ANTHROPIC_API_KEY: z.string().optional(),
+    ANTHROPIC_MODEL: z.string().optional(),
     DEEPSEEK_API_KEY: z.string().optional(),
     OLLAMA_BASE_URL: z.string().optional(),
+    OLLAMA_MODEL: z.string().optional(),
+    OLLAMA_EMBED_MODEL: z.string().optional(),
+
+    // Circuit breaker
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.coerce.number().int().min(1).max(20).default(5),
     CIRCUIT_BREAKER_COOLDOWN_MS: z.coerce.number().int().min(1000).max(300_000).default(60_000),
+
+    // Observability
     METRICS_BEARER_TOKEN: z.string().optional(),
+    OTLP_ENDPOINT: z.string().url().optional(),
+    LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
+
+    // Scheduled jobs
     CRON_SECRET: z.string().min(32).optional(),
+
+    // Storage (S3-compatible: Cloudflare R2 in prod, MinIO locally)
     AWS_ACCESS_KEY_ID: z.string().optional(),
     AWS_SECRET_ACCESS_KEY: z.string().optional(),
+    AWS_REGION: z.string().optional(),
+    AWS_S3_ENDPOINT: z.string().optional(),
+    AWS_S3_BUCKET: z.string().optional(),
+    R2_PUBLIC_URL: z.string().url().optional(),
+    MINIO_ENDPOINT: z.string().optional(),
+
+    // Push notifications
     VAPID_PRIVATE_KEY: z.string().optional(),
+    VAPID_PUBLIC_KEY: z.string().optional(),
     VAPID_SUBJECT: z.string().optional(),
-    OTLP_ENDPOINT: z.string().url().optional(),
-    TURNSTILE_SECRET_KEY: z.string().optional()
+
+    // Malware scanning
+    MALWARE_SCAN_MODE: z.enum(["none", "clamav"]).optional(),
+    MALWARE_SCAN_REQUIRED: z.enum(["0", "1"]).optional(),
+    CLAMAV_HOST: z.string().optional(),
+    CLAMAV_PORT: z.coerce.number().int().optional(),
+
+    // Redis
+    REDIS_URL: z.string().optional(),
+    REDIS_PORT: z.coerce.number().int().optional(),
+
+    // Email (Resend)
+    EMAIL_FROM: z.string().optional(),
+    EMAIL_SERVER_PASSWORD: z.string().optional(),
+
+    // Africa's Talking (SMS)
+    AT_API_KEY: z.string().optional(),
+    AT_USERNAME: z.string().optional(),
+    AT_SENDER_ID: z.string().optional(),
+    AT_ALLOWLIST_IPS: z.string().optional(),
+
+    // Pusher (real-time)
+    PUSHER_APP_ID: z.string().optional(),
+    PUSHER_KEY: z.string().optional(),
+    PUSHER_SECRET: z.string().optional(),
+    PUSHER_CLUSTER: z.string().optional(),
+
+    // Yoco (payments)
+    YOCO_SECRET_KEY: z.string().optional(),
+    YOCO_WEBHOOK_SECRET: z.string().optional(),
+
+    // Staff step-up MFA
+    STAFF_STEP_UP_WINDOW_SECONDS: z.coerce.number().int().optional(),
+
+    // Customer import (inline vs queued)
+    CUSTOMER_IMPORT_INLINE: z.enum(["0", "1"]).optional(),
+
+    // Bot protection
+    TURNSTILE_SECRET_KEY: z.string().optional(),
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
+
+    // Public app config
+    NEXT_PUBLIC_APP_URL: z.string().url().optional(),
+    NEXT_PUBLIC_APP_VERSION: z.string().optional(),
+    NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
+    NEXT_PUBLIC_PUSHER_KEY: z.string().optional(),
+    NEXT_PUBLIC_PUSHER_CLUSTER: z.string().optional(),
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY: z.string().optional(),
+    NEXT_PUBLIC_WHATSAPP_NUMBER: z.string().optional(),
+
+    // Sentry (build-time source map upload)
+    SENTRY_ORG: z.string().optional(),
+    SENTRY_PROJECT: z.string().optional(),
+    SENTRY_AUTH_TOKEN: z.string().optional()
   })
   .superRefine((data, ctx) => {
     const isProduction = data.NODE_ENV === "production";

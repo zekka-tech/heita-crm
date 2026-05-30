@@ -104,7 +104,7 @@ export async function createStaffInvite(input: CreateStaffInviteInput) {
     );
 
     return createdInvite;
-  });
+  }, { maxWait: 5000, timeout: 10000 });
 
   const acceptUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/staff/accept/${token}`;
 

@@ -94,5 +94,5 @@ export async function joinBusiness(input: JoinBusinessInput) {
     });
 
     return membership;
-  });
+  }, { maxWait: 5000, timeout: 10000 });
 }

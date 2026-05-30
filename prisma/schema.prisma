@@ -426,6 +426,7 @@ model Message {
   body           String
   metadata       Json?
   sentAt         DateTime?
+  readByStaffAt  DateTime?
   createdAt      DateTime        @default(now())
   business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   user           User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -433,6 +434,7 @@ model Message {
 
   @@index([businessId, channel, createdAt])
   @@index([businessId, contactPhone, createdAt])
+  @@index([businessId, readByStaffAt])
   @@index([userId])
   @@unique([channel, externalId])
 }

@@ -76,7 +76,10 @@ export async function createYocoCheckoutSession(
   if (!yocoKey) throw new Error("YOCO_SECRET_KEY not configured.");
 
   const amountCents = plan.monthlyPriceZar * 100;
-  const idempotencyKey = `${businessId}:${planId}:${Math.floor(Date.now() / 3_600_000)}`;
+  // Stable idempotency key: same business+plan pair always produces the same
+  // key (within the same month) so retries don't create duplicate checkouts.
+  const monthStamp = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+  const idempotencyKey = `checkout:${businessId}:${planId}:${monthStamp}`;
 
   const resp = await fetch("https://payments.yoco.com/api/checkouts", {
     method: "POST",

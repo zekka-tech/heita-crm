@@ -99,7 +99,7 @@ export async function createDocumentRecord(
     }
 
     return document;
-  });
+  }, { maxWait: 5000, timeout: 10000 });
 }
 
 export async function requestDocumentIngestion(

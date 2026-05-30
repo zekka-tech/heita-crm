@@ -286,7 +286,7 @@ export async function softDeleteAccount(userId: string) {
     });
 
     return updatedUser;
-  });
+  }, { maxWait: 5000, timeout: 10000 });
 
   if (existingUser.email) {
     await sendEmail({
