@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { StaffRole } from "@prisma/client";
+import { StaffRole } from "@/types/enums";
 
 import {
   removeStaffMemberAction,

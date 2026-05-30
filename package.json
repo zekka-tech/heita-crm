@@ -8,6 +8,7 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev --turbopack",
     "build": "HEITA_BUILD_PHASE=1 next build",
     "start": "next start",
