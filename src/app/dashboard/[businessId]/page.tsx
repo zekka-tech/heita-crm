@@ -57,7 +57,9 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           memberships: true,
           messages: true,
           rewards: true,
-          loyaltyTransactions: true
+          loyaltyTransactions: true,
+          staffMembers: true,
+          documents: true
         }
       }
     }
@@ -144,6 +146,49 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           value={totalPointsIssued.toLocaleString()}
         />
       </section>
+
+      {(business._count.rewards === 0 || business._count.documents === 0 || business._count.staffMembers <= 1 || !business.whatsappPhoneNumber) ? (
+        <Card variant="surface" className="mt-6 space-y-3">
+          <header>
+            <h2 className="section-title">{t("setupChecklist")}</h2>
+            <p className="text-sm text-ink-muted">{t("setupChecklistBlurb")}</p>
+          </header>
+          <ul className="grid gap-2">
+            {business._count.rewards === 0 ? (
+              <li>
+                <Link href={`/dashboard/${businessId}/loyalty` as Route} className="flex items-center gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-ink hover:bg-warning/10">
+                  <Gift className="h-4 w-4 shrink-0 text-warning" />
+                  <span className="font-medium">Create your first reward</span>
+                </Link>
+              </li>
+            ) : null}
+            {business._count.documents === 0 ? (
+              <li>
+                <Link href={`/dashboard/${businessId}/ai-workspace` as Route} className="flex items-center gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-ink hover:bg-warning/10">
+                  <Sparkles className="h-4 w-4 shrink-0 text-warning" />
+                  <span className="font-medium">Upload a document to train your AI assistant</span>
+                </Link>
+              </li>
+            ) : null}
+            {business._count.staffMembers <= 1 ? (
+              <li>
+                <Link href={`/dashboard/${businessId}/settings/staff` as Route} className="flex items-center gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-ink hover:bg-warning/10">
+                  <Users className="h-4 w-4 shrink-0 text-warning" />
+                  <span className="font-medium">Invite a team member</span>
+                </Link>
+              </li>
+            ) : null}
+            {!business.whatsappPhoneNumber ? (
+              <li>
+                <Link href={`/dashboard/${businessId}/settings` as Route} className="flex items-center gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-ink hover:bg-warning/10">
+                  <MessageSquare className="h-4 w-4 shrink-0 text-warning" />
+                  <span className="font-medium">Connect your WhatsApp Business number</span>
+                </Link>
+              </li>
+            ) : null}
+          </ul>
+        </Card>
+      ) : null}
 
       <section className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card variant="surface" className="space-y-3 lg:col-span-2">

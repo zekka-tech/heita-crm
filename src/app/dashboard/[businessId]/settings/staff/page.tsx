@@ -15,6 +15,7 @@ import {
   createInviteAction,
   revokeInviteAction
 } from "@/app/dashboard/[businessId]/settings/staff/actions";
+import { StaffMemberActions } from "@/app/dashboard/[businessId]/settings/staff/staff-member-actions";
 import { CsrfField } from "@/components/security/csrf-field";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +52,7 @@ export default async function SettingsStaffPage({ params }: SettingsStaffPagePro
 
   const [staffMembers, invites] = await Promise.all([
     prisma.staffMember.findMany({
-      where: { businessId },
+      where: { businessId, user: { deletedAt: null } },
       include: { user: { select: { id: true, name: true, email: true, phone: true } } },
       orderBy: { joinedAt: "asc" }
     }),
@@ -115,7 +116,7 @@ export default async function SettingsStaffPage({ params }: SettingsStaffPagePro
           {staffMembers.map((member) => (
             <li
               key={member.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-elevated px-3 py-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-elevated px-3 py-3"
             >
               <div>
                 <p className="font-medium text-ink">
@@ -125,9 +126,18 @@ export default async function SettingsStaffPage({ params }: SettingsStaffPagePro
                   Joined {member.joinedAt.toLocaleDateString("en-ZA")}
                 </p>
               </div>
-              <Chip variant="primary" size="sm">
-                {member.role}
-              </Chip>
+              {canManage && member.user.id !== session.user.id ? (
+                <StaffMemberActions
+                  businessId={businessId}
+                  targetUserId={member.user.id}
+                  currentRole={member.role}
+                  name={member.user.name ?? member.user.email ?? "member"}
+                />
+              ) : (
+                <Chip variant="primary" size="sm">
+                  {member.role}
+                </Chip>
+              )}
             </li>
           ))}
         </ul>

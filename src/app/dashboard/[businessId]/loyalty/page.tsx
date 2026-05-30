@@ -169,7 +169,6 @@ export default async function LoyaltyDashboardPage({
             </header>
             <EarnPointsForm
               businessId={business.id}
-              memberships={business.memberships}
               csrfField={<CsrfField />}
             />
           </Card>

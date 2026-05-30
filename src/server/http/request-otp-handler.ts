@@ -110,7 +110,7 @@ export async function handleRequestOtp(request: Request) {
       durationMs: Date.now() - startedAt
     });
     return NextResponse.json(
-      { error: "Too many requests from this network. Try again later." },
+      { error: "Too many requests from this network. Try again later.", code: "rate_limited" },
       {
         status: 429,
         headers: {
@@ -135,7 +135,7 @@ export async function handleRequestOtp(request: Request) {
       durationMs: Date.now() - startedAt
     });
     return NextResponse.json(
-      { error: "Wait a moment before requesting another code." },
+      { error: "Wait a moment before requesting another code.", code: "rate_limited" },
       {
         status: 429,
         headers: {
@@ -160,7 +160,7 @@ export async function handleRequestOtp(request: Request) {
       durationMs: Date.now() - startedAt
     });
     return NextResponse.json(
-      { error: "Too many codes requested for this number. Try again in an hour." },
+      { error: "Too many codes requested for this number. Try again in an hour.", code: "rate_limited" },
       {
         status: 429,
         headers: {
@@ -255,6 +255,7 @@ export async function handleRequestOtp(request: Request) {
   return NextResponse.json(
     {
       ...GENERIC_OTP_SENT_BODY,
+      code: "ok",
       expiresAt: expiresAt.toISOString(),
       devCode: EXPOSE_DEV_OTP ? code : undefined
     },

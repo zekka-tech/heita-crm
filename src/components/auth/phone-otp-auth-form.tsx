@@ -94,13 +94,18 @@ export function PhoneOtpAuthForm({
         .then(async (response) => {
           const payload = (await response.json()) as {
             ok?: boolean;
+            code?: string;
             message?: string;
             devCode?: string;
             error?: string;
           };
 
           if (!response.ok) {
-            throw new Error(payload.error ?? "Unable to send verification code.");
+            const msg =
+              payload.code === "rate_limited"
+                ? (payload.error ?? "Too many attempts. Please wait before trying again.")
+                : (payload.error ?? "Unable to send verification code.");
+            throw new Error(msg);
           }
 
           setStatus({ kind: "info", text: payload.message ?? "Code sent." });
@@ -126,10 +131,11 @@ export function PhoneOtpAuthForm({
         redirectTo: callbackUrl
       }).then((result) => {
         if (!result?.ok || result.error) {
-          setStatus({
-            kind: "error",
-            text: "Verification failed. Request a new code and try again."
-          });
+          const errorText =
+            result?.error === "CredentialsSignin"
+              ? "Incorrect or expired code. Check the code and try again, or request a new one."
+              : "Verification failed. Request a new code and try again.";
+          setStatus({ kind: "error", text: errorText });
           return;
         }
 

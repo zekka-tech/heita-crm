@@ -310,3 +310,105 @@ export async function acceptStaffInvite(input: {
     return staffMember;
   });
 }
+
+export async function removeStaffMember(input: {
+  businessId: string;
+  targetUserId: string;
+  actorUserId: string;
+}) {
+  await requireRole({
+    businessId: input.businessId,
+    userId: input.actorUserId,
+    allowedRoles: [StaffRole.OWNER]
+  });
+
+  if (input.targetUserId === input.actorUserId) {
+    throw new Error("You cannot remove yourself from the business.");
+  }
+
+  const staffMember = await prisma.staffMember.findUnique({
+    where: { businessId_userId: { businessId: input.businessId, userId: input.targetUserId } }
+  });
+
+  if (!staffMember) {
+    throw new Error("Staff member not found.");
+  }
+
+  if (staffMember.role === StaffRole.OWNER) {
+    throw new Error("Cannot remove the business owner.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const removed = await tx.staffMember.delete({
+      where: { businessId_userId: { businessId: input.businessId, userId: input.targetUserId } }
+    });
+
+    await recordStaffAuditLog(
+      {
+        businessId: input.businessId,
+        actorUserId: input.actorUserId,
+        action: "STAFF_MEMBER_REMOVE",
+        targetType: "StaffMember",
+        targetId: input.targetUserId,
+        metadata: { removedRole: staffMember.role }
+      },
+      tx
+    );
+
+    return removed;
+  }, { maxWait: 5000, timeout: 10000 });
+}
+
+export async function updateStaffRole(input: {
+  businessId: string;
+  targetUserId: string;
+  newRole: StaffRole;
+  actorUserId: string;
+}) {
+  await requireRole({
+    businessId: input.businessId,
+    userId: input.actorUserId,
+    allowedRoles: [StaffRole.OWNER]
+  });
+
+  if (input.targetUserId === input.actorUserId) {
+    throw new Error("You cannot change your own role.");
+  }
+
+  if (input.newRole === StaffRole.OWNER) {
+    throw new Error("Cannot promote a member to OWNER via this action.");
+  }
+
+  const staffMember = await prisma.staffMember.findUnique({
+    where: { businessId_userId: { businessId: input.businessId, userId: input.targetUserId } }
+  });
+
+  if (!staffMember) {
+    throw new Error("Staff member not found.");
+  }
+
+  if (staffMember.role === StaffRole.OWNER) {
+    throw new Error("Cannot change the role of the business owner.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.staffMember.update({
+      where: { businessId_userId: { businessId: input.businessId, userId: input.targetUserId } },
+      data: { role: input.newRole }
+    });
+
+    await recordStaffAuditLog(
+      {
+        businessId: input.businessId,
+        actorUserId: input.actorUserId,
+        action: "STAFF_ROLE_CHANGE",
+        targetType: "StaffMember",
+        targetId: input.targetUserId,
+        metadata: { previousRole: staffMember.role, newRole: input.newRole }
+      },
+      tx
+    );
+
+    return updated;
+  }, { maxWait: 5000, timeout: 10000 });
+}

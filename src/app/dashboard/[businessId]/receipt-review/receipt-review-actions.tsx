@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 
 type Props = {
@@ -18,6 +19,7 @@ export function ReceiptReviewActions({ receiptId, businessId, suggestedPoints }:
   const router = useRouter();
   const [overridePoints, setOverridePoints] = useState(suggestedPoints.toString());
   const [submitting, setSubmitting] = useState(false);
+  const [confirmReject, setConfirmReject] = useState(false);
 
   async function handleAction(action: "approve" | "reject") {
     setSubmitting(true);
@@ -42,11 +44,22 @@ export function ReceiptReviewActions({ receiptId, businessId, suggestedPoints }:
       toast.error(err instanceof Error ? err.message : "Action failed.");
     } finally {
       setSubmitting(false);
+      setConfirmReject(false);
     }
   }
 
   return (
     <div className="space-y-3">
+      <ConfirmDialog
+        open={confirmReject}
+        title="Reject this receipt?"
+        description="The customer will not receive points for this submission. This action cannot be undone."
+        confirmLabel="Reject"
+        destructive
+        isPending={submitting}
+        onConfirm={() => void handleAction("reject")}
+        onCancel={() => setConfirmReject(false)}
+      />
       <Input
         label="Points to award"
         type="number"
@@ -74,15 +87,11 @@ export function ReceiptReviewActions({ receiptId, businessId, suggestedPoints }:
         <Button
           variant="danger"
           className="flex-1"
-          onClick={() => void handleAction("reject")}
+          onClick={() => setConfirmReject(true)}
           disabled={submitting}
           aria-label="Reject receipt"
         >
-          {submitting ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <XCircle className="h-4 w-4" aria-hidden="true" />
-          )}
+          <XCircle className="h-4 w-4" aria-hidden="true" />
           Reject
         </Button>
       </div>

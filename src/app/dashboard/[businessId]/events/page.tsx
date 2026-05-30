@@ -1,13 +1,13 @@
 import { StaffRole } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { Bell, Calendar, MapPin, Sparkles, Trash2 } from "lucide-react";
+import { Bell, Calendar, MapPin, Sparkles } from "lucide-react";
 
 import {
   createEventAction,
-  deleteEventAction,
   updateEventAction
 } from "@/app/dashboard/[businessId]/events/actions";
+import { DeleteEventButton } from "@/app/dashboard/[businessId]/events/delete-event-button";
 import { CsrfField } from "@/components/security/csrf-field";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
@@ -247,15 +247,7 @@ export default async function EventsDashboardPage({
                     </SubmitButton>
                   </form>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <form action={deleteEventAction}>
-                      <CsrfField />
-                      <input type="hidden" name="businessId" value={business.id} />
-                      <input type="hidden" name="eventId" value={event.id} />
-                      <SubmitButton variant="danger" size="sm">
-                        <Trash2 className="h-3.5 w-3.5" />
-                        {t("deleteCta")}
-                      </SubmitButton>
-                    </form>
+                    <DeleteEventButton businessId={business.id} eventId={event.id} />
                   </div>
                 </article>
               ))}
@@ -290,14 +282,7 @@ export default async function EventsDashboardPage({
                       {event.location ? ` · ${event.location}` : ""}
                     </p>
                   </div>
-                  <form action={deleteEventAction}>
-                    <CsrfField />
-                    <input type="hidden" name="businessId" value={business.id} />
-                    <input type="hidden" name="eventId" value={event.id} />
-                    <SubmitButton variant="ghost" size="sm">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </SubmitButton>
-                  </form>
+                  <DeleteEventButton businessId={business.id} eventId={event.id} iconOnly />
                 </li>
               ))}
             </ul>

@@ -14,6 +14,7 @@ import {
   redeemPoints,
   refundTransaction
 } from "@/server/services/loyalty.service";
+import { getCustomersSearch } from "@/server/services/membership.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 export async function requestStaffStepUpAction(formData: FormData) {
@@ -352,4 +353,13 @@ export async function queueCustomerImportAction(formData: FormData) {
   await enqueueCustomerImportRun(importRun.id);
 
   redirect(`/dashboard/${businessId}/loyalty?updated=import`);
+}
+
+export async function searchMembersAction(businessId: string, query: string) {
+  const session = await auth();
+  if (!session?.user?.id) return [];
+
+  await requireRole({ businessId, userId: session.user.id, allowedRoles: [StaffRole.OWNER, StaffRole.MANAGER, StaffRole.STAFF] });
+
+  return getCustomersSearch(businessId, query);
 }

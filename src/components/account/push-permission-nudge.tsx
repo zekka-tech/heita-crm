@@ -16,35 +16,52 @@ function base64UrlToUint8Array(base64Url: string) {
   return Uint8Array.from(raw, (char) => char.charCodeAt(0));
 }
 
+type NudgeState = "prompt" | "denied" | "hidden";
+
+function detectPlatform(): "ios" | "android" | "desktop" {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/.test(ua)) return "ios";
+  if (/Android/.test(ua)) return "android";
+  return "desktop";
+}
+
+const DENIED_HELP: Record<"ios" | "android" | "desktop", string> = {
+  ios: "To re-enable: open Settings → Safari → Notifications and allow Heita, then revisit this page.",
+  android: "To re-enable: open your browser Settings → Site settings → Notifications, find Heita, and set it to Allow.",
+  desktop: "To re-enable: click the lock icon in your address bar → Notifications → Allow."
+};
+
 export function PushPermissionNudge() {
   const csrfToken = useCsrfToken();
-  const [visible, setVisible] = useState(false);
+  const [state, setState] = useState<NudgeState>("hidden");
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (
-      !vapidKey ||
-      !("Notification" in window) ||
-      !("serviceWorker" in navigator) ||
-      !("PushManager" in window) ||
-      Notification.permission !== "default" ||
-      localStorage.getItem(DISMISSED_KEY)
-    ) {
+    if (!vapidKey || !("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+      return;
+    }
+
+    if (Notification.permission === "denied") {
+      setState("denied");
+      return;
+    }
+
+    if (Notification.permission !== "default" || localStorage.getItem(DISMISSED_KEY)) {
       return;
     }
 
     navigator.serviceWorker.ready
       .then(async (reg) => {
         const sub = await reg.pushManager.getSubscription();
-        if (!sub) setVisible(true);
+        if (!sub) setState("prompt");
       })
       .catch(() => undefined);
   }, []);
 
   const dismiss = () => {
     localStorage.setItem(DISMISSED_KEY, "1");
-    setVisible(false);
+    setState("hidden");
   };
 
   const enable = () => {
@@ -53,6 +70,10 @@ export function PushPermissionNudge() {
       if (!vapidKey) return;
 
       const permission = await Notification.requestPermission();
+      if (permission === "denied") {
+        setState("denied");
+        return;
+      }
       if (permission !== "granted") {
         dismiss();
         return;
@@ -74,11 +95,36 @@ export function PushPermissionNudge() {
         credentials: "same-origin"
       }).catch(() => undefined);
 
-      setVisible(false);
+      setState("hidden");
     });
   };
 
-  if (!visible) return null;
+  if (state === "hidden") return null;
+
+  if (state === "denied") {
+    const platform = detectPlatform();
+    return (
+      <div
+        role="region"
+        aria-label="Notifications blocked"
+        className="flex items-start gap-3 rounded-2xl border border-warning/30 bg-warning/5 px-4 py-3"
+      >
+        <Bell className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-ink">Notifications are blocked</p>
+          <p className="mt-0.5 text-xs text-ink-muted">{DENIED_HELP[platform]}</p>
+        </div>
+        <button
+          type="button"
+          aria-label="Dismiss"
+          onClick={() => setState("hidden")}
+          className="shrink-0 rounded p-0.5 text-ink-subtle transition hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div

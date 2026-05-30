@@ -148,9 +148,7 @@ export default async function BusinessJoinPage({
         ) : (
           <Button asChild variant="primary" size="lg">
             <Link
-              href={`/sign-in?callbackUrl=/b/${business.slug}/join${
-                channel ? `?channel=${channel}` : ""
-              }`}
+              href={`/sign-in?callbackUrl=${encodeURIComponent(`/b/${business.slug}/join${channel ? `?channel=${channel}` : ""}`)}`}
             >
               Sign in to join
             </Link>

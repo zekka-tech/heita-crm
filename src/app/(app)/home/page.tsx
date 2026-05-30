@@ -5,6 +5,7 @@ import { ArrowRight, Plus, Search, Sparkles } from "lucide-react";
 
 import { BusinessCard } from "@/components/business/business-card";
 import { PushPermissionNudge } from "@/components/account/push-permission-nudge";
+import { FlashBanner } from "@/components/shared/flash-banner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <section className="grid gap-5">
+      <FlashBanner />
       <Card variant="hero" className="px-6 py-8 sm:px-8">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
           {t("eyebrow")}

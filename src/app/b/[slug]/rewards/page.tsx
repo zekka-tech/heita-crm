@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/shared/breadcrumb";
+import { FlashBanner } from "@/components/shared/flash-banner";
 import { isBuildPhase } from "@/lib/build-phase";
 import { describeTierPerks } from "@/lib/loyalty";
 
@@ -72,6 +73,7 @@ export default async function BusinessRewardsPage({
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
+      <FlashBanner />
       <Breadcrumb
         crumbs={[
           { label: "Discover", href: "/discover" },

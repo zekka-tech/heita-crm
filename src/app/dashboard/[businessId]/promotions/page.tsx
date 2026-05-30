@@ -1,14 +1,14 @@
 import { PromotionType, StaffRole } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { Megaphone, Sparkles, Tag, Trash2 } from "lucide-react";
+import { Megaphone, Sparkles, Tag } from "lucide-react";
 
 import {
   broadcastPromotionAction,
   createPromotionAction,
-  deletePromotionAction,
   updatePromotionAction
 } from "@/app/dashboard/[businessId]/promotions/actions";
+import { DeletePromotionButton } from "@/app/dashboard/[businessId]/promotions/delete-promotion-button";
 import { CsrfField } from "@/components/security/csrf-field";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
@@ -356,15 +356,11 @@ export default async function PromotionsDashboardPage({
                           </SubmitButton>
                         </form>
                       ) : null}
-                      <form action={deletePromotionAction}>
-                        <CsrfField />
-                        <input type="hidden" name="businessId" value={business.id} />
-                        <input type="hidden" name="promotionId" value={promotion.id} />
-                        <SubmitButton variant="danger" size="sm">
-                          <Trash2 className="h-3.5 w-3.5" />
-                          {t("deleteCta")}
-                        </SubmitButton>
-                      </form>
+                      <DeletePromotionButton
+                        businessId={business.id}
+                        promotionId={promotion.id}
+                        label={t("deleteCta")}
+                      />
                     </div>
                   </article>
                 );

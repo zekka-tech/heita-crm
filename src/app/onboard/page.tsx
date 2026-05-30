@@ -35,9 +35,8 @@ export default async function OnboardPage() {
             Create a new business
           </h1>
           <p className="max-w-xl text-sm leading-6 text-ink-muted">
-            We&apos;ll provision your owner role, three default tiers
-            (Bronze/Silver/Gold), a primary QR code, a join link, and your AI
-            workspace.
+            We&apos;ll provision your owner role, a primary QR code, a join link, and your AI
+            workspace. You can create custom loyalty tiers once your programme is set up.
           </p>
         </header>
 

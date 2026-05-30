@@ -96,3 +96,28 @@ export async function joinBusiness(input: JoinBusinessInput) {
     return membership;
   }, { maxWait: 5000, timeout: 10000 });
 }
+
+
+export async function getCustomersSearch(businessId: string, query: string) {
+  const q = query.trim();
+  if (!q) return [];
+
+  return prisma.membership.findMany({
+    where: {
+      businessId,
+      isActive: true,
+      user: {
+        deletedAt: null,
+        OR: [
+          { phone: { contains: q } },
+          { name: { contains: q, mode: "insensitive" } }
+        ]
+      }
+    },
+    include: {
+      user: { select: { id: true, name: true, phone: true } }
+    },
+    orderBy: { joinedAt: "desc" },
+    take: 20
+  });
+}

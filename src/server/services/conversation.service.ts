@@ -1,4 +1,5 @@
 import { MessageChannel } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -53,47 +54,53 @@ export async function listBusinessConversations(input: { businessId: string }) {
     take: 200
   });
 
-  const conversations: ConversationParticipant[] = await Promise.all(
-    latestMessages.map(async (message) => {
-      const contactPhone = message.contactPhone!;
+  const phones = latestMessages.map((m) => m.contactPhone!).filter(Boolean);
 
-      const [unreadCount, lastInbound] = await Promise.all([
-        prisma.message.count({
-          where: {
-            businessId: input.businessId,
-            channel: MessageChannel.WHATSAPP,
-            contactPhone,
-            direction: "INBOUND"
-          }
-        }),
-        prisma.message.findFirst({
-          where: {
-            businessId: input.businessId,
-            channel: MessageChannel.WHATSAPP,
-            contactPhone,
-            direction: "INBOUND"
-          },
-          orderBy: { createdAt: "desc" },
-          select: { createdAt: true }
-        })
-      ]);
+  // Single query: unread count + last-inbound timestamp grouped by contactPhone.
+  // "Unread" means inbound messages where staff hasn't read them yet (readByStaffAt IS NULL).
+  type UnreadRow = { contact_phone: string; unread_count: bigint; last_inbound_at: Date | null };
+  const unreadRows: UnreadRow[] = phones.length
+    ? await prisma.$queryRaw(
+        Prisma.sql`
+          SELECT
+            "contactPhone" AS contact_phone,
+            COUNT(*) FILTER (WHERE direction = 'INBOUND' AND "readByStaffAt" IS NULL)::bigint AS unread_count,
+            MAX(CASE WHEN direction = 'INBOUND' THEN "createdAt" END) AS last_inbound_at
+          FROM "Message"
+          WHERE
+            "businessId" = ${input.businessId}
+            AND channel = 'WHATSAPP'
+            AND "contactPhone" = ANY(${phones})
+          GROUP BY "contactPhone"
+        `
+      )
+    : [];
 
-      const serviceWindow = computeCustomerServiceWindow(lastInbound?.createdAt ?? null);
-
-      return {
-        userId: message.userId,
-        contactPhone,
-        name: message.user?.name ?? null,
-        lastMessageAt: message.createdAt,
-        lastMessageBody: message.body,
-        lastDirection: message.direction,
-        unreadCount,
-        status: message.status,
-        customerServiceWindowOpen: serviceWindow.open,
-        customerServiceWindowExpiresAt: serviceWindow.expiresAt
-      };
-    })
+  const unreadByPhone = new Map(
+    unreadRows.map((r) => [
+      r.contact_phone,
+      { unreadCount: Number(r.unread_count), lastInboundAt: r.last_inbound_at }
+    ])
   );
+
+  const conversations: ConversationParticipant[] = latestMessages.map((message) => {
+    const contactPhone = message.contactPhone!;
+    const stats = unreadByPhone.get(contactPhone) ?? { unreadCount: 0, lastInboundAt: null };
+    const serviceWindow = computeCustomerServiceWindow(stats.lastInboundAt);
+
+    return {
+      userId: message.userId,
+      contactPhone,
+      name: message.user?.name ?? null,
+      lastMessageAt: message.createdAt,
+      lastMessageBody: message.body,
+      lastDirection: message.direction,
+      unreadCount: stats.unreadCount,
+      status: message.status,
+      customerServiceWindowOpen: serviceWindow.open,
+      customerServiceWindowExpiresAt: serviceWindow.expiresAt
+    };
+  });
 
   return conversations.sort(
     (left, right) => right.lastMessageAt.getTime() - left.lastMessageAt.getTime()
