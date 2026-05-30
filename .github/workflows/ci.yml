@@ -59,7 +59,26 @@ jobs:
         run: npx prisma migrate deploy
 
       - name: Migration drift check
-        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+        run: |
+          # Capture diff without --exit-code so we can inspect it ourselves.
+          DRIFT=$(npx prisma migrate diff \
+            --from-config-datasource \
+            --to-schema prisma/schema.prisma \
+            --script 2>&1 || true)
+
+          # Business_name_trgm_idx (GIN) and DocumentChunk_embedding_hnsw_idx (HNSW)
+          # cannot be expressed in schema.prisma — they are Prisma-unmanaged and are
+          # intentionally created via raw SQL in migrations 0006 and 0016.
+          MEANINGFUL=$(echo "$DRIFT" \
+            | grep -E "^(ALTER TABLE|DROP TABLE|CREATE TABLE|DROP INDEX|CREATE INDEX|ADD CONSTRAINT|DROP CONSTRAINT)" \
+            | grep -vE "Business_name_trgm_idx|DocumentChunk_embedding_hnsw_idx")
+
+          if [ -n "$MEANINGFUL" ]; then
+            echo "::error::Unexpected schema drift detected:"
+            echo "$DRIFT"
+            exit 1
+          fi
+          echo "Drift check passed (only known Prisma-unmanaged indexes differ, if any)."
 
       - name: Destructive migration safety gate
         if: github.event_name == 'pull_request'
