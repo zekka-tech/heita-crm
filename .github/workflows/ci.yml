@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: "22.11.0"
+  NODE_VERSION: "22.12.0"
 
 permissions:
   contents: read
@@ -268,7 +268,7 @@ jobs:
         run: npm audit --omit=dev --audit-level=moderate
 
       - name: Trivy filesystem scan (fail on critical)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .

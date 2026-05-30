@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Multi-stage build for Heita CRM (Next.js 15 App Router)
 
-ARG NODE_VERSION=22.11.0
+ARG NODE_VERSION=22.12.0
 
 FROM node:${NODE_VERSION}-alpine AS deps
 RUN apk add --no-cache libc6-compat
