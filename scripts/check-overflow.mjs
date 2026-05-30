@@ -18,10 +18,8 @@ for (const vp of VIEWPORTS) {
   const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   for (const route of ROUTES) {
-    let status = 0;
     try {
-      const resp = await page.goto(BASE + route, { waitUntil: "domcontentloaded", timeout: 45000 });
-      status = resp?.status() ?? 0;
+      await page.goto(BASE + route, { waitUntil: "domcontentloaded", timeout: 45000 });
     } catch (e) {
       findings.push({ vp: vp.name, route, type: "load-error", detail: String(e).slice(0, 120) });
       continue;
