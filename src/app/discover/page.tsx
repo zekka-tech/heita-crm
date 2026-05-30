@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { businessCategories, formatEnumLabel, provinces } from "@/lib/business";
 import { discoverBusinesses } from "@/server/services/discovery.service";
+import { auth } from "@/lib/auth";
 
 type DiscoverPageProps = {
   searchParams?: Promise<{
@@ -35,12 +36,17 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     ? (params.province as Province)
     : null;
 
-  const businesses = await discoverBusinesses({
-    query: params.q ?? null,
-    category,
-    province,
-    city: params.city ?? null
-  }).catch(() => []);
+  const [businesses, session] = await Promise.all([
+    discoverBusinesses({
+      query: params.q ?? null,
+      category,
+      province,
+      city: params.city ?? null
+    }).catch(() => []),
+    auth()
+  ]);
+
+  const backHref = session?.user ? "/home" : "/";
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
@@ -109,7 +115,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
 
       <div className="mt-6">
         <Button asChild variant="secondary">
-          <Link href="/">Back to Heita</Link>
+          <Link href={backHref}>Back to Heita</Link>
         </Button>
       </div>
     </main>
