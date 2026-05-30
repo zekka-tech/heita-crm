@@ -186,6 +186,14 @@ If verification fails, refuse to roll out and open a security incident.
 - Postmortem template lives under `docs/incidents/TEMPLATE.md` (add as needed).
 - Sentry release tag must be referenced in every incident note.
 - Game-day learnings amend this playbook directly — no separate runbook.
+- **Recurring evidence:** the `Chaos Game Day` workflow (`.github/workflows/game-day.yml`)
+  opens a quarterly drill issue from this playbook; closed issues are the audit
+  trail that drills were executed, not just documented.
+
+## Service levels & release gate
+
+SLOs, error budgets, RTO/RPO targets, and the release go/no-go checklist live in
+[`docs/SLO.md`](docs/SLO.md). No release ships unless that gate passes.
 
 ---
 
