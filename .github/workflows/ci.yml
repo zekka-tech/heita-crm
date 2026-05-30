@@ -58,6 +58,30 @@ jobs:
       - name: Apply migrations
         run: npx prisma migrate deploy
 
+      - name: DEBUG drift datasource resolution
+        run: |
+          echo "::group::env DATABASE_URL (masked)"
+          echo "job DATABASE_URL = $(echo "${DATABASE_URL:-<unset>}" | sed -E 's#://[^@]*@#://***@#')"
+          echo "::endgroup::"
+
+          echo "::group::is a .env file present in CI?"
+          ls -la .env* 2>/dev/null || echo "no .env* files"
+          [ -f .env ] && { echo ".env EXISTS — contents (masked):"; sed -E 's#(://[^@]*@)#://***@#g; s#(SECRET|KEY|PASSWORD|TOKEN)=.*#\1=***#g' .env; } || echo "no .env"
+          echo "::endgroup::"
+
+          echo "::group::URL prisma.config.ts resolves (after dotenv/config)"
+          node -e "import('dotenv/config').then(()=>console.log('config resolves DATABASE_URL =',(process.env.DATABASE_URL||'<unset>').replace(/:\/\/[^@]*@/,'://***@')))"
+          echo "::endgroup::"
+
+          echo "::group::introspect the job DATABASE_URL: table + key index counts"
+          psql "$DATABASE_URL" -c "SELECT count(*) AS tables FROM information_schema.tables WHERE table_schema='public';" || true
+          psql "$DATABASE_URL" -c "SELECT count(*) AS perf_idx FROM pg_indexes WHERE schemaname='public' AND (indexname LIKE 'Membership%' OR indexname LIKE 'Message%' OR indexname LIKE 'OcrReceipt%' OR indexname='OtpCode_expiresAt_idx');" || true
+          echo "::endgroup::"
+
+          echo "::group::full, unconditional drift output (the exact command the gate runs)"
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script 2>&1 | head -60 || true
+          echo "::endgroup::"
+
       - name: Migration drift check
         run: |
           # Capture diff without --exit-code so we can inspect it ourselves.
