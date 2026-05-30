@@ -434,3 +434,91 @@ describe("refundTransaction", () => {
     );
   });
 });
+
+// ------------------------------------------------------------------
+describe("redeemPoints — concurrent last-reward-stock scenarios", () => {
+  it("throws OUT_OF_STOCK when reward.stock is 0", async () => {
+    prisma.membership.findUniqueOrThrow.mockResolvedValue(makeMembership({ pointsBalance: 500 }));
+    prisma.reward.findFirstOrThrow.mockResolvedValue({
+      id: "reward_ltd",
+      businessId: "biz_1",
+      title: "Last One",
+      pointsCost: 100,
+      isActive: true,
+      stock: 0
+    });
+
+    await expect(
+      redeemPoints({
+        businessId: "biz_1",
+        membershipId: "mem_1",
+        rewardId: "reward_ltd",
+        actorUserId: "user_1",
+        idempotencyKey: "idem_oos_1"
+      })
+    ).rejects.toThrow(/out of stock/i);
+
+    expect(prisma.reward.update).not.toHaveBeenCalled();
+    expect(prisma.loyaltyTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it("succeeds and decrements stock when reward.stock is 1", async () => {
+    prisma.membership.findUniqueOrThrow.mockResolvedValue(makeMembership({ pointsBalance: 500 }));
+    prisma.reward.findFirstOrThrow.mockResolvedValue({
+      id: "reward_ltd2",
+      businessId: "biz_1",
+      title: "Almost Gone",
+      pointsCost: 50,
+      isActive: true,
+      stock: 1
+    });
+    prisma.reward.update.mockResolvedValue({ id: "reward_ltd2", stock: 0 });
+    prisma.membership.update.mockResolvedValue(makeMembership({ pointsBalance: 450 }));
+    prisma.loyaltyTransaction.create.mockResolvedValue({ id: "tx_redeem_stock" });
+    prisma.notification.create.mockResolvedValue({});
+
+    await redeemPoints({
+      businessId: "biz_1",
+      membershipId: "mem_1",
+      rewardId: "reward_ltd2",
+      actorUserId: "user_1",
+      idempotencyKey: "idem_oos_2"
+    });
+
+    expect(prisma.reward.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { stock: { decrement: 1 } }
+      })
+    );
+  });
+
+  it("does not decrement stock when reward.stock is null (unlimited)", async () => {
+    prisma.membership.findUniqueOrThrow.mockResolvedValue(makeMembership({ pointsBalance: 500 }));
+    prisma.reward.findFirstOrThrow.mockResolvedValue({
+      id: "reward_unlimited",
+      businessId: "biz_1",
+      title: "Unlimited",
+      pointsCost: 50,
+      isActive: true,
+      stock: null
+    });
+    prisma.reward.update.mockResolvedValue({ id: "reward_unlimited", stock: null });
+    prisma.membership.update.mockResolvedValue(makeMembership({ pointsBalance: 450 }));
+    prisma.loyaltyTransaction.create.mockResolvedValue({ id: "tx_redeem_unlimited" });
+    prisma.notification.create.mockResolvedValue({});
+
+    await redeemPoints({
+      businessId: "biz_1",
+      membershipId: "mem_1",
+      rewardId: "reward_unlimited",
+      actorUserId: "user_1",
+      idempotencyKey: "idem_oos_3"
+    });
+
+    expect(prisma.reward.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { stock: null }
+      })
+    );
+  });
+});

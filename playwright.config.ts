@@ -15,6 +15,18 @@ export default defineConfig({
     headless: true
   },
   projects: [
+    // Smoke suite: 4 critical flows that run on every PR (fast feedback).
+    // Configured via PLAYWRIGHT_SMOKE=1 env var in CI.
+    {
+      name: "smoke",
+      testMatch: [
+        "**/auth-otp.spec.ts",
+        "**/join-earn.spec.ts",
+        "**/loyalty-earn-redeem.spec.ts"
+      ],
+      use: { ...devices["Pixel 7"] }
+    },
+    // Full suite: all devices, runs on main push only.
     {
       name: "mobile",
       use: { ...devices["Pixel 7"] }
