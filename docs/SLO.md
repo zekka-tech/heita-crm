@@ -10,7 +10,7 @@ release must pass. SLIs are derived from `/api/metrics` (Prometheus) and the
 
 ## 1. Service Level Objectives
 
-SLOs are measured over a **rolling 28-day window**, per production region.
+SLOs are measured over a **rolling 30-day window**, per production region.
 
 | # | Service / journey | SLI | SLO target |
 |---|---|---|---|
@@ -30,11 +30,11 @@ SLOs are measured over a **rolling 28-day window**, per production region.
 
 ## 2. Error budgets
 
-The error budget is `(1 - SLO)` over the 28-day window.
+The error budget is `(1 - SLO)` over the 30-day window.
 
 | SLO | Monthly budget |
 |---|---|
-| 99.9% | ~43 min of failure |
+| 99.9% | ~43 min of failure (30 d) |
 | 99.5% | ~3.6 h |
 | 99.0% | ~7.2 h |
 
@@ -46,9 +46,18 @@ The error budget is `(1 - SLO)` over the 28-day window.
   budget recovers above 25% and a corrective action is merged. Exceptions
   require a documented sign-off in the release issue.
 
-Burn-rate alerting (configure in Sentry/alertmanager):
-- **Fast burn:** 2% of 28-day budget in 1 h → page on-call.
-- **Slow burn:** 5% of 28-day budget in 6 h → ticket + Slack.
+Burn-rate alerting is enforced by Prometheus + Alertmanager — rules in
+[`prometheus-rules.yml`](../prometheus-rules.yml) (group `heita_crm_slo_burn_rate`),
+routing in [`alertmanager.yml`](../alertmanager.yml). Each alert requires both a
+long and a short window to fire, so transient blips don't page.
+
+| Speed | Burn rate | Windows | Alert | Routes to |
+|---|---|---|---|---|
+| **Fast** (≈2% of budget in 1 h) | 14.4× | 1 h + 5 m | `ErrorBudgetBurnFast`, `WebhookErrorBudgetBurnFast` | PagerDuty (page) |
+| **Slow** (≈5% of budget in 6 h) | 6× | 6 h + 30 m | `ErrorBudgetBurnSlow`, `AiChatErrorBudgetBurnSlow` | Slack (ticket) |
+
+A fast-burn page inhibits the matching slow-burn ticket for the same SLO. Sentry
+remains the backend for application error/exception events (`sentry.server.config.ts`).
 
 ## 3. Recovery objectives (DR)
 
