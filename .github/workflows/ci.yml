@@ -366,14 +366,33 @@ jobs:
   lighthouse:
     name: Lighthouse CI (Web Vitals)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     if: github.event_name == 'pull_request'
     needs: quality
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: heita
+          POSTGRES_PASSWORD: heita
+          POSTGRES_DB: heita
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U heita -d heita"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     env:
       NEXT_TELEMETRY_DISABLED: "1"
       AUTH_SECRET: "ci-only-secret"
       DATABASE_URL: "postgresql://heita:heita@localhost:5432/heita"
       NODE_ENV: "production"
+      POS_SHARED_SECRET: "ci-lighthouse-pos-secret"
+      METRICS_BEARER_TOKEN: "ci-lighthouse-metrics-token"
+      CRON_SECRET: "ci-lighthouse-cron-secret"
+      TURNSTILE_SECRET_KEY: "ci-lighthouse-turnstile-key"
+      OLLAMA_BASE_URL: "http://localhost:11434"
     steps:
       - uses: actions/checkout@v6
 
@@ -389,6 +408,9 @@ jobs:
 
       - name: Prisma generate
         run: npx prisma generate
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
 
       - name: Build
         env:

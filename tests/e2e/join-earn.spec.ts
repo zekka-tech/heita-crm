@@ -43,7 +43,7 @@ test("customer can sign in, join a business, and receive earned points", async (
   try {
     await page.goto("/sign-in");
     await page.getByLabel(/phone number/i).fill(customerPhone);
-    await page.getByRole("button", { name: /send code/i }).click();
+    await page.getByRole("button", { name: /send.*code/i }).click();
 
     const devOtpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
     await expect(devOtpChip).toBeVisible();

@@ -76,9 +76,19 @@ jobs:
           for i in $(seq 1 36); do
             STATUS=$(docker inspect --format='{{.State.Health.Status}}' heita_ephemeral_app 2>/dev/null || echo "starting")
             if [ "$STATUS" = "healthy" ]; then break; fi
+            if [ "$STATUS" = "unhealthy" ] && [ "$i" -ge 5 ]; then
+              echo "::group::App container logs (unhealthy)"
+              docker logs --tail 80 heita_ephemeral_app 2>&1 || true
+              echo "::endgroup::"
+            fi
             echo "Waiting for app to become healthy (attempt $i/36, status=$STATUS)..."
             sleep 5
           done
+
+          # Dump app logs before migrations so failures are diagnosable
+          echo "::group::App container logs (pre-migration)"
+          docker logs --tail 50 heita_ephemeral_app 2>&1 || true
+          echo "::endgroup::"
 
           # Apply migrations
           docker exec heita_ephemeral_app npx prisma migrate deploy || true

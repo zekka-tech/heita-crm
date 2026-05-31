@@ -23,7 +23,7 @@ import { createBusinessWithDefaults } from "../../src/server/services/business.s
 async function signInAs(page: Page, phone: string) {
   await page.goto("/sign-in");
   await page.getByLabel(/phone number/i).fill(phone);
-  await page.getByRole("button", { name: /send code/i }).click();
+  await page.getByRole("button", { name: /send.*code/i }).click();
   const devOtpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
   await expect(devOtpChip).toBeVisible({ timeout: 10_000 });
   const devOtpText = (await devOtpChip.textContent()) ?? "";
