@@ -1,0 +1,24 @@
+# CVEs in packages pre-compiled into next/dist/compiled/
+# These are bundled verbatim inside the Next.js distribution and cannot be
+# updated independently of Next.js itself. They will be resolved when the
+# project upgrades to a Next.js release that ships patched versions.
+# Re-evaluate this file on every Next.js major/minor upgrade.
+
+# cross-spawn (next/dist/compiled/cross-spawn)
+CVE-2024-21538
+
+# glob (next/dist/compiled/glob)
+CVE-2025-64756
+
+# minimatch (next/dist/compiled/minimatch)
+CVE-2026-26996
+CVE-2026-27903
+CVE-2026-27904
+
+# tar (next/dist/compiled/tar — two versions bundled: 6.x and 7.x)
+CVE-2026-23745
+CVE-2026-23950
+CVE-2026-24842
+CVE-2026-26960
+CVE-2026-29786
+CVE-2026-31802

@@ -347,6 +347,8 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --progress=false
+        env:
+          NODE_ENV: development
 
       - name: Prisma generate
         run: npx prisma generate
@@ -382,6 +384,8 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --progress=false
+        env:
+          NODE_ENV: development
 
       - name: Prisma generate
         run: npx prisma generate

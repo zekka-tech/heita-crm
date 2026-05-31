@@ -57,6 +57,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+          trivyignores: .trivyignore
 
       - name: Publish staging compose artifact
         uses: actions/upload-artifact@v4
