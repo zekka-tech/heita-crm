@@ -69,9 +69,14 @@ jobs:
           # Business_name_trgm_idx (GIN) and DocumentChunk_embedding_hnsw_idx (HNSW)
           # cannot be expressed in schema.prisma — they are Prisma-unmanaged and are
           # intentionally created via raw SQL in migrations 0006 and 0016.
+          # NOTE: the trailing `|| true` is required. This step runs under
+          # `bash -e`; when there is no meaningful drift the final `grep -v`
+          # filters out every line and exits 1, which (as a command-substitution
+          # in an assignment) would abort the step BEFORE the `if` below — failing
+          # CI on a clean schema. `|| true` keeps MEANINGFUL empty without aborting.
           MEANINGFUL=$(echo "$DRIFT" \
             | grep -E "^(ALTER TABLE|DROP TABLE|CREATE TABLE|DROP INDEX|CREATE INDEX|ADD CONSTRAINT|DROP CONSTRAINT)" \
-            | grep -vE "Business_name_trgm_idx|DocumentChunk_embedding_hnsw_idx")
+            | grep -vE "Business_name_trgm_idx|DocumentChunk_embedding_hnsw_idx" || true)
 
           if [ -n "$MEANINGFUL" ]; then
             echo "::error::Unexpected schema drift detected:"
