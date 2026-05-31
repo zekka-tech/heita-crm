@@ -25,7 +25,7 @@ services:
       # are not exercised in the CI smoke test.
       POS_SHARED_SECRET: ci-ephemeral-pos-secret
       METRICS_BEARER_TOKEN: ci-ephemeral-metrics-token
-      CRON_SECRET: ci-ephemeral-cron-secret
+      CRON_SECRET: ci-ephemeral-cron-secret-not-for-prod
       TURNSTILE_SECRET_KEY: ci-ephemeral-turnstile-key
       OLLAMA_BASE_URL: http://localhost:11434
     ports:

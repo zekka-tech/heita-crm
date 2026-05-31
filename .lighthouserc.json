@@ -2,7 +2,7 @@
   "ci": {
     "collect": {
       "numberOfRuns": 1,
-      "startServerCommand": "npm run start",
+      "startServerCommand": "node .next/standalone/server.js",
       "url": ["http://localhost:3000/", "http://localhost:3000/sign-in"]
     },
     "assert": {

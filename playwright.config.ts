@@ -45,12 +45,18 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: "npm run build && npm run start",
+    // `next start` does not work with `output: standalone` (Next.js 15+).
+    // Build is done separately by the CI "Build for smoke/E2E" step;
+    // we only start the pre-built standalone server here.
+    command: process.env.CI
+      ? `node .next/standalone/server.js`
+      : "npm run build && node .next/standalone/server.js",
     url: `http://localhost:${PORT}`,
     timeout: 180_000,
     reuseExistingServer: !process.env.CI,
     env: {
       PORT: String(PORT),
+      HOSTNAME: "0.0.0.0",
       POS_SHARED_SECRET: process.env.POS_SHARED_SECRET ?? "e2e-pos-shared-secret",
       E2E_EXPOSE_DEV_OTP: "1"
     }

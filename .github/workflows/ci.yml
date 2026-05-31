@@ -390,7 +390,7 @@ jobs:
       NODE_ENV: "production"
       POS_SHARED_SECRET: "ci-lighthouse-pos-secret"
       METRICS_BEARER_TOKEN: "ci-lighthouse-metrics-token"
-      CRON_SECRET: "ci-lighthouse-cron-secret"
+      CRON_SECRET: "ci-lighthouse-cron-secret-not-for-prod"
       TURNSTILE_SECRET_KEY: "ci-lighthouse-turnstile-key"
       OLLAMA_BASE_URL: "http://localhost:11434"
     steps:
@@ -418,22 +418,6 @@ jobs:
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: npm run build
-
-      - name: Server smoke check
-        run: |
-          npm run start &
-          SERVER_PID=$!
-          for i in $(seq 1 20); do
-            STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:3000/api/health/live 2>/dev/null || echo "0")
-            if [ "$STATUS" = "200" ]; then echo "Server ready (attempt $i)"; break; fi
-            echo "Waiting for server (attempt $i, status=$STATUS)..."
-            sleep 2
-          done
-          echo "=== / response ==="
-          curl -s -D - http://localhost:3000/ 2>&1 | head -40 || true
-          echo "=== /sign-in response ==="
-          curl -s -D - http://localhost:3000/sign-in 2>&1 | head -20 || true
-          kill "$SERVER_PID" 2>/dev/null || true
 
       - name: Run Lighthouse CI
         run: npm run lighthouse
