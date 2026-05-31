@@ -19,7 +19,11 @@ import { verifyTurnstileToken } from "@/lib/turnstile";
 const RequestOtpSchema = z.object({
   phone: z.string().min(8).max(20),
   mode: z.enum(["sign-in", "sign-up"]).default("sign-in"),
-  turnstileToken: z.string().optional()
+  // nullish(): the client sends `null` when no Turnstile widget is mounted
+  // (e.g. Turnstile unconfigured in dev/CI). Accepting null avoids a spurious
+  // schema failure; absent/null tokens are still rejected by verifyTurnstileToken
+  // when Turnstile is configured in production.
+  turnstileToken: z.string().nullish()
 });
 
 const OTP_PER_PHONE_PER_HOUR = 5;

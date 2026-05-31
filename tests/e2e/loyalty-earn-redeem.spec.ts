@@ -35,7 +35,7 @@ async function signInAs(page: Page, phone: string) {
 }
 
 test("customer earns and redeems loyalty points end-to-end", async ({ page, request }) => {
-  const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
   const ownerPhone = `+27830${suffix.slice(-6)}`;
   const customerPhone = `+27821${suffix.slice(-6)}`;
   const posSecret = process.env.POS_SHARED_SECRET ?? "e2e-pos-shared-secret";
@@ -144,7 +144,7 @@ test("customer earns and redeems loyalty points end-to-end", async ({ page, requ
 });
 
 test("expired OTP cannot be replayed to earn points", async ({ request }) => {
-  const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
   const posSecret = process.env.POS_SHARED_SECRET ?? "e2e-pos-shared-secret";
 
   const payload = {

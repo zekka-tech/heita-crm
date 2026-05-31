@@ -39,7 +39,7 @@ test("OTP endpoint enforces rate limits on rapid requests", async ({ request }) 
 });
 
 test("successful OTP sign-in redirects to /home", async ({ page }) => {
-  const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
   const phone = `+27800${suffix.slice(-6)}`;
 
   const user = await prisma.user.create({

@@ -113,7 +113,7 @@ test.describe.serial("responsive layout — authenticated routes", () => {
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000); // cold `next dev` compile of sign-in + home
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
     const ownerPhone = `+27870${suffix.slice(-6)}`;
 
     const owner = await prisma.user.create({
