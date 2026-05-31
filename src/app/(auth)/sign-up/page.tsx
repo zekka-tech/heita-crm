@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { PhoneOtpAuthForm } from "@/components/auth/phone-otp-auth-form";
-import { readCsrfCookie } from "@/lib/csrf";
+import { readCsrfFromRequestHeaders } from "@/lib/csrf";
 import { turnstileSiteKey } from "@/lib/turnstile";
 
 export const metadata: Metadata = {
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default async function SignUpPage() {
-  const csrfToken = await readCsrfCookie();
+  const csrfToken = await readCsrfFromRequestHeaders();
   return (
     <PhoneOtpAuthForm
       mode="sign-up"

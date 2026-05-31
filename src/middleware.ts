@@ -4,6 +4,7 @@ import NextAuth from "next-auth";
 import { authBaseConfig } from "@/lib/auth.config";
 import {
   CSRF_COOKIE,
+  CSRF_HEADER,
   generateCsrfToken,
   isValidCsrfToken
 } from "@/lib/csrf";
@@ -190,17 +191,32 @@ export default auth((request) => {
     return decorateApiResponse(response, requestId);
   }
 
+  // Pre-compute the CSRF token so it can be injected into the forwarded
+  // request headers. Server Components read cookies() from the REQUEST,
+  // not the response, so they never see a cookie set for the first time
+  // by middleware. Forwarding via request headers (like x-nonce) is the
+  // only reliable path on first load.
+  const csrfToken = isValidCsrfToken(incomingCsrf) ? incomingCsrf : generateCsrfToken();
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(requestIdHeader, requestId);
-  // Pass nonce to Server Components via request header
   requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set(CSRF_HEADER, csrfToken);
   const response = NextResponse.next({
     request: {
       headers: requestHeaders
     }
   });
-  const token = ensureCsrfCookie(response, incomingCsrf);
-  return decoratePageResponse(response, requestId, token, nonce);
+  if (!isValidCsrfToken(incomingCsrf)) {
+    response.cookies.set(CSRF_COOKIE, csrfToken, {
+      httpOnly: false,
+      sameSite: "strict",
+      secure: true,
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7
+    });
+  }
+  return decoratePageResponse(response, requestId, csrfToken, nonce);
 });
 
 export const config = {
