@@ -57,7 +57,13 @@ export default defineConfig({
     env: {
       PORT: String(PORT),
       HOSTNAME: "0.0.0.0",
+      // next/standalone server.js sets NODE_ENV=production at startup,
+      // so all production-required secrets must be provided even in CI test runs.
       POS_SHARED_SECRET: process.env.POS_SHARED_SECRET ?? "e2e-pos-shared-secret",
+      METRICS_BEARER_TOKEN: process.env.METRICS_BEARER_TOKEN ?? "e2e-metrics-token",
+      CRON_SECRET: process.env.CRON_SECRET ?? "e2e-cron-secret-not-for-prod-ci-only",
+      TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY ?? "e2e-turnstile-key",
+      OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
       E2E_EXPOSE_DEV_OTP: "1"
     }
   }
