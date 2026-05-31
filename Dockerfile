@@ -4,7 +4,7 @@
 ARG NODE_VERSION=22.12.0
 
 FROM node:${NODE_VERSION}-alpine AS deps
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma

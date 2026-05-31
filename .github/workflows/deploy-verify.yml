@@ -30,7 +30,7 @@ jobs:
       # On scheduled runs use the PROD_APP_URL secret; on manual runs use the input
       APP_URL: ${{ inputs.app_url || secrets.PROD_APP_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
