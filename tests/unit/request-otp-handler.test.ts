@@ -141,3 +141,23 @@ describe("handleRequestOtp — invalid input", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("handleRequestOtp — dev OTP exposure", () => {
+  it("returns the dev code when the runtime E2E flag is enabled", async () => {
+    const { prisma } = await import("@/lib/prisma");
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "usr_1",
+      phone: "+27821234567",
+      phoneVerifiedAt: new Date(),
+      deletedAt: null
+    } as never);
+    vi.stubEnv("E2E_EXPOSE_DEV_OTP", "1");
+
+    const res = await handleRequestOtp(makeOtpRequest("+27821234567"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.devCode).toBe("123456");
+
+    vi.unstubAllEnvs();
+  });
+});

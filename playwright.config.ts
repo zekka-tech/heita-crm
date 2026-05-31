@@ -12,7 +12,21 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: "on-first-retry",
-    headless: true
+    headless: true,
+    // Seed cookie consent so the fixed-position consent banner (which overlays
+    // the lower viewport, covering primary CTAs like "Send code" on mobile)
+    // does not intercept pointer events. This mirrors a returning, consented
+    // user; no test asserts the banner, and a real first-time user simply
+    // dismisses it before interacting.
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: `http://localhost:${PORT}`,
+          localStorage: [{ name: "heita-cookie-consent", value: "accepted" }]
+        }
+      ]
+    }
   },
   projects: [
     // Smoke suite: 4 critical flows that run on every PR (fast feedback).

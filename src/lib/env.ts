@@ -116,6 +116,7 @@ const envSchema = z
     // Bot protection
     TURNSTILE_SECRET_KEY: z.string().optional(),
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
+    E2E_EXPOSE_DEV_OTP: z.enum(["0", "1"]).optional(),
 
     // Public app config
     NEXT_PUBLIC_APP_URL: z.string().url().optional(),

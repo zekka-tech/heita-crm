@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getOtpPurposeForMode, type AuthOtpMode } from "@/lib/auth-intent";
 import { csrfFailureResponse } from "@/lib/csrf";
+import { e2eDevOtpEnabled } from "@/lib/e2e";
 import { logger } from "@/lib/logger";
 import { incrementOtpMetric, observeHttpRoute } from "@/lib/metrics";
 import { issueOtpCode } from "@/lib/otp";
@@ -24,8 +25,6 @@ const RequestOtpSchema = z.object({
 const OTP_PER_PHONE_PER_HOUR = 5;
 const OTP_PER_IP_PER_HOUR = 20;
 const OTP_PER_PHONE_PER_MINUTE = 1;
-const EXPOSE_DEV_OTP =
-  process.env.NODE_ENV !== "production" && process.env.E2E_EXPOSE_DEV_OTP === "1";
 
 // Generic response returned in every case where a code would be sent.
 // Using identical text and status for both "account found" and "not found"
@@ -270,7 +269,7 @@ async function _handleRequestOtp(request: Request) {
       ...GENERIC_OTP_SENT_BODY,
       code: "ok",
       expiresAt: expiresAt.toISOString(),
-      devCode: EXPOSE_DEV_OTP ? code : undefined
+      devCode: e2eDevOtpEnabled() ? code : undefined
     },
     {
       headers: {

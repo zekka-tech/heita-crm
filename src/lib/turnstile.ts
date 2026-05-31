@@ -1,5 +1,6 @@
 import { logger } from "@/lib/logger";
 import { incrementTurnstileFailure } from "@/lib/metrics";
+import { e2eDevOtpEnabled } from "@/lib/e2e";
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
@@ -31,6 +32,10 @@ export type TurnstileVerifyResult =
 export async function verifyTurnstileToken(
   input: TurnstileVerifyInput
 ): Promise<TurnstileVerifyResult> {
+  if (e2eDevOtpEnabled()) {
+    return { ok: true, action: "bypass-e2e" };
+  }
+
   if (!turnstileConfigured()) {
     if (process.env.NODE_ENV === "production") {
       logger.error("turnstile.not_configured — rejecting request to enforce bot protection");
