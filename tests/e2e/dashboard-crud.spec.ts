@@ -21,7 +21,7 @@ async function signInAs(
 ): Promise<void> {
   await page.goto("/sign-in");
   await page.getByLabel(/phone number/i).fill(phone);
-  await page.getByRole("button", { name: /send code/i }).click();
+  await page.getByRole("button", { name: /send.*code/i }).click();
 
   const devOtpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
   await expect(devOtpChip).toBeVisible({ timeout: 10_000 });

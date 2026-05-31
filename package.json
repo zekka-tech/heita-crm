@@ -13,7 +13,7 @@
     "build": "HEITA_BUILD_PHASE=1 next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "next typegen && tsc -p tsconfig.json --noEmit",
+    "typecheck": "next typegen && tsc -p tsconfig.typecheck.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:a11y": "vitest run tests/unit/a11y.test.ts",

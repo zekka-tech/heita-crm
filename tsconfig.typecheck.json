@@ -4,8 +4,13 @@
     "incremental": false,
     "noEmit": true
   },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
   "exclude": [
-    ".next",
     "node_modules",
     "src/sw/service-worker.ts"
   ]

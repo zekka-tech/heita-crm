@@ -1,3 +1,5 @@
+/* eslint-disable no-console */
+
 // Ad-hoc responsive-overflow audit. Loads public routes at mobile/tablet/desktop
 // widths and reports (a) page-level horizontal overflow and (b) any element
 // whose content overflows its own box (a common cause of text overlap).
