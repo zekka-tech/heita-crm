@@ -51,7 +51,7 @@ export default defineConfig({
     command: process.env.CI
       ? `node .next/standalone/server.js`
       : "npm run build && node .next/standalone/server.js",
-    url: `http://localhost:${PORT}`,
+    url: `http://localhost:${PORT}/api/health/live`,
     timeout: 180_000,
     reuseExistingServer: !process.env.CI,
     env: {
