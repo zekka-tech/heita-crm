@@ -20,9 +20,14 @@ function readCookie(name: string): string | null {
  * Read the double-submit CSRF token issued by middleware. Returns null until
  * the cookie is observable, so callers should disable mutating buttons while
  * the value is still loading.
+ *
+ * Pass `serverToken` when a Server Component has already read the value from
+ * the cookie store (e.g. via `readCsrfCookie()`). That bypasses document.cookie
+ * polling entirely and makes the token available on the first render.
  */
-export function useCsrfToken(): string | null {
+export function useCsrfToken(serverToken?: string | null): string | null {
   const [token, setToken] = useState<string | null>(() => {
+    if (isValidCsrfToken(serverToken)) return serverToken;
     const value = readCookie(CSRF_COOKIE);
     return isValidCsrfToken(value) ? value : null;
   });

@@ -9,6 +9,7 @@ import { CsrfField } from "@/components/security/csrf-field";
 import { Chip } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { readCsrfCookie } from "@/lib/csrf";
 import { turnstileSiteKey } from "@/lib/turnstile";
 
 export const metadata: Metadata = {
@@ -26,6 +27,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const devBypassEnabled = process.env.NODE_ENV !== "production";
   const devResetDone = resolved.devReset === "1";
   const devDbUnavailable = resolved.devError === "db-unavailable";
+  const csrfToken = await readCsrfCookie();
 
   return (
     <div className="grid w-full max-w-md gap-4">
@@ -35,6 +37,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         appleEnabled={Boolean(process.env.AUTH_APPLE_ID && process.env.AUTH_APPLE_SECRET)}
         turnstileSiteKey={turnstileSiteKey()}
         oauthError={resolved.error ?? null}
+        serverCsrfToken={csrfToken}
       />
 
       {devBypassEnabled ? (
