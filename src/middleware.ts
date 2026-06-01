@@ -50,11 +50,18 @@ function buildCsp(nonce: string): string {
     // strict-dynamic: scripts loaded via the nonce may load other scripts.
     // unsafe-inline is ignored in CSP3 browsers when strict-dynamic is present.
     // https: covers legacy browsers that don't support strict-dynamic.
-    `script-src 'strict-dynamic' 'nonce-${nonce}' https: 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
+    // 'wasm-unsafe-eval' lets the client-side receipt OCR engine (Tesseract.js)
+    // compile its self-hosted WebAssembly core. It only permits WASM
+    // compilation/instantiation — not arbitrary JS eval — so it is far tighter
+    // than 'unsafe-eval' and the standard way to allow WASM under a strict CSP.
+    `script-src 'strict-dynamic' 'nonce-${nonce}' 'wasm-unsafe-eval' https: 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     `img-src 'self' data: blob: ${IMG_SRC_DOMAINS}`,
     "font-src 'self' data: https://fonts.gstatic.com",
     `connect-src 'self' ${CONNECT_SRC_DOMAINS}`,
+    // Tesseract.js spawns its (self-hosted /tesseract/worker.min.js) Web Worker
+    // from a same-origin blob: URL (workerBlobURL). 'self' alone is insufficient.
+    "worker-src 'self' blob:",
     "frame-ancestors 'none'",
     "form-action 'self'",
     "base-uri 'self'",

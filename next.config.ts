@@ -42,7 +42,6 @@ const nextConfig: NextConfig = {
     "@prisma/adapter-pg",
     "@aws-sdk/client-s3",
     "@aws-sdk/s3-request-presigner",
-    "@aws-sdk/client-textract",
     "pdf-parse",
     "mammoth",
     "csv-parse",

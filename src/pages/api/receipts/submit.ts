@@ -25,13 +25,28 @@ export default async function handler(
     return res.status(401).json({ error: "Unauthenticated." });
   }
 
-  const { businessId, imageUrl } = req.body as {
+  const { businessId, imageUrl, rawText } = req.body as {
     businessId?: string;
     imageUrl?: string;
+    rawText?: unknown;
   };
 
   if (!businessId || !imageUrl) {
     return res.status(400).json({ error: "businessId and imageUrl are required." });
+  }
+
+  // Optional client-side (Tesseract.js) OCR text. Validate type + cap length to
+  // bound payload size; trim before passing through to the OCR service.
+  const MAX_RAW_TEXT = 50_000;
+  let clientRawText: string | null = null;
+  if (rawText !== undefined && rawText !== null) {
+    if (typeof rawText !== "string") {
+      return res.status(400).json({ error: "rawText must be a string." });
+    }
+    if (rawText.length > MAX_RAW_TEXT) {
+      return res.status(400).json({ error: "rawText is too large." });
+    }
+    clientRawText = rawText.trim();
   }
 
   // Guard against SSRF: only accept URLs pointing to Heita's own storage.
@@ -56,7 +71,8 @@ export default async function handler(
     const result = await submitOcrReceipt({
       businessId,
       userId: session.userId,
-      imageUrl
+      imageUrl,
+      clientRawText
     });
     return res.status(201).json(result);
   } catch (err) {

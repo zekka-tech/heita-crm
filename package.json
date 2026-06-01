@@ -8,8 +8,10 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate && node scripts/copy-tesseract-assets.mjs",
+    "copy-tesseract-assets": "node scripts/copy-tesseract-assets.mjs",
     "dev": "next dev --turbopack",
+    "prebuild": "node scripts/copy-tesseract-assets.mjs",
     "build": "HEITA_BUILD_PHASE=1 next build",
     "start": "next start",
     "lint": "eslint .",
@@ -36,7 +38,6 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
     "@aws-sdk/client-s3": "^3.1056.0",
-    "@aws-sdk/client-textract": "^3.1056.0",
     "@aws-sdk/s3-request-presigner": "^3.1056.0",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.218.0",
@@ -67,6 +68,7 @@
     "sonner": "^2.0.5",
     "superjson": "^2.2.6",
     "tailwind-merge": "^3.3.0",
+    "tesseract.js": "^7.0.0",
     "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },

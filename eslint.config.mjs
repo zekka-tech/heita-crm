@@ -11,7 +11,9 @@ const config = [
       "coverage/**",
       "next-env.d.ts",
       "public/sw.js",
-      "public/workbox-*.js"
+      "public/workbox-*.js",
+      // Vendored Tesseract.js worker/core assets copied from node_modules.
+      "public/tesseract/**"
     ]
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),

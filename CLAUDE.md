@@ -9,6 +9,7 @@ This repository is the **Heita CRM** — a mobile-first PWA loyalty + messaging 
 - **Database**: PostgreSQL 16 + Prisma 7 + pgvector
 - **Auth**: Auth.js v5 (next-auth@beta) — phone OTP (Africa's Talking), Google, Apple
 - **AI**: Ollama (local) with Anthropic Claude fallback, streamed over SSE
+- **Receipt OCR**: client-side Tesseract.js (primary, runs in-browser via self-hosted WASM) with server-side DeepSeek vision API fallback
 - **WhatsApp**: Meta Cloud API (HMAC-verified webhook)
 - **SMS**: Africa's Talking
 - **Queue / cache**: BullMQ + Redis (ioredis), with in-memory fallback for OTP/rate-limit
@@ -44,6 +45,7 @@ This repository is the **Heita CRM** — a mobile-first PWA loyalty + messaging 
   - `api/webhooks/africas-talking` — IP-allowlist + shared-secret protected
   - `api/auth/request-otp` — rate-limited (per phone burst, per phone hour, per IP hour)
   - `api/ai/chat` — SSE streaming, RAG pipeline (Ollama → Anthropic fallback)
+  - `api/receipts/submit` — accepts client-side Tesseract.js OCR text (`rawText`); server parses it heuristically and falls back to the DeepSeek vision API when on-device text is missing/insufficient
   - `api/health` — DB + Redis liveness for orchestrators
 - `src/lib` — infrastructure
   - `auth`, `prisma`, `redis` — singletons

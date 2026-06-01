@@ -17,6 +17,7 @@ type OcrFeedback = {
 type UploadState =
   | { kind: "idle" }
   | { kind: "uploading" }
+  | { kind: "scanning"; progress: number }
   | { kind: "processing" }
   | { kind: "done"; feedback: OcrFeedback }
   | { kind: "error"; message: string };
@@ -25,6 +26,41 @@ type Props = {
   businessId: string;
   uploadEndpoint?: string;
 };
+
+// Self-hosted Tesseract.js assets (served same-origin from /public so they are
+// not blocked by the strict CSP). See scripts/copy-tesseract-assets.mjs.
+const TESSERACT_WORKER_PATH = "/tesseract/worker.min.js";
+const TESSERACT_CORE_PATH = "/tesseract"; // directory; SIMD variant auto-selected
+const TESSERACT_LANG_PATH = "/tesseract/lang";
+
+/**
+ * Run client-side OCR on the selected image using Tesseract.js (WASM, in the
+ * browser). Returns the recognised text, or "" on any failure so the caller
+ * can fall back to the server-side vision API. `onProgress` receives 0..1.
+ */
+async function runClientOcr(file: File, onProgress: (p: number) => void): Promise<string> {
+  try {
+    const { createWorker } = await import("tesseract.js");
+    const worker = await createWorker("eng", 1 /* OEM.LSTM_ONLY */, {
+      workerPath: TESSERACT_WORKER_PATH,
+      corePath: TESSERACT_CORE_PATH,
+      langPath: TESSERACT_LANG_PATH,
+      logger: (m: { status: string; progress: number }) => {
+        if (m.status === "recognizing text") onProgress(m.progress);
+      }
+    });
+    try {
+      const { data } = await worker.recognize(file);
+      return data.text ?? "";
+    } finally {
+      await worker.terminate();
+    }
+  } catch {
+    // Any OCR failure (unsupported browser, asset load error, etc.) is
+    // non-fatal: the server falls back to the DeepSeek vision API.
+    return "";
+  }
+}
 
 export function ReceiptUpload({ businessId, uploadEndpoint = "/api/upload" }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,13 +109,21 @@ export function ReceiptUpload({ businessId, uploadEndpoint = "/api/upload" }: Pr
       return;
     }
 
+    // Primary OCR runs on-device in the browser (Tesseract.js, WASM). If it
+    // fails or returns nothing, we POST an empty rawText and the server falls
+    // back to the DeepSeek cloud vision API.
+    setState({ kind: "scanning", progress: 0 });
+    const rawText = await runClientOcr(file, (progress) =>
+      setState({ kind: "scanning", progress })
+    );
+
     setState({ kind: "processing" });
 
     try {
       const resp = await fetch("/api/receipts/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, imageUrl })
+        body: JSON.stringify({ businessId, imageUrl, rawText })
       });
 
       if (!resp.ok) {
@@ -176,6 +220,29 @@ export function ReceiptUpload({ businessId, uploadEndpoint = "/api/upload" }: Pr
         <div className="flex items-center justify-center gap-2 py-6 text-ink-muted">
           <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
           <span className="text-sm">Uploading image…</span>
+        </div>
+      )}
+
+      {state.kind === "scanning" && (
+        <div className="space-y-2 py-6" role="status" aria-live="polite">
+          <div className="flex items-center justify-center gap-2 text-ink-muted">
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+            <span className="text-sm">
+              Scanning on your device… {Math.round(state.progress * 100)}%
+            </span>
+          </div>
+          <div
+            className="mx-auto h-1.5 w-48 overflow-hidden rounded-full bg-surface-elevated"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(state.progress * 100)}
+          >
+            <div
+              className="h-full rounded-full bg-primary-action transition-all"
+              style={{ width: `${Math.round(state.progress * 100)}%` }}
+            />
+          </div>
         </div>
       )}
 
