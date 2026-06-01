@@ -72,6 +72,13 @@ export default function PrivacyPage() {
               works&rdquo; below).
             </li>
             <li>
+              <strong>Business website content</strong> — when a business owner adds their
+              own website as an AI knowledge source, we fetch the public text of those pages
+              and store it so the AI can answer customer questions from the business&rsquo;s
+              real material. Only publicly reachable pages on the owner&rsquo;s chosen domain
+              are crawled, and only by that business&rsquo;s authorised staff.
+            </li>
+            <li>
               <strong>Security data</strong> — IP addresses used for rate limiting and
               fraud prevention; these are not linked to your profile and are not retained
               beyond the rate-limit window.

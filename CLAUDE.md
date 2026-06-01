@@ -46,6 +46,8 @@ This repository is the **Heita CRM** — a mobile-first PWA loyalty + messaging 
   - `api/auth/request-otp` — rate-limited (per phone burst, per phone hour, per IP hour)
   - `api/ai/chat` — SSE streaming, RAG pipeline (Ollama → Anthropic fallback)
   - `api/receipts/submit` — accepts client-side Tesseract.js OCR text (`rawText`); server parses it heuristically and falls back to the DeepSeek vision API when on-device text is missing/insufficient
+  - `api/ai/web-sources` — add/list/delete/refresh website knowledge sources; SSRF-guarded same-origin crawl (`lib/ai/web-crawler`) → text/plain documents → same RAG pipeline
+  - `api/cron/refresh-web-sources` — re-crawls due web sources (constant-time `CRON_SECRET`); unchanged pages skipped via `contentHash`
   - `api/health` — DB + Redis liveness for orchestrators
 - `src/lib` — infrastructure
   - `auth`, `prisma`, `redis` — singletons
@@ -55,6 +57,7 @@ This repository is the **Heita CRM** — a mobile-first PWA loyalty + messaging 
   - `otp` — HMAC-SHA256 codes, single-use, 10-min TTL
   - `logger` — pino with sensitive-field redaction
   - `ai/{ollama,anthropic,rag}` — streamed RAG with graceful fallback
+  - `ai/{web-crawler,web-source-crawl,html-extract}` — SSRF-guarded site crawl → text → existing document ingestion pipeline (BullMQ `web-crawl` queue)
 - `src/server/services` — domain services (loyalty, membership, business, whatsapp, notification)
 - `src/components/{ui,layout,business,loyalty,ai,auth,shared}` — shared Stitch component library
 - `src/workers` — BullMQ workers (document ingestion, WhatsApp AI replies)
@@ -66,6 +69,7 @@ This repository is the **Heita CRM** — a mobile-first PWA loyalty + messaging 
 - Africa's Talking webhook accepts only documented IP ranges or shared-secret callers
 - OTP request hits three rate-limiters (burst, per-phone hour, per-IP hour) and HMAC-signs codes with `AUTH_SECRET`
 - Cron endpoints use constant-time secret comparison
+- Web-source crawler is SSRF-guarded (`assertPublicHttpUrl`): http(s) only, DNS-resolved, rejects loopback/private/link-local/metadata IPs on every fetch and redirect hop; same-origin, robots.txt-respecting, with hard depth/page/size/time caps
 - Strict CSP, HSTS (prod), X-Frame-Options DENY, Permissions-Policy enforced via `next.config.ts`
 - `pino` logger redacts auth headers, OTP codes, tokens
 

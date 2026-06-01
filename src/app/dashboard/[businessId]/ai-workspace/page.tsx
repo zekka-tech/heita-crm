@@ -1,8 +1,9 @@
 import { notFound, redirect } from "next/navigation";
-import { FileText, Sparkles } from "lucide-react";
+import { FileText, Globe, Sparkles } from "lucide-react";
 
 import { ChatInterface } from "@/components/ai/chat-interface";
 import { DocumentUploadCard } from "@/components/ai/document-upload-card";
+import { WebSourcesList } from "@/components/ai/web-sources-list";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
@@ -44,6 +45,11 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
         }
       },
       documents: {
+        where: { sourceType: "FILE" },
+        orderBy: { createdAt: "desc" },
+        take: 10
+      },
+      webSources: {
         orderBy: { createdAt: "desc" },
         take: 10
       }
@@ -54,6 +60,16 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
 
   const docs = business.documents;
   const ready = docs.filter((doc) => doc.status === "READY").length;
+  const webSources = business.webSources.map((source) => ({
+    id: source.id,
+    rootUrl: source.rootUrl,
+    domain: source.domain,
+    status: source.status,
+    pageCount: source.pageCount,
+    refreshIntervalDays: source.refreshIntervalDays,
+    lastCrawledAt: source.lastCrawledAt ? source.lastCrawledAt.toISOString() : null,
+    errorMessage: source.errorMessage
+  }));
   const latestChatSession = business.aiChatSessions[0] ?? null;
 
   return (
@@ -128,6 +144,13 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
                   customer questions from your real material.
                 </p>
               )}
+            </Card>
+            <Card variant="surface" className="space-y-4">
+              <header className="flex items-center gap-2">
+                <Globe className="h-5 w-5 text-primary-action" />
+                <h2 className="section-title">Web sources</h2>
+              </header>
+              <WebSourcesList sources={webSources} />
             </Card>
           </div>
 

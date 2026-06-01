@@ -18,6 +18,7 @@ Last reviewed: 2026-05-27
 | `OcrReceipt` | `userId`, `imageUrl`, `rawOcrText` | Automated receipt processing | 2 years | Consent |
 | `CustomerImportRun` | linked via `userId` | Bulk customer upload | 1 year | Legitimate interest |
 | `AiChatSession` / `AiChatMessage` | `userId`, free-text messages | AI co-worker conversations | 1 year | Consent |
+| `WebSource` / `BusinessDocument` (URL) | business-owned public web page text (no end-user PII) | AI knowledge grounding from a business&rsquo;s own website (SSRF-guarded crawl) | Until the source is deleted | Legitimate interest |
 | `UserConsent` | `userId`, `type`, `grantedAt` | Consent records | Lifetime of consent + 5 years | Legal obligation |
 
 ## Retention Schedule (automated via cron)
