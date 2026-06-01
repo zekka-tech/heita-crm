@@ -95,6 +95,46 @@ docker compose -f docker-compose.prod.yml down
 docker compose -f docker-compose.prod.yml up -d
 ```
 
+### Scheduled jobs (cron)
+
+The app exposes its background jobs as POST `/api/cron/*` endpoints. They are
+**not** self-scheduling — point an external scheduler (host `crontab`, systemd
+timer, or a hosted cron service) at them. Every endpoint authenticates with the
+shared secret, sent as `Authorization: Bearer $CRON_SECRET` (or an
+`x-cron-secret:` header), and is safe to over-fire (idempotent / internally
+locked).
+
+| Endpoint | Purpose | Suggested cadence |
+|---|---|---|
+| `/api/cron/broadcast-promotions` | Dispatch promotions whose send time has arrived | every 15 min |
+| `/api/cron/send-reminders` | Send due loyalty / points reminders | hourly |
+| `/api/cron/cleanup-otp` | Purge expired OTP codes | hourly |
+| `/api/cron/expire-points` | Expire points past their TTL | daily |
+| `/api/cron/recalculate-tiers` | Recompute membership tiers | daily |
+| `/api/cron/purge-whatsapp-messages` | Delete WhatsApp messages past retention | daily |
+| `/api/cron/hard-delete-users` | Hard-delete users past the soft-delete window | daily |
+| `/api/cron/refresh-web-sources` | Re-crawl AI web sources whose refresh interval elapsed (unchanged pages skipped via `contentHash`) | daily |
+
+Example host `crontab` (replace `$DOMAIN`; keep `CRON_SECRET` out of the crontab
+file itself — source it from a root-only env file):
+
+```cron
+# /etc/cron.d/heita  — runs in UTC; %-signs must be escaped in cron.d
+CRON_SECRET_FILE=/etc/heita/cron.env
+*/15 *  * * *  root  . /etc/heita/cron.env; curl -fsS -m 60 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/broadcast-promotions
+0    *  * * *  root  . /etc/heita/cron.env; curl -fsS -m 60 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/send-reminders
+15   *  * * *  root  . /etc/heita/cron.env; curl -fsS -m 60 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/cleanup-otp
+0    2  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/expire-points
+30   2  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/recalculate-tiers
+0    3  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/purge-whatsapp-messages
+30   3  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/hard-delete-users
+0    4  * * *  root  . /etc/heita/cron.env; curl -fsS -m 600 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/refresh-web-sources
+```
+
+`refresh-web-sources` only enqueues crawl jobs (the BullMQ `web-crawl` worker does
+the work), so its request returns quickly; give it a longer `-m` only if you run
+crawls inline (`AI_INGEST_INLINE=1`).
+
 ### Backups
 Postgres data lives in the `postgres_data` volume. Schedule
 `pg_dump`/`pgBackRest` against the `postgres` container and ship dumps off-box
