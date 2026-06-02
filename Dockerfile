@@ -8,6 +8,10 @@ RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
+# scripts/ is needed because the postinstall hook runs
+# scripts/copy-tesseract-assets.mjs (Tesseract worker/WASM → public/, see the
+# script header for the CSP rationale).
+COPY scripts ./scripts
 RUN --mount=type=cache,target=/root/.npm npm ci --prefer-offline --no-audit --progress=false
 
 FROM node:${NODE_VERSION}-alpine AS builder
