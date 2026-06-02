@@ -117,7 +117,10 @@ export async function deleteWebSource(input: {
   actorUserId?: string | null;
 }): Promise<void> {
   await requireOwnedSource(input.id, input.businessId);
-  await prisma.webSource.delete({ where: { id: input.id } });
+  // businessId in the where clause is defense-in-depth on top of the ownership
+  // check above — the mutation can never touch another tenant's row, even under
+  // a TOCTOU race.
+  await prisma.webSource.delete({ where: { id: input.id, businessId: input.businessId } });
 
   if (input.actorUserId) {
     await recordStaffAuditLog({
@@ -135,8 +138,10 @@ export async function refreshWebSource(input: {
   businessId: string;
 }): Promise<WebSource> {
   const source = await requireOwnedSource(input.id, input.businessId);
+  // businessId in the where clause is defense-in-depth on top of the ownership
+  // check above (see deleteWebSource).
   const updated = await prisma.webSource.update({
-    where: { id: source.id },
+    where: { id: source.id, businessId: input.businessId },
     data: { status: WebSourceStatus.PENDING, errorMessage: null }
   });
   await enqueueWebCrawlJob(source.id);

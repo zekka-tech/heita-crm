@@ -96,7 +96,9 @@ describe("deleteWebSource / refreshWebSource", () => {
     prisma.webSource.findUnique.mockResolvedValue({ id: "src_1", businessId: "biz_1" });
     prisma.webSource.delete.mockResolvedValue({});
     await deleteWebSource({ id: "src_1", businessId: "biz_1" });
-    expect(prisma.webSource.delete).toHaveBeenCalledWith({ where: { id: "src_1" } });
+    expect(prisma.webSource.delete).toHaveBeenCalledWith({
+      where: { id: "src_1", businessId: "biz_1" }
+    });
   });
 
   it("refuses to mutate a source from another business", async () => {
