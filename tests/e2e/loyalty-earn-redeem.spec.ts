@@ -126,16 +126,32 @@ test("customer earns and redeems loyalty points end-to-end", async ({ page, requ
     await signInAs(page, ownerPhone);
     await page.goto(`/dashboard/${business.id}/loyalty`);
 
-    // The redeem form targets a membership. Look for the customer name or a
-    // membership input and fill in the reward.
-    await page.getByLabel(/membership id/i).fill(membership.id);
-    await page.getByLabel(/reward/i).selectOption(reward.id);
-    await page.getByRole("button", { name: /redeem/i }).click();
+    // Mutating loyalty actions require a fresh staff step-up OTP. Request one,
+    // read the dev code surfaced on the page, and verify to unlock the forms.
+    await page.getByRole("button", { name: /send staff otp/i }).click();
+    const stepUpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
+    await expect(stepUpChip).toBeVisible({ timeout: 10_000 });
+    const stepUpCode = ((await stepUpChip.textContent()) ?? "").match(/(\d{6})/)?.[1];
+    expect(stepUpCode).toBeTruthy();
+    await page.getByLabel(/verification code/i).fill(stepUpCode!);
+    await page.getByRole("button", { name: /verify staff access/i }).click();
+    await expect(page.getByText(/staff verification is active/i)).toBeVisible({
+      timeout: 10_000
+    });
 
-    // Expect a success confirmation on the page
-    await expect(
-      page.getByText(/redeemed|points deducted|success/i)
-    ).toBeVisible({ timeout: 10_000 });
+    // Redeem the reward's points cost on the customer's behalf. Both the "Issue
+    // points" and "Redeem manually" cards expose "Customer"/"Points" controls,
+    // so scope to the form that owns the "Redeem points" button.
+    const redeemForm = page.locator("form", {
+      has: page.getByRole("button", { name: /redeem points/i })
+    });
+    await redeemForm.getByLabel(/customer/i).selectOption(membership.id);
+    await redeemForm.getByLabel("Points", { exact: true }).fill(String(reward.pointsCost));
+    await redeemForm.getByRole("button", { name: /redeem points/i }).click();
+
+    // redeemPointsAction redirects to ?updated=redeem on success; the DB
+    // assertion below is the authoritative balance check.
+    await page.waitForURL(/updated=redeem/);
 
     // ── Step 6: Verify DB balance post-redemption ─────────────────────────
     const updatedMembership = await prisma.membership.findUniqueOrThrow({
