@@ -222,6 +222,26 @@ const envSchema = z
       });
     }
 
+    // Yoco billing keys travel together: the checkout API needs the secret
+    // key and the webhook needs the signing secret to verify callbacks. A
+    // half-configured pair only surfaces when a real payment/webhook arrives,
+    // so enforce both-or-neither in production to fail fast at boot instead.
+    const yocoConfigured = Boolean(data.YOCO_SECRET_KEY || data.YOCO_WEBHOOK_SECRET);
+    if (isProduction && yocoConfigured && !data.YOCO_SECRET_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "YOCO_SECRET_KEY is required when Yoco billing is enabled in production — it authenticates checkout-session creation.",
+        path: ["YOCO_SECRET_KEY"]
+      });
+    }
+    if (isProduction && yocoConfigured && !data.YOCO_WEBHOOK_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "YOCO_WEBHOOK_SECRET is required when Yoco billing is enabled in production — it verifies payment webhook signatures.",
+        path: ["YOCO_WEBHOOK_SECRET"]
+      });
+    }
+
     if (data.VAPID_PRIVATE_KEY && !data.VAPID_SUBJECT) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
