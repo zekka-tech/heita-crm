@@ -30,6 +30,16 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // next-auth (and its @auth/core dependency) are ESM ("type": "module") and
+  // import { NextRequest } from "next/server". If Next externalizes them, the
+  // standalone Node runtime loads them raw and that bare import fails —
+  // Node's ESM loader does not append ".js" to extensionless specifiers and
+  // `next` has no "exports" map, so `import "next/server"` throws
+  // ERR_MODULE_NOT_FOUND ("Did you mean next/server.js?"). Bundling them via
+  // transpilePackages lets webpack resolve next/server at build time. Without
+  // this, every auth callback (e.g. signIn) 500s → /api/auth/error, in both
+  // the standalone e2e/smoke server and the production Docker image.
+  transpilePackages: ["next-auth", "@auth/core"],
   typedRoutes: true,
   poweredByHeader: false,
   reactStrictMode: true,

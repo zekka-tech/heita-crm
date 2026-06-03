@@ -21,6 +21,12 @@ import { prisma } from "../../src/lib/prisma";
 import { createBusinessWithDefaults } from "../../src/server/services/business.service";
 
 async function signInAs(page: Page, phone: string) {
+  // Clear any existing session first: this helper is called twice in the same
+  // page (customer, then staff), and an authenticated user hitting /sign-in is
+  // correctly redirected to /home by middleware — which would leave no phone
+  // field to fill. Cookie-consent lives in localStorage (storageState), so it
+  // survives clearCookies; the CSRF cookie is re-issued on the next page load.
+  await page.context().clearCookies();
   await page.goto("/sign-in");
   await page.getByLabel(/phone number/i).fill(phone);
   await page.getByRole("button", { name: /send.*code/i }).click();
