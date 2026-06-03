@@ -2,6 +2,16 @@ import { defineConfig, devices } from "@playwright/test";
 
 const PORT = Number(process.env.E2E_PORT ?? 3000);
 
+// Copy build-time static assets into the standalone output tree so the
+// standalone server can serve them. Idempotent (mkdir -p + copy contents),
+// so it is safe under Playwright's reuseExistingServer in local runs.
+const copyStandaloneAssets = [
+  "mkdir -p .next/standalone/.next/static",
+  "cp -r .next/static/. .next/standalone/.next/static/",
+  "mkdir -p .next/standalone/public",
+  "cp -r public/. .next/standalone/public/"
+].join(" && ");
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -62,9 +72,17 @@ export default defineConfig({
     // `next start` does not work with `output: standalone` (Next.js 15+).
     // Build is done separately by the CI "Build for smoke/E2E" step;
     // we only start the pre-built standalone server here.
+    //
+    // The standalone server serves /_next/static and /public RELATIVE to
+    // server.js (i.e. from .next/standalone/.next/static and
+    // .next/standalone/public). `next build` leaves those assets in the
+    // top-level .next/static and public dirs, so they must be copied in or
+    // every JS chunk 404s — which silently breaks client hydration and makes
+    // every interactive e2e/smoke test fail (button never enables, etc.).
+    // This mirrors the COPY steps in the Dockerfile runner stage.
     command: process.env.CI
-      ? `node .next/standalone/server.js`
-      : "npm run build && node .next/standalone/server.js",
+      ? `${copyStandaloneAssets} && node .next/standalone/server.js`
+      : `npm run build && ${copyStandaloneAssets} && node .next/standalone/server.js`,
     url: `http://localhost:${PORT}/api/health/live`,
     timeout: 180_000,
     reuseExistingServer: !process.env.CI,
