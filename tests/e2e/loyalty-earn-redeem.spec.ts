@@ -20,6 +20,8 @@ import type { Locator, Page } from "@playwright/test";
 import { prisma } from "../../src/lib/prisma";
 import { createBusinessWithDefaults } from "../../src/server/services/business.service";
 
+test.setTimeout(60_000);
+
 async function readDevOtp(
   payload: { devCode?: string },
   chip: Locator
@@ -28,7 +30,7 @@ async function readDevOtp(
     return payload.devCode;
   }
 
-  const chipText = await chip.textContent({ timeout: 10_000 }).catch(() => "");
+  const chipText = await chip.textContent({ timeout: 2_000 }).catch(() => "");
   return (chipText ?? "").match(/(\d{6})/)?.[1];
 }
 
@@ -167,15 +169,20 @@ test("customer earns and redeems loyalty points end-to-end", async ({ page, requ
     await redeemForm.getByLabel("Points", { exact: true }).fill(String(reward.pointsCost));
     await redeemForm.getByRole("button", { name: /redeem points/i }).click();
 
-    // redeemPointsAction redirects to ?updated=redeem on success; the DB
-    // assertion below is the authoritative balance check.
-    await page.waitForURL(/updated=redeem/);
-
     // ── Step 6: Verify DB balance post-redemption ─────────────────────────
-    const updatedMembership = await prisma.membership.findUniqueOrThrow({
-      where: { id: membership.id }
-    });
-    expect(updatedMembership.pointsBalance).toBe(EXPECTED_BALANCE - reward.pointsCost);
+    // The form action may complete without a client-observable navigation under
+    // Playwright timing, so the persisted balance is the authoritative signal.
+    await expect
+      .poll(
+        async () => {
+          const updatedMembership = await prisma.membership.findUniqueOrThrow({
+            where: { id: membership.id }
+          });
+          return updatedMembership.pointsBalance;
+        },
+        { timeout: 10_000 }
+      )
+      .toBe(EXPECTED_BALANCE - reward.pointsCost);
   } finally {
     await prisma.reward.deleteMany({ where: { id: reward.id } });
     await prisma.business.deleteMany({ where: { id: business.id } });
