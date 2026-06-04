@@ -1,25 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import dynamic from "next/dynamic";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
 
 import { Toaster } from "sonner";
 
 import { HeitaTRPCProvider } from "@/components/providers/trpc-provider";
+import { AnalyticsProviders } from "@/components/providers/analytics-providers";
 import { CookieConsentBanner } from "@/components/layout/cookie-consent-banner";
 import { PwaInstallBanner } from "@/components/layout/pwa-install-banner";
 import { ServiceWorkerRegister } from "@/components/layout/service-worker-register";
-
-// Analytics providers — lazy so they never block first paint and are absent
-// when NEXT_PUBLIC_POSTHOG_KEY is unset (e.g. CI, staging without tracking).
-const PostHogProvider = dynamic(
-  () => import("@/components/providers/posthog-provider").then((m) => m.PostHogProvider),
-  { ssr: false }
-);
-const WebVitalsReporter = dynamic(
-  () => import("@/components/providers/web-vitals").then((m) => m.WebVitalsReporter),
-  { ssr: false }
-);
 import { resolveLocale } from "@/i18n/locale";
 import "./globals.css";
 
@@ -119,8 +108,7 @@ export default async function RootLayout({
         </a>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <HeitaTRPCProvider>
-            <PostHogProvider />
-            <WebVitalsReporter />
+            <AnalyticsProviders />
             <ServiceWorkerRegister />
             <PwaInstallBanner />
             <CookieConsentBanner />

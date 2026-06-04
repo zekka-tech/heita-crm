@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import type { Route } from "next";
-import dynamicImport from "next/dynamic";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
@@ -18,25 +17,12 @@ import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getBusinessDashboardAnalytics } from "@/server/services/analytics.service";
-
-// Chart bundle is lazy-loaded client-side so Recharts never lands in the
-// server-rendered initial HTML payload — eliminates the ~250 kB from first paint.
-const MemberGrowthChart = dynamicImport(
-  () => import("@/components/analytics/charts").then((m) => m.MemberGrowthChart),
-  { ssr: false, loading: () => <ChartSkeleton /> }
-);
-const PointsActivityChart = dynamicImport(
-  () => import("@/components/analytics/charts").then((m) => m.PointsActivityChart),
-  { ssr: false, loading: () => <ChartSkeleton /> }
-);
-const MessagesChart = dynamicImport(
-  () => import("@/components/analytics/charts").then((m) => m.MessagesChart),
-  { ssr: false, loading: () => <ChartSkeleton /> }
-);
-const TopRewardsTable = dynamicImport(
-  () => import("@/components/analytics/charts").then((m) => m.TopRewardsTable),
-  { ssr: false, loading: () => <div className="h-32 animate-pulse rounded-xl bg-surface-elevated" /> }
-);
+import {
+  MemberGrowthChart,
+  PointsActivityChart,
+  MessagesChart,
+  TopRewardsTable,
+} from "@/components/analytics/charts-loader";
 
 export const dynamic = "force-dynamic";
 
@@ -293,6 +279,3 @@ function StatTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ChartSkeleton() {
-  return <div className="h-44 animate-pulse rounded-xl bg-surface-elevated" />;
-}
