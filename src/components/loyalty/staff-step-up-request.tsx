@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 
 import { Chip } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,6 @@ type Props = {
 };
 
 export function StaffStepUpRequest({ businessId }: Props) {
-  const router = useRouter();
   const csrfToken = useCsrfToken();
   const [devCode, setDevCode] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -61,8 +59,8 @@ export function StaffStepUpRequest({ businessId }: Props) {
             setStep("request");
             return;
           }
-          // Refresh the page so the Server Component re-checks hasFreshStaffStepUp
-          router.refresh();
+          // Reload so the Server Component re-checks hasFreshStaffStepUp.
+          window.location.reload();
         })
         .catch(() => setStatus({ kind: "error", text: "Verification failed. Please try again." }));
     });
