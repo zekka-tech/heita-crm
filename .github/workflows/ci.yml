@@ -192,7 +192,12 @@ jobs:
         run: npm ci --prefer-offline --no-audit --progress=false
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx playwright install --with-deps chromium
+          else
+            npx playwright install --with-deps
+          fi
 
       - name: Prisma generate + migrate
         run: npx prisma generate && npx prisma migrate deploy
@@ -201,7 +206,12 @@ jobs:
         run: npm run build
 
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx playwright test --project=smoke
+          else
+            npm run test:e2e
+          fi
 
       - name: Upload Playwright report on failure
         if: failure()
