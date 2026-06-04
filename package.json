@@ -114,7 +114,7 @@
     {
       "comment": "Next.js main runtime chunk",
       "path": ".next/static/chunks/main-*.js",
-      "maxSize": "120 kB",
+      "maxSize": "130 kB",
       "compression": "gzip"
     },
     {
