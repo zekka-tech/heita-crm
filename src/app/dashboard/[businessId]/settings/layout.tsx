@@ -12,8 +12,9 @@ type SettingsLayoutProps = {
 
 const TABS = [
   { href: "staff", label: "Staff" },
-  { href: "billing", label: "Billing" },
-  { href: "templates", label: "Templates" }
+  { href: "integrations", label: "Integrations" },
+  { href: "templates", label: "Templates" },
+  { href: "billing", label: "Billing" }
 ] as const;
 
 export default async function DashboardSettingsLayout({
