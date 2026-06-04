@@ -1,6 +1,5 @@
 import { anthropicConfigured, streamAnthropicChat } from "@/lib/ai/anthropic";
 import { embedText } from "@/lib/ai/embeddings";
-import { checkAnswerGrounding } from "@/lib/ai/grounding";
 import { ollamaConfigured, streamOllamaChat } from "@/lib/ai/ollama";
 import { rerankChunks } from "@/lib/ai/reranker";
 import { ZERO_USAGE, type StreamUsage } from "@/lib/ai/stream-types";

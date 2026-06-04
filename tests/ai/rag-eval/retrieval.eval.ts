@@ -12,7 +12,7 @@
  * Run with: npm run test:eval
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
 import { recallAtK, mrr, precisionAtK, aggregate } from "./metrics";
 import { buildQueryForRetrieval } from "@/lib/ai/rag";
@@ -208,7 +208,7 @@ describe("golden-set — no-context cases", () => {
   });
 
   it("recall is 1.0 for empty relevant sets (vacuously true)", () => {
-    for (const c of noCases) {
+    for (const _c of noCases) {
       expect(recallAtK(["some-chunk"], new Set(), 5)).toBe(1);
     }
   });

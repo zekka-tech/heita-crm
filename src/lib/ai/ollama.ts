@@ -1,6 +1,5 @@
 import { logger } from "@/lib/logger";
 import type { StreamUsage, StreamWithUsage } from "@/lib/ai/stream-types";
-import { ZERO_USAGE } from "@/lib/ai/stream-types";
 
 export type { StreamUsage, StreamWithUsage };
 
