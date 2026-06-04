@@ -1,5 +1,6 @@
 import { Prisma, TransactionType } from "@prisma/client";
 
+import { analyticsKeysForBusiness, cacheDel } from "@/lib/data-cache";
 import {
   applyTierPointMultiplier,
   calculatePointsExpiryDate,
@@ -213,9 +214,12 @@ function createEarnTransactionData(input: {
 }
 
 export async function earnPoints(input: EarnPointsInput) {
-  return withSpan("loyalty.earn_points", { "business.id": input.businessId, points: input.points }, () =>
+  const result = await withSpan("loyalty.earn_points", { "business.id": input.businessId, points: input.points }, () =>
     _earnPoints(input)
   );
+  // Bust all analytics windows so staff immediately see the transaction they just issued.
+  cacheDel(...analyticsKeysForBusiness(input.businessId)).catch(() => undefined);
+  return result;
 }
 
 async function _earnPoints(input: EarnPointsInput) {
@@ -314,9 +318,11 @@ async function _earnPoints(input: EarnPointsInput) {
 }
 
 export async function redeemPoints(input: RedeemPointsInput) {
-  return withSpan("loyalty.redeem_points", { "business.id": input.businessId }, () =>
+  const result = await withSpan("loyalty.redeem_points", { "business.id": input.businessId }, () =>
     _redeemPoints(input)
   );
+  cacheDel(...analyticsKeysForBusiness(input.businessId)).catch(() => undefined);
+  return result;
 }
 
 async function _redeemPoints(input: RedeemPointsInput) {
@@ -444,9 +450,11 @@ async function _redeemPoints(input: RedeemPointsInput) {
 }
 
 export async function refundTransaction(input: RefundTransactionInput) {
-  return withSpan("loyalty.refund_transaction", { "business.id": input.businessId, "transaction.id": input.transactionId }, () =>
+  const result = await withSpan("loyalty.refund_transaction", { "business.id": input.businessId, "transaction.id": input.transactionId }, () =>
     _refundTransaction(input)
   );
+  cacheDel(...analyticsKeysForBusiness(input.businessId)).catch(() => undefined);
+  return result;
 }
 
 async function _refundTransaction(input: RefundTransactionInput) {

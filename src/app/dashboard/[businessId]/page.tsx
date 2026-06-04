@@ -39,46 +39,58 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}`);
   }
 
-  const business = await prisma.business.findFirst({
-    where: {
-      id: businessId,
-      deletedAt: null,
-      staffMembers: { some: { userId: session.user.id } }
-    },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      whatsappPhoneNumber: true,
-      qrCodes: {
-        select: { token: true },
-        orderBy: { createdAt: "asc" },
-        take: 1
+  const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [business, recentMembers, pointsAgg] = await Promise.all([
+    prisma.business.findFirst({
+      where: {
+        id: businessId,
+        deletedAt: null,
+        staffMembers: { some: { userId: session.user.id } }
       },
-      joinLinks: {
-        select: { token: true },
-        orderBy: { createdAt: "asc" },
-        take: 1
-      },
-      memberships: { select: { joinedAt: true, pointsBalance: true } },
-      events: {
-        select: { id: true, title: true, startsAt: true },
-        where: { startsAt: { gte: new Date() } },
-        orderBy: { startsAt: "asc" },
-        take: 3
-      },
-      _count: {
-        select: {
-          memberships: true,
-          messages: true,
-          rewards: true,
-          loyaltyTransactions: true,
-          staffMembers: true,
-          documents: true
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        whatsappPhoneNumber: true,
+        qrCodes: {
+          select: { token: true },
+          orderBy: { createdAt: "asc" },
+          take: 1
+        },
+        joinLinks: {
+          select: { token: true },
+          orderBy: { createdAt: "asc" },
+          take: 1
+        },
+        events: {
+          select: { id: true, title: true, startsAt: true },
+          where: { startsAt: { gte: new Date() } },
+          orderBy: { startsAt: "asc" },
+          take: 3
+        },
+        _count: {
+          select: {
+            memberships: true,
+            messages: true,
+            rewards: true,
+            loyaltyTransactions: true,
+            staffMembers: true,
+            documents: true
+          }
         }
       }
-    }
-  });
+    }),
+    // Members who joined in the last 30 days — avoids loading all membership rows.
+    prisma.membership.count({
+      where: { businessId, joinedAt: { gte: last30 } }
+    }),
+    // Current outstanding points balance (sum across all members).
+    prisma.membership.aggregate({
+      where: { businessId },
+      _sum: { pointsBalance: true }
+    }),
+  ]);
 
   if (!business) {
     notFound();
@@ -87,15 +99,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const primaryQr = business.qrCodes[0] ?? null;
   const primaryLink = business.joinLinks[0] ?? null;
-
-  const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const recentMembers = business.memberships.filter(
-    (m) => m.joinedAt.getTime() >= last30.getTime()
-  ).length;
-  const totalPointsIssued = business.memberships.reduce(
-    (sum, m) => sum + m.pointsBalance,
-    0
-  );
+  const totalPointsOutstanding = pointsAgg._sum.pointsBalance ?? 0;
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
@@ -155,7 +159,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         <Metric
           icon={LineChart}
           label={t("pointsOutstanding")}
-          value={totalPointsIssued.toLocaleString()}
+          value={totalPointsOutstanding.toLocaleString()}
         />
       </section>
 

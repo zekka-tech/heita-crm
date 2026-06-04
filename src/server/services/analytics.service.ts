@@ -1,4 +1,4 @@
-import { TransactionType } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { withAnalyticsCache } from "@/lib/data-cache";
 import { prisma } from "@/lib/prisma";
@@ -12,157 +12,151 @@ type WeeklyBucket = {
   messagesOutbound: number;
 };
 
-function startOfWeek(input: Date) {
+// Raw SQL rows returned by Postgres aggregations. COUNT/SUM return bigint in
+// the node-postgres driver, so we coerce to Number at the boundary.
+type JoinRow = { week: Date; joins: bigint };
+type TxRow = { week: Date; issued: bigint; redeemed: bigint };
+type MsgRow = { week: Date; inbound: bigint; outbound: bigint };
+type TxKpi = { issued: bigint | null; redeemed: bigint | null };
+type MsgKpi = { inbound: bigint | null; outbound: bigint | null };
+
+function startOfWeek(input: Date): Date {
   const date = new Date(input);
   const day = date.getDay();
-  const diff = (day + 6) % 7;
+  const diff = (day + 6) % 7; // Monday = 0 offset
   date.setHours(0, 0, 0, 0);
   date.setDate(date.getDate() - diff);
   return date;
 }
 
-function bucketKey(input: Date) {
-  return startOfWeek(input).toISOString().slice(0, 10);
+// Postgres date_trunc('week', ...) returns Monday 00:00:00 UTC — same as our
+// startOfWeek for servers running in UTC. Slice to YYYY-MM-DD for map keying.
+function weekKey(date: Date): string {
+  return new Date(date).toISOString().slice(0, 10);
 }
 
-function bucketLabel(key: string) {
+function bucketLabel(key: string): string {
   const date = new Date(`${key}T00:00:00.000Z`);
-  return date.toLocaleDateString("en-ZA", {
-    month: "short",
-    day: "numeric"
-  });
+  return date.toLocaleDateString("en-ZA", { month: "short", day: "numeric" });
 }
 
 async function _getBusinessDashboardAnalytics(input: {
   businessId: string;
-  weeks?: number;
+  weeks: number;
 }) {
-  const weeks = input.weeks ?? 8;
+  const { businessId, weeks } = input;
   const from = startOfWeek(new Date(Date.now() - (weeks - 1) * 7 * 24 * 60 * 60 * 1000));
-  const bucketMap = new Map<string, WeeklyBucket>();
+  const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  for (let index = 0; index < weeks; index += 1) {
-    const week = new Date(from);
-    week.setDate(from.getDate() + index * 7);
-    const key = bucketKey(week);
+  // Five parallel queries instead of three unbounded findMany + JS bucketing.
+  // Each query does constant-memory aggregation in Postgres using existing indexes
+  // on (businessId, joinedAt) / (businessId, createdAt) / (businessId, direction, createdAt).
+  const [joinRows, txRows, msgRows, txKpi, msgKpi] = await Promise.all([
+    prisma.$queryRaw<JoinRow[]>(Prisma.sql`
+      SELECT
+        date_trunc('week', "joinedAt") AS week,
+        COUNT(*) AS joins
+      FROM "Membership"
+      WHERE "businessId" = ${businessId}
+        AND "joinedAt" >= ${from}
+      GROUP BY 1
+    `),
+
+    prisma.$queryRaw<TxRow[]>(Prisma.sql`
+      SELECT
+        date_trunc('week', "createdAt") AS week,
+        SUM(
+          CASE WHEN type IN ('EARN','SIGNUP_BONUS','ADJUSTMENT','REFUND')
+                AND "pointsDelta" > 0
+               THEN "pointsDelta" ELSE 0 END
+        ) AS issued,
+        SUM(
+          CASE WHEN type IN ('REDEEM','EXPIRY')
+               THEN ABS("pointsDelta") ELSE 0 END
+        ) AS redeemed
+      FROM "LoyaltyTransaction"
+      WHERE "businessId" = ${businessId}
+        AND "createdAt" >= ${from}
+      GROUP BY 1
+    `),
+
+    prisma.$queryRaw<MsgRow[]>(Prisma.sql`
+      SELECT
+        date_trunc('week', "createdAt") AS week,
+        COUNT(*) FILTER (WHERE direction = 'INBOUND')  AS inbound,
+        COUNT(*) FILTER (WHERE direction = 'OUTBOUND') AS outbound
+      FROM "Message"
+      WHERE "businessId" = ${businessId}
+        AND "createdAt" >= ${from}
+      GROUP BY 1
+    `),
+
+    prisma.$queryRaw<TxKpi[]>(Prisma.sql`
+      SELECT
+        SUM(
+          CASE WHEN type IN ('EARN','SIGNUP_BONUS','ADJUSTMENT','REFUND')
+                AND "pointsDelta" > 0
+               THEN "pointsDelta" ELSE 0 END
+        ) AS issued,
+        SUM(
+          CASE WHEN type IN ('REDEEM','EXPIRY')
+               THEN ABS("pointsDelta") ELSE 0 END
+        ) AS redeemed
+      FROM "LoyaltyTransaction"
+      WHERE "businessId" = ${businessId}
+        AND "createdAt" >= ${last30}
+    `),
+
+    prisma.$queryRaw<MsgKpi[]>(Prisma.sql`
+      SELECT
+        COUNT(*) FILTER (WHERE direction = 'INBOUND')  AS inbound,
+        COUNT(*) FILTER (WHERE direction = 'OUTBOUND') AS outbound
+      FROM "Message"
+      WHERE "businessId" = ${businessId}
+        AND "createdAt" >= ${last30}
+    `),
+  ]);
+
+  // Build the ordered bucket map (one entry per week, including empty weeks).
+  const bucketMap = new Map<string, WeeklyBucket>();
+  for (let i = 0; i < weeks; i++) {
+    const weekDate = new Date(from);
+    weekDate.setDate(from.getDate() + i * 7);
+    const key = weekKey(startOfWeek(weekDate));
     bucketMap.set(key, {
       label: bucketLabel(key),
       memberJoins: 0,
       pointsIssued: 0,
       pointsRedeemed: 0,
       messagesInbound: 0,
-      messagesOutbound: 0
+      messagesOutbound: 0,
     });
   }
 
-  const [memberships, transactions, messages] = await Promise.all([
-    prisma.membership.findMany({
-      where: {
-        businessId: input.businessId,
-        joinedAt: {
-          gte: from
-        }
-      },
-      select: {
-        joinedAt: true
-      }
-    }),
-    prisma.loyaltyTransaction.findMany({
-      where: {
-        businessId: input.businessId,
-        createdAt: {
-          gte: from
-        }
-      },
-      select: {
-        createdAt: true,
-        pointsDelta: true,
-        type: true
-      }
-    }),
-    prisma.message.findMany({
-      where: {
-        businessId: input.businessId,
-        createdAt: {
-          gte: from
-        }
-      },
-      select: {
-        createdAt: true,
-        direction: true
-      }
-    })
-  ]);
-
-  for (const membership of memberships) {
-    const bucket = bucketMap.get(bucketKey(membership.joinedAt));
+  // Merge SQL rows into the bucket map — only weeks present in the map are used.
+  for (const row of joinRows) {
+    const bucket = bucketMap.get(weekKey(row.week));
+    if (bucket) bucket.memberJoins = Number(row.joins);
+  }
+  for (const row of txRows) {
+    const bucket = bucketMap.get(weekKey(row.week));
     if (bucket) {
-      bucket.memberJoins += 1;
+      bucket.pointsIssued = Number(row.issued);
+      bucket.pointsRedeemed = Number(row.redeemed);
+    }
+  }
+  for (const row of msgRows) {
+    const bucket = bucketMap.get(weekKey(row.week));
+    if (bucket) {
+      bucket.messagesInbound = Number(row.inbound);
+      bucket.messagesOutbound = Number(row.outbound);
     }
   }
 
-  for (const transaction of transactions) {
-    const bucket = bucketMap.get(bucketKey(transaction.createdAt));
-    if (!bucket) continue;
-
-    if (
-      transaction.type === TransactionType.EARN ||
-      transaction.type === TransactionType.SIGNUP_BONUS ||
-      transaction.type === TransactionType.ADJUSTMENT ||
-      transaction.type === TransactionType.REFUND
-    ) {
-      bucket.pointsIssued += Math.max(transaction.pointsDelta, 0);
-    }
-
-    if (
-      transaction.type === TransactionType.REDEEM ||
-      transaction.type === TransactionType.EXPIRY
-    ) {
-      bucket.pointsRedeemed += Math.abs(transaction.pointsDelta);
-    }
-  }
-
-  for (const message of messages) {
-    const bucket = bucketMap.get(bucketKey(message.createdAt));
-    if (!bucket) continue;
-
-    if (message.direction === "INBOUND") {
-      bucket.messagesInbound += 1;
-    } else {
-      bucket.messagesOutbound += 1;
-    }
-  }
-
-  // 30d KPIs are computed from the already-fetched transaction/message arrays
-  // (which cover the full `weeks` window, always ≥ 30 days). This avoids 4
-  // extra DB round-trips per dashboard load.
-  const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const EARN_TYPES = new Set<TransactionType>([
-    TransactionType.EARN,
-    TransactionType.SIGNUP_BONUS,
-    TransactionType.ADJUSTMENT,
-    TransactionType.REFUND
-  ]);
-  const REDEEM_TYPES = new Set<TransactionType>([
-    TransactionType.REDEEM,
-    TransactionType.EXPIRY
-  ]);
-
-  let pointsIssued30d = 0;
-  let pointsRedeemed30d = 0;
-  let inbound30d = 0;
-  let outbound30d = 0;
-
-  for (const tx of transactions) {
-    if (tx.createdAt < last30) continue;
-    if (EARN_TYPES.has(tx.type) && tx.pointsDelta > 0) pointsIssued30d += tx.pointsDelta;
-    if (REDEEM_TYPES.has(tx.type)) pointsRedeemed30d += Math.abs(tx.pointsDelta);
-  }
-  for (const msg of messages) {
-    if (msg.createdAt < last30) continue;
-    if (msg.direction === "INBOUND") inbound30d += 1;
-    else outbound30d += 1;
-  }
+  const kpiTx = txKpi[0];
+  const kpiMsg = msgKpi[0];
+  const pointsIssued30d = Number(kpiTx?.issued ?? 0);
+  const pointsRedeemed30d = Number(kpiTx?.redeemed ?? 0);
 
   return {
     series: [...bucketMap.values()],
@@ -171,9 +165,9 @@ async function _getBusinessDashboardAnalytics(input: {
       pointsRedeemed30d,
       redemptionRate30d:
         pointsIssued30d > 0 ? pointsRedeemed30d / pointsIssued30d : 0,
-      inbound30d,
-      outbound30d
-    }
+      inbound30d: Number(kpiMsg?.inbound ?? 0),
+      outbound30d: Number(kpiMsg?.outbound ?? 0),
+    },
   };
 }
 
@@ -181,12 +175,8 @@ export function getBusinessDashboardAnalytics(input: {
   businessId: string;
   weeks?: number;
 }) {
-  // Cache only for the default 8-week window (dashboard view).
-  // Custom-week calls (e.g. analytics page with date range) bypass the cache.
-  if (!input.weeks || input.weeks === 8) {
-    return withAnalyticsCache(input.businessId, () =>
-      _getBusinessDashboardAnalytics(input)
-    );
-  }
-  return _getBusinessDashboardAnalytics(input);
+  const weeks = input.weeks ?? 8;
+  return withAnalyticsCache(input.businessId, weeks, () =>
+    _getBusinessDashboardAnalytics({ businessId: input.businessId, weeks })
+  );
 }
