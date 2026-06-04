@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHmac } from "crypto";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -22,6 +23,125 @@ vi.mock("@/lib/logger", () => ({
 import { prisma } from "@/lib/prisma";
 import { POST } from "@/app/api/email/webhook/route";
 import { NextRequest } from "next/server";
+
+// Base64-encoded test signing secret ("testsecret" in base64).
+const TEST_SECRET_B64 = Buffer.from("testsecret").toString("base64");
+
+function makeSvixSignature(body: string, msgId: string, timestamp: string): string {
+  const secretBytes = Buffer.from(TEST_SECRET_B64, "base64");
+  const signingInput = `${msgId}.${timestamp}.${body}`;
+  const computed = createHmac("sha256", secretBytes).update(signingInput).digest("base64");
+  return `v1,${computed}`;
+}
+
+function nowSeconds(): string {
+  return String(Math.floor(Date.now() / 1000));
+}
+
+describe("POST /api/email/webhook — Svix signature verification", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.EMAIL_WEBHOOK_SECRET = TEST_SECRET_B64;
+  });
+  afterEach(() => {
+    process.env.EMAIL_WEBHOOK_SECRET = "";
+  });
+
+  it("accepts a request with a valid Svix signature", async () => {
+    (prisma.user.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ id: "u1" });
+    (prisma.userConsent.updateMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ count: 1 });
+
+    const body = JSON.stringify({
+      type: "email.complained",
+      data: { email_id: "e1", to: ["user@test.com"], created_at: new Date().toISOString() },
+    });
+    const ts = nowSeconds();
+    const msgId = "msg_test_001";
+
+    const req = new NextRequest(new URL("http://localhost/api/email/webhook"), {
+      method: "POST",
+      body,
+      headers: {
+        "svix-id": msgId,
+        "svix-timestamp": ts,
+        "svix-signature": makeSvixSignature(body, msgId, ts),
+      },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a request with a tampered body (signature mismatch)", async () => {
+    const body = JSON.stringify({
+      type: "email.complained",
+      data: { email_id: "e1", to: ["user@test.com"], created_at: new Date().toISOString() },
+    });
+    const ts = nowSeconds();
+    const msgId = "msg_test_002";
+    const tamperedBody = body + " ";
+
+    const req = new NextRequest(new URL("http://localhost/api/email/webhook"), {
+      method: "POST",
+      body: tamperedBody,
+      headers: {
+        "svix-id": msgId,
+        "svix-timestamp": ts,
+        "svix-signature": makeSvixSignature(body, msgId, ts),
+      },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a request with missing svix-signature header", async () => {
+    const body = JSON.stringify({ type: "email.delivered", data: { email_id: "e1", to: [], created_at: "" } });
+    const req = new NextRequest(new URL("http://localhost/api/email/webhook"), {
+      method: "POST",
+      body,
+      headers: { "svix-id": "msg_003", "svix-timestamp": nowSeconds() },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a request with a stale timestamp (> 5 minutes old)", async () => {
+    const body = JSON.stringify({ type: "email.delivered", data: { email_id: "e1", to: [], created_at: "" } });
+    const staleTs = String(Math.floor(Date.now() / 1000) - 400);
+    const msgId = "msg_004";
+
+    const req = new NextRequest(new URL("http://localhost/api/email/webhook"), {
+      method: "POST",
+      body,
+      headers: {
+        "svix-id": msgId,
+        "svix-timestamp": staleTs,
+        "svix-signature": makeSvixSignature(body, msgId, staleTs),
+      },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a request with a completely wrong signature", async () => {
+    const body = JSON.stringify({ type: "email.delivered", data: { email_id: "e1", to: [], created_at: "" } });
+    const req = new NextRequest(new URL("http://localhost/api/email/webhook"), {
+      method: "POST",
+      body,
+      headers: {
+        "svix-id": "msg_005",
+        "svix-timestamp": nowSeconds(),
+        "svix-signature": "v1,bm90YXZhbGlkc2lnbmF0dXJl",
+      },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+  });
+});
 
 describe("POST /api/email/webhook", () => {
   beforeEach(() => {

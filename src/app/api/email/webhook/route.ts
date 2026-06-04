@@ -4,8 +4,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 
-const WEBHOOK_SECRET = process.env.EMAIL_WEBHOOK_SECRET;
-
 type ResendEvent = {
   type: string;
   data: {
@@ -36,7 +34,7 @@ async function verifySvixSignature(
   if (ageSeconds > 300) return false;
 
   const signingInput = `${msgId}.${msgTimestamp}.${rawBody}`;
-  const secretBytes = Buffer.from(WEBHOOK_SECRET!, "base64");
+  const secretBytes = Buffer.from(process.env.EMAIL_WEBHOOK_SECRET!, "base64");
   const computed = createHmac("sha256", secretBytes)
     .update(signingInput)
     .digest("base64");
@@ -61,7 +59,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  if (WEBHOOK_SECRET) {
+  if (process.env.EMAIL_WEBHOOK_SECRET) {
     const verified = await verifySvixSignature(request, rawBody);
     if (!verified) {
       logger.warn("email.webhook_signature_invalid");
