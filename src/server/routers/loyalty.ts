@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { router, protectedProcedure } from "@/server/trpc";
 
 export const loyaltyRouter = router({
@@ -30,5 +32,30 @@ export const loyaltyRouter = router({
         }
       }
     });
-  })
+  }),
+
+  referralCode: protectedProcedure
+    .input(z.object({ businessId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const referralCode = await ctx.prisma.referralCode.findFirst({
+        where: {
+          businessId: input.businessId,
+          ownerUserId: ctx.userId,
+          isActive: true
+        },
+        select: {
+          code: true,
+          business: { select: { slug: true } }
+        }
+      });
+
+      if (!referralCode) {
+        return null;
+      }
+
+      return {
+        code: referralCode.code,
+        businessSlug: referralCode.business.slug
+      };
+    })
 });

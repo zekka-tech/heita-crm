@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { captureEvent } from "@/lib/telemetry";
 import { createBusinessWithDefaults } from "@/server/services/business.service";
 
 export async function createBusinessAction(formData: FormData) {
@@ -47,15 +48,39 @@ export async function createBusinessAction(formData: FormData) {
     throw new Error("Choose a valid province.");
   }
 
-  const business = await createBusinessWithDefaults({
+  let business;
+  try {
+    business = await createBusinessWithDefaults({
+      userId,
+      name,
+      description,
+      category,
+      province,
+      phone,
+      email,
+      loyaltySignupBonus: Number.isFinite(loyaltySignupBonus) ? loyaltySignupBonus : 100
+    });
+  } catch (error) {
+    captureEvent({
+      userId,
+      event: "onboarding_error",
+      properties: {
+        error: error instanceof Error ? error.message : String(error)
+      }
+    });
+    throw error;
+  }
+
+  captureEvent({
     userId,
-    name,
-    description,
-    category,
-    province,
-    phone,
-    email,
-    loyaltySignupBonus: Number.isFinite(loyaltySignupBonus) ? loyaltySignupBonus : 100
+    event: "onboarding_completed",
+    properties: {
+      businessName: name,
+      category,
+      province,
+      hasPhone: Boolean(phone),
+      hasEmail: Boolean(email)
+    }
   });
 
   redirect(`/dashboard/${business.id}`);

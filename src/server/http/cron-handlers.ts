@@ -6,7 +6,7 @@ import { getRedis } from "@/lib/redis";
 import { constantTimeEqual } from "@/lib/security";
 import { withSpan } from "@/lib/tracing";
 import { sendDueEventReminders } from "@/server/services/events.service";
-import { expireEligiblePoints } from "@/server/services/loyalty.service";
+import { expireEligiblePoints, sendPointsExpiryWarnings } from "@/server/services/loyalty.service";
 
 const STALE_OTP_HOURS = 24;
 const STALE_WEBHOOK_DAYS = 30;
@@ -94,6 +94,23 @@ export async function handleExpirePointsCron(request: Request) {
   return withSpan("cron.expire_points", { job: "expire-points" }, async () => {
     const result = await expireEligiblePoints();
     return NextResponse.json({ ok: true, job: "expire-points", result });
+  });
+}
+
+export async function handleSendExpiryWarningsCron(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const idempKey = `cron:expiry-warnings:${new Date().toISOString().slice(0, 13)}`;
+  if (await checkIdempotency(idempKey, 7200)) {
+    return NextResponse.json({ ok: true, cached: true });
+  }
+
+  return withSpan("cron.send_expiry_warnings", { job: "expiry-warnings" }, async () => {
+    const result = await sendPointsExpiryWarnings(7, new Date());
+    logger.info(result, "cron.expiry_warnings.completed");
+    return NextResponse.json({ ok: true, job: "expiry-warnings", result });
   });
 }
 

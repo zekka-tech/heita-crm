@@ -11,6 +11,7 @@ import { runIdempotentOperation } from "@/lib/idempotency";
 import { logger } from "@/lib/logger";
 import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
 import { withSpan } from "@/lib/tracing";
+import { sendNotification } from "@/server/services/notification.service";
 import { applyReferralRewardIfEligible } from "@/server/services/referral.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
@@ -738,6 +739,115 @@ const EXPIRE_WHERE = (now: Date) => ({
     }
   }
 });
+
+export async function sendPointsExpiryWarnings(
+  daysBeforeExpiry: number = 7,
+  now: Date = new Date()
+): Promise<{ warningsSent: number; membershipsWarned: number }> {
+  const warningThreshold = new Date(
+    now.getTime() + daysBeforeExpiry * 24 * 60 * 60 * 1000
+  );
+
+  const nowForQuery = now;
+  const expiringTransactions = await prisma.loyaltyTransaction.findMany({
+    where: {
+      type: "EARN",
+      expiresAt: {
+        gt: nowForQuery,
+        lte: warningThreshold
+      },
+      expiryTarget: null,
+      refundTarget: null
+    },
+    select: {
+      id: true,
+      pointsDelta: true,
+      expiresAt: true,
+      membership: {
+        select: {
+          id: true,
+          userId: true,
+          businessId: true,
+          pointsBalance: true,
+          business: {
+            select: { name: true }
+          }
+        }
+      }
+    },
+    orderBy: { expiresAt: "asc" }
+  });
+
+  const byMembership = new Map<
+    string,
+    {
+      membershipId: string;
+      userId: string;
+      businessId: string;
+      businessName: string;
+      pointsExpiring: number;
+      earliestExpiry: Date;
+    }
+  >();
+
+  for (const tx of expiringTransactions) {
+    const m = tx.membership;
+    const existing = byMembership.get(m.id);
+    if (existing) {
+      existing.pointsExpiring += tx.pointsDelta;
+      if (tx.expiresAt && tx.expiresAt < existing.earliestExpiry) {
+        existing.earliestExpiry = tx.expiresAt;
+      }
+    } else {
+      byMembership.set(m.id, {
+        membershipId: m.id,
+        userId: m.userId,
+        businessId: m.businessId,
+        businessName: m.business.name,
+        pointsExpiring: tx.pointsDelta,
+        earliestExpiry: tx.expiresAt ?? warningThreshold
+      });
+    }
+  }
+
+  let warningsSent = 0;
+
+  for (const warning of byMembership.values()) {
+    try {
+      await sendNotification({
+        userId: warning.userId,
+        businessId: warning.businessId,
+        title: "Points expiring soon",
+        body: `${warning.pointsExpiring} points at ${warning.businessName} will expire on ${warning.earliestExpiry.toLocaleDateString("en-ZA")}. Use them before they're gone!`,
+        type: "POINTS_EXPIRING_SOON",
+        actionUrl: `/b/${warning.businessId}/rewards`,
+        metadata: {
+          pointsExpiring: warning.pointsExpiring,
+          earliestExpiry: warning.earliestExpiry.toISOString()
+        }
+      });
+      warningsSent++;
+    } catch (error) {
+      logger.error(
+        { err: error, membershipId: warning.membershipId },
+        "loyalty.expiry_warning.send_failed"
+      );
+    }
+  }
+
+  logger.info(
+    {
+      membershipsFound: byMembership.size,
+      warningsSent
+    },
+    "loyalty.expiry_warnings.sent"
+  );
+
+  return {
+    warningsSent,
+    membershipsWarned: byMembership.size
+  };
+}
 
 export async function expireEligiblePoints(now = new Date()): Promise<ExpirePointsResult> {
   let cursor: string | undefined;

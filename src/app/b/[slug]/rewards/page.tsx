@@ -4,6 +4,7 @@ import { Gift, Sparkles } from "lucide-react";
 
 import { redeemRewardAction } from "@/app/b/[slug]/rewards/actions";
 import { CsrfField } from "@/components/security/csrf-field";
+import { ReferralCard } from "@/components/loyalty/referral-card";
 import { RewardCard } from "@/components/loyalty/reward-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -67,9 +68,7 @@ export default async function BusinessRewardsPage({
           ownerUserId: session.user.id
         })
       : null;
-  const referralLink = referralCode
-    ? `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/b/${slug}/join?ref=${referralCode.code}`
-    : null;
+
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
@@ -118,24 +117,8 @@ export default async function BusinessRewardsPage({
         </Card>
       ) : null}
 
-      {membership && referralLink ? (
-        <Card variant="surface" className="mt-6 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="section-title">Refer a friend</h2>
-              <p className="text-sm text-ink-muted">
-                Share your referral link. When a friend joins and earns their first points, you
-                receive a referral bonus.
-              </p>
-            </div>
-            <Chip variant="primary" size="sm">
-              Code {referralCode?.code}
-            </Chip>
-          </div>
-          <div className="rounded-xl border border-line bg-surface-elevated px-3 py-3 text-sm text-ink">
-            {referralLink}
-          </div>
-        </Card>
+      {membership && referralCode ? (
+        <ReferralCard code={referralCode.code} businessSlug={business.slug} />
       ) : null}
 
       <section className="mt-6 grid gap-4 md:grid-cols-2">
