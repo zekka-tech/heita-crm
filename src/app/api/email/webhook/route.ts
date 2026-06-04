@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { logger } from "@/lib/logger";
@@ -14,16 +15,73 @@ type ResendEvent = {
   };
 };
 
+/**
+ * Verify a Svix-signed webhook request using only Node.js crypto.
+ * Protocol: HMAC-SHA256 over "{svix-id}.{svix-timestamp}.{raw-body}" with the
+ * base64-decoded signing secret. Signature header format: "v1,{base64}[,...]".
+ */
+async function verifySvixSignature(
+  request: NextRequest,
+  rawBody: string
+): Promise<boolean> {
+  const msgId = request.headers.get("svix-id");
+  const msgTimestamp = request.headers.get("svix-timestamp");
+  const msgSignature = request.headers.get("svix-signature");
+
+  if (!msgId || !msgTimestamp || !msgSignature) return false;
+
+  const tsSeconds = Number(msgTimestamp);
+  if (isNaN(tsSeconds)) return false;
+  const ageSeconds = Math.abs(Date.now() / 1000 - tsSeconds);
+  if (ageSeconds > 300) return false;
+
+  const signingInput = `${msgId}.${msgTimestamp}.${rawBody}`;
+  const secretBytes = Buffer.from(WEBHOOK_SECRET!, "base64");
+  const computed = createHmac("sha256", secretBytes)
+    .update(signingInput)
+    .digest("base64");
+  const expectedBuf = Buffer.from(`v1,${computed}`);
+
+  return msgSignature.split(" ").some((sig) => {
+    try {
+      const sigBuf = Buffer.from(sig);
+      return (
+        sigBuf.length === expectedBuf.length &&
+        timingSafeEqual(sigBuf, expectedBuf)
+      );
+    } catch {
+      return false;
+    }
+  });
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const rawBody = await request.text().catch(() => null);
+  if (rawBody === null) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
   if (WEBHOOK_SECRET) {
-    const header = request.headers.get("svix-id");
-    if (!header) {
+    const verified = await verifySvixSignature(request, rawBody);
+    if (!verified) {
+      logger.warn("email.webhook_signature_invalid");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }
 
-  const payload = await request.json().catch(() => null);
-  if (!payload?.type) {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    !("type" in payload) ||
+    typeof (payload as Record<string, unknown>).type !== "string"
+  ) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 

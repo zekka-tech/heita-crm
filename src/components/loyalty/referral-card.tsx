@@ -9,9 +9,10 @@ import { Card, CardHeader } from "@/components/ui/card";
 type ReferralCardProps = {
   code: string;
   businessSlug: string;
+  bonusPoints?: number;
 };
 
-export function ReferralCard({ code, businessSlug }: ReferralCardProps) {
+export function ReferralCard({ code, businessSlug, bonusPoints = 50 }: ReferralCardProps) {
   const [copied, setCopied] = useState(false);
 
   const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/b/${businessSlug}/join?ref=${code}`;
@@ -39,7 +40,7 @@ export function ReferralCard({ code, businessSlug }: ReferralCardProps) {
     <Card variant="surface" className="space-y-3">
       <CardHeader
         title="Refer a friend"
-        description={`Share your link and earn ${50} bonus points when they join and make their first purchase.`}
+        description={`Share your link and earn ${bonusPoints} bonus points when they join and make their first purchase.`}
       />
       <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-elevated px-3 py-2 font-mono text-sm">
         <span className="flex-1 truncate">{code}</span>

@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 
 type SegmentRule = {
@@ -11,6 +13,7 @@ type SegmentRules = {
   matchAll: boolean;
 };
 
+// Column identifiers are hardcoded here — never derived from user input.
 const FIELD_MAP: Record<string, string> = {
   pointsBalance: 'm."pointsBalance"',
   tier: 't."name"',
@@ -21,28 +24,39 @@ const FIELD_MAP: Record<string, string> = {
   visitCount: 'm."transactionCount"'
 };
 
-function buildSegmentWhere(rules: SegmentRules): string {
-  const parts = rules.rules
-    .map((rule) => {
-      const field = FIELD_MAP[rule.field];
-      if (!field) return null;
+function buildSegmentConditions(rules: SegmentRules): Prisma.Sql[] {
+  return rules.rules
+    .map((rule): Prisma.Sql | null => {
+      const fieldIdentifier = FIELD_MAP[rule.field];
+      if (!fieldIdentifier) return null;
+      // Prisma.raw is safe here: fieldIdentifier comes from the hardcoded FIELD_MAP above.
+      const col = Prisma.raw(fieldIdentifier);
       switch (rule.operator) {
-        case "eq": return `${field} = '${String(rule.value).replace(/'/g, "''")}'`;
-        case "gte": return `${field} >= ${Number(rule.value)}`;
-        case "lte": return `${field} <= ${Number(rule.value)}`;
-        case "gt": return `${field} > ${Number(rule.value)}`;
-        case "lt": return `${field} < ${Number(rule.value)}`;
-        case "not_eq": return `${field} != '${String(rule.value).replace(/'/g, "''")}'`;
-        default: return null;
+        case "eq":
+          return Prisma.sql`${col} = ${String(rule.value)}`;
+        case "not_eq":
+          return Prisma.sql`${col} != ${String(rule.value)}`;
+        case "gte": {
+          const n = Number(rule.value);
+          return isNaN(n) ? null : Prisma.sql`${col} >= ${n}`;
+        }
+        case "lte": {
+          const n = Number(rule.value);
+          return isNaN(n) ? null : Prisma.sql`${col} <= ${n}`;
+        }
+        case "gt": {
+          const n = Number(rule.value);
+          return isNaN(n) ? null : Prisma.sql`${col} > ${n}`;
+        }
+        case "lt": {
+          const n = Number(rule.value);
+          return isNaN(n) ? null : Prisma.sql`${col} < ${n}`;
+        }
+        default:
+          return null;
       }
     })
-    .filter((c): c is string => c !== null);
-
-  if (parts.length === 0) {
-    return "TRUE";
-  }
-
-  return parts.join(rules.matchAll ? " AND " : " OR ");
+    .filter((c): c is Prisma.Sql => c !== null);
 }
 
 export async function listSegments(businessId: string) {
@@ -63,17 +77,20 @@ export async function getSegmentMemberCount(
   businessId: string,
   rules: SegmentRules
 ): Promise<number> {
-  const where = buildSegmentWhere(rules);
+  const conditions = buildSegmentConditions(rules);
+  const whereClause =
+    conditions.length === 0
+      ? Prisma.sql`TRUE`
+      : Prisma.join(conditions, rules.matchAll ? " AND " : " OR ");
 
-  const result = await prisma.$queryRawUnsafe<{ count: bigint }[]>(
-    `SELECT COUNT(DISTINCT m."id")::bigint as count
-     FROM "Membership" m
-     JOIN "Business" b ON b."id" = m."businessId"
-     LEFT JOIN "LoyaltyTier" t ON t."id" = m."tierId"
-     WHERE m."businessId" = '${businessId}'
-       AND m."isActive" = true
-       AND (${where})`
-  );
+  const result = await prisma.$queryRaw<{ count: bigint }[]>`
+    SELECT COUNT(DISTINCT m."id")::bigint as count
+    FROM "Membership" m
+    JOIN "Business" b ON b."id" = m."businessId"
+    LEFT JOIN "LoyaltyTier" t ON t."id" = m."tierId"
+    WHERE m."businessId" = ${businessId}
+      AND m."isActive" = true
+      AND (${whereClause})`;
 
   return Number(result[0]?.count ?? 0);
 }
