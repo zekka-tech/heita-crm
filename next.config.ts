@@ -62,6 +62,7 @@ const nextConfig: NextConfig = {
     optimizePackageImports: [
       "lucide-react",
       "next-intl",
+      "recharts",
       "@radix-ui/react-dialog",
       "@radix-ui/react-dropdown-menu",
       "@radix-ui/react-select",

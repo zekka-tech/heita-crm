@@ -19,6 +19,22 @@ type TxRow = { week: Date; issued: bigint; redeemed: bigint };
 type MsgRow = { week: Date; inbound: bigint; outbound: bigint };
 type TxKpi = { issued: bigint | null; redeemed: bigint | null };
 type MsgKpi = { inbound: bigint | null; outbound: bigint | null };
+type MemberStatsRow = {
+  totalMembers: bigint;
+  activeMembersLast90d: bigint;
+  pointsLiability: bigint;
+};
+type TopRewardRow = {
+  rewardId: string;
+  title: string | null;
+  redemptions: bigint;
+};
+
+export type TopReward = {
+  rewardId: string;
+  title: string;
+  redemptions: number;
+};
 
 function startOfWeek(input: Date): Date {
   const date = new Date(input);
@@ -48,10 +64,12 @@ async function _getBusinessDashboardAnalytics(input: {
   const from = startOfWeek(new Date(Date.now() - (weeks - 1) * 7 * 24 * 60 * 60 * 1000));
   const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  // Five parallel queries instead of three unbounded findMany + JS bucketing.
+  // Eight parallel queries — all constant-memory DB aggregations.
   // Each query does constant-memory aggregation in Postgres using existing indexes
   // on (businessId, joinedAt) / (businessId, createdAt) / (businessId, direction, createdAt).
-  const [joinRows, txRows, msgRows, txKpi, msgKpi] = await Promise.all([
+  const last90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+  const [joinRows, txRows, msgRows, txKpi, msgKpi, memberStats, topRewards] = await Promise.all([
     prisma.$queryRaw<JoinRow[]>(Prisma.sql`
       SELECT
         date_trunc('week', "joinedAt") AS week,
@@ -115,6 +133,37 @@ async function _getBusinessDashboardAnalytics(input: {
       WHERE "businessId" = ${businessId}
         AND "createdAt" >= ${last30}
     `),
+
+    // Member stats: total count, active in last 90d (any transaction), points liability.
+    prisma.$queryRaw<MemberStatsRow[]>(Prisma.sql`
+      SELECT
+        COUNT(*) AS "totalMembers",
+        COUNT(*) FILTER (WHERE id IN (
+          SELECT DISTINCT "membershipId"
+          FROM "LoyaltyTransaction"
+          WHERE "businessId" = ${businessId}
+            AND "createdAt" >= ${last90}
+        )) AS "activeMembersLast90d",
+        COALESCE(SUM("pointsBalance"), 0) AS "pointsLiability"
+      FROM "Membership"
+      WHERE "businessId" = ${businessId}
+    `),
+
+    // Top 5 rewards by redemption count, derived from transaction metadata JSON.
+    prisma.$queryRaw<TopRewardRow[]>(Prisma.sql`
+      SELECT
+        lt.metadata->>'rewardId' AS "rewardId",
+        MIN(r.title)             AS title,
+        COUNT(*)                 AS redemptions
+      FROM "LoyaltyTransaction" lt
+      LEFT JOIN "Reward" r ON r.id = lt.metadata->>'rewardId'
+      WHERE lt."businessId" = ${businessId}
+        AND lt.type = 'REDEEM'
+        AND lt.metadata->>'rewardId' IS NOT NULL
+      GROUP BY 1
+      ORDER BY redemptions DESC
+      LIMIT 5
+    `),
   ]);
 
   // Build the ordered bucket map (one entry per week, including empty weeks).
@@ -155,8 +204,11 @@ async function _getBusinessDashboardAnalytics(input: {
 
   const kpiTx = txKpi[0];
   const kpiMsg = msgKpi[0];
+  const stats = memberStats[0];
   const pointsIssued30d = Number(kpiTx?.issued ?? 0);
   const pointsRedeemed30d = Number(kpiTx?.redeemed ?? 0);
+  const totalMembersCount = Number(stats?.totalMembers ?? 0);
+  const activeLast90d = Number(stats?.activeMembersLast90d ?? 0);
 
   return {
     series: [...bucketMap.values()],
@@ -167,7 +219,17 @@ async function _getBusinessDashboardAnalytics(input: {
         pointsIssued30d > 0 ? pointsRedeemed30d / pointsIssued30d : 0,
       inbound30d: Number(kpiMsg?.inbound ?? 0),
       outbound30d: Number(kpiMsg?.outbound ?? 0),
+      totalMembers: totalMembersCount,
+      activeMembersLast90d: activeLast90d,
+      activeMemberRate90d:
+        totalMembersCount > 0 ? activeLast90d / totalMembersCount : 0,
+      pointsLiability: Number(stats?.pointsLiability ?? 0),
     },
+    topRewards: topRewards.map((r) => ({
+      rewardId: r.rewardId,
+      title: r.title ?? "(deleted reward)",
+      redemptions: Number(r.redemptions),
+    })) satisfies TopReward[],
   };
 }
 
