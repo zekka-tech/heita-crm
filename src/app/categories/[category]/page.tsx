@@ -52,7 +52,9 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   };
 }
 
-export const dynamic = "force-dynamic";
+// Public category pages contain no user-specific content — ISR with 1h TTL.
+// Individual business joins are handled by /b/[slug]/join which stays dynamic.
+export const revalidate = 3600;
 
 export default async function CategoryPage({
   params,

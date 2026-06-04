@@ -55,7 +55,9 @@ const features = [
   }
 ];
 
-export const dynamic = "force-dynamic";
+// No auth or cookie reads — this page can be statically generated and
+// revalidated on demand. Featured categories change at most a few times a day.
+export const revalidate = 3600;
 
 export default async function LandingPage() {
   const featuredCategories = await listFeaturedCategories().catch(() => []);

@@ -7,6 +7,7 @@ import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
+import { captureEvent } from "@/lib/telemetry";
 import {
   AiUsageQuotaExceededError,
   buildAiQuotaExceededResponse,
@@ -275,6 +276,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           })
         ]);
 
+        captureEvent({ userId, event: "ai.message_sent", properties: { businessId, runtime: ragAnswer.runtime, model: ragAnswer.model ?? undefined, citationCount: ragAnswer.citations.length, totalTokens: totalTokens || undefined } });
         controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"));
       } catch (err) {
         logger.error({ err }, "ai.chat.stream_error");

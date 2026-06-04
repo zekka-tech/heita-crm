@@ -1,6 +1,7 @@
 import { Prisma, TransactionType } from "@prisma/client";
 
 import { analyticsKeysForBusiness, cacheDel } from "@/lib/data-cache";
+import { captureEvent } from "@/lib/telemetry";
 import {
   applyTierPointMultiplier,
   calculatePointsExpiryDate,
@@ -217,8 +218,8 @@ export async function earnPoints(input: EarnPointsInput) {
   const result = await withSpan("loyalty.earn_points", { "business.id": input.businessId, points: input.points }, () =>
     _earnPoints(input)
   );
-  // Bust all analytics windows so staff immediately see the transaction they just issued.
   cacheDel(...analyticsKeysForBusiness(input.businessId)).catch(() => undefined);
+  captureEvent({ userId: input.actorUserId, event: "loyalty.points_earned", properties: { businessId: input.businessId, points: input.points } });
   return result;
 }
 
@@ -322,6 +323,14 @@ export async function redeemPoints(input: RedeemPointsInput) {
     _redeemPoints(input)
   );
   cacheDel(...analyticsKeysForBusiness(input.businessId)).catch(() => undefined);
+  captureEvent({
+    userId: input.actorUserId,
+    event: "loyalty.points_redeemed",
+    properties: {
+      businessId: input.businessId,
+      ...("rewardId" in input ? { rewardId: input.rewardId } : { points: input.points }),
+    },
+  });
   return result;
 }
 

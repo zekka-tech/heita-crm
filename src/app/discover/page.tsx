@@ -12,9 +12,19 @@ import { GeoDiscoveryButton } from "@/components/discover/geo-discovery-button";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
+import { unstable_cache } from "next/cache";
 import { businessCategories, formatEnumLabel, provinces } from "@/lib/business";
 import { discoverBusinesses } from "@/server/services/discovery.service";
 import { auth } from "@/lib/auth";
+
+// Cache the unfiltered business list (most common landing) for 5 min.
+// Filtered queries (q, category, province) bypass the cache since they're
+// user-specific search results that should stay fresh.
+const getCachedAllBusinesses = unstable_cache(
+  () => discoverBusinesses({}).catch(() => []),
+  ["discover-all"],
+  { revalidate: 300, tags: ["businesses"] }
+);
 
 type DiscoverPageProps = {
   searchParams?: Promise<{
@@ -36,13 +46,12 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     ? (params.province as Province)
     : null;
 
+  const hasFilter = params.q || params.category || params.province || params.city;
+
   const [businesses, session] = await Promise.all([
-    discoverBusinesses({
-      query: params.q ?? null,
-      category,
-      province,
-      city: params.city ?? null
-    }).catch(() => []),
+    hasFilter
+      ? discoverBusinesses({ query: params.q ?? null, category, province, city: params.city ?? null }).catch(() => [])
+      : getCachedAllBusinesses(),
     auth()
   ]);
 

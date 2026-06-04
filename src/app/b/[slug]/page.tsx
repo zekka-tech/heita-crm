@@ -17,9 +17,13 @@ import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/shared/breadcrumb";
 import { auth } from "@/lib/auth";
+import { withBusinessProfileCache } from "@/lib/data-cache";
 import { describeTierPerks } from "@/lib/loyalty";
 import { prisma } from "@/lib/prisma";
 
+// auth() reads cookies so this page stays dynamic, but the heavy business
+// data query (rewards, promotions, events, tiers) is served from Redis
+// cache (10-min TTL via withBusinessProfileCache) on repeat visits.
 export const dynamic = "force-dynamic";
 
 type BusinessLandingPageProps = {
@@ -72,23 +76,25 @@ export default async function BusinessLandingPage({
 }: BusinessLandingPageProps) {
   const t = await getTranslations("businessProfile");
   const { slug } = await params;
-  const business = await prisma.business.findFirst({
-    where: { slug, deletedAt: null },
-    include: {
-      rewards: { where: { isActive: true }, orderBy: { pointsCost: "asc" }, take: 3 },
-      promotions: {
-        where: { isActive: true, endsAt: { gt: new Date() } },
-        orderBy: { endsAt: "asc" },
-        take: 3
-      },
-      events: {
-        where: { startsAt: { gte: new Date() } },
-        orderBy: { startsAt: "asc" },
-        take: 3
-      },
-      loyaltyTiers: { orderBy: { minPoints: "asc" } }
-    }
-  }).catch(() => null);
+  const business = await withBusinessProfileCache(slug, () =>
+    prisma.business.findFirst({
+      where: { slug, deletedAt: null },
+      include: {
+        rewards: { where: { isActive: true }, orderBy: { pointsCost: "asc" }, take: 3 },
+        promotions: {
+          where: { isActive: true, endsAt: { gt: new Date() } },
+          orderBy: { endsAt: "asc" },
+          take: 3
+        },
+        events: {
+          where: { startsAt: { gte: new Date() } },
+          orderBy: { startsAt: "asc" },
+          take: 3
+        },
+        loyaltyTiers: { orderBy: { minPoints: "asc" } }
+      }
+    }).catch(() => null)
+  );
 
   if (!business) {
     notFound();

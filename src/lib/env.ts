@@ -119,6 +119,10 @@ const envSchema = z
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
     E2E_EXPOSE_DEV_OTP: z.enum(["0", "1"]).optional(),
 
+    // Product analytics (PostHog)
+    NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
+    NEXT_PUBLIC_POSTHOG_HOST: z.string().url().optional(),
+
     // Public app config
     NEXT_PUBLIC_APP_URL: z.string().url().optional(),
     NEXT_PUBLIC_APP_VERSION: z.string().optional(),
