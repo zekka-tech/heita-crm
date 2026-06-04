@@ -2,6 +2,7 @@ import { anthropicConfigured, streamAnthropicChat } from "@/lib/ai/anthropic";
 import { embedText } from "@/lib/ai/embeddings";
 import { ollamaConfigured, streamOllamaChat } from "@/lib/ai/ollama";
 import { rerankChunks } from "@/lib/ai/reranker";
+import { ZERO_USAGE, type StreamUsage } from "@/lib/ai/stream-types";
 import { hybridSearch, type SimilarityMatch } from "@/lib/ai/vector-store";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
@@ -18,12 +19,16 @@ export type RagCitation = {
   similarity: number;
 };
 
+export type { StreamUsage };
+
 export type RagAnswerStream = {
   runtime: "ollama" | "anthropic" | "fallback";
   model: string | null;
   prompt: string;
   citations: RagCitation[];
   stream: AsyncGenerator<string>;
+  /** Resolves with real token counts after the stream is consumed or abandoned. */
+  usage: Promise<StreamUsage>;
 };
 
 export type RagStreamInput = {
@@ -163,6 +168,7 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
       stream: (async function* () {
         yield "Please send a question to start the conversation.";
       })(),
+      usage: Promise.resolve(ZERO_USAGE),
     };
   }
 
@@ -174,21 +180,16 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
   if (ollamaConfigured()) {
     try {
       const model = process.env.OLLAMA_CHAT_MODEL ?? "llama3.2";
-      return {
-        runtime: "ollama",
-        model,
-        prompt,
-        citations,
-        stream: streamOllamaChat({
-          messages: [
-            { role: "system", content: prompt },
-            ...history.map((turn) => ({
-              role: turn.role,
-              content: turn.content,
-            })),
-          ],
-        }),
-      };
+      const { stream, usage } = await streamOllamaChat({
+        messages: [
+          { role: "system", content: prompt },
+          ...history.map((turn) => ({
+            role: turn.role,
+            content: turn.content,
+          })),
+        ],
+      });
+      return { runtime: "ollama", model, prompt, citations, stream, usage };
     } catch (error) {
       logger.warn({ err: error }, "rag.ollama_fallback");
     }
@@ -196,22 +197,18 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
 
   if (anthropicConfigured()) {
     const model = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
-    return {
-      runtime: "anthropic",
+    const { stream, usage } = await streamAnthropicChat({
+      system: prompt,
+      messages: history
+        .filter((turn) => turn.role !== "system")
+        .map((turn) => ({
+          role: turn.role === "assistant" ? "assistant" : "user",
+          content: turn.content,
+        })),
       model,
-      prompt,
-      citations,
-      stream: streamAnthropicChat({
-        system: prompt,
-        messages: history
-          .filter((turn) => turn.role !== "system")
-          .map((turn) => ({
-            role: turn.role === "assistant" ? "assistant" : "user",
-            content: turn.content,
-          })),
-        model,
-      }),
-    };
+      enablePromptCache: true,
+    });
+    return { runtime: "anthropic", model, prompt, citations, stream, usage };
   }
 
   return {
@@ -222,5 +219,6 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
     stream: (async function* () {
       yield "AI co-worker is not configured for this environment. Add OLLAMA_BASE_URL or ANTHROPIC_API_KEY to enable replies.";
     })(),
+    usage: Promise.resolve(ZERO_USAGE),
   };
 }

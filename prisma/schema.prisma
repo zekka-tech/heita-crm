@@ -608,10 +608,12 @@ model AiTokenUsage {
   userId           String?
   runtime          String
   model            String?
-  messageUnits     Int            @default(1)
-  promptTokens     Int?
-  completionTokens Int?
-  totalTokens      Int?
+  messageUnits         Int            @default(1)
+  promptTokens         Int?
+  completionTokens     Int?
+  totalTokens          Int?
+  cacheReadTokens      Int?
+  cacheCreationTokens  Int?
   createdAt        DateTime       @default(now())
   business         Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   session          AiChatSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)

@@ -236,7 +236,13 @@ export async function POST(request: NextRequest): Promise<Response> {
           );
         }
 
-        // Persist assistant response and finalize usage record
+        // Await real token counts — the usage promise resolves in the
+        // generator's finally block, so it's already settled by the time
+        // we reach here.
+        const tokenUsage = await ragAnswer.usage;
+        const totalTokens = tokenUsage.inputTokens + tokenUsage.outputTokens;
+
+        // Persist assistant response and finalize usage record with real counts
         const latencyMs = Date.now() - startedAt;
         await Promise.all([
           prisma.aiChatMessage.create({
@@ -258,7 +264,12 @@ export async function POST(request: NextRequest): Promise<Response> {
             runtime: ragAnswer.runtime ?? "unknown",
             model: ragAnswer.model ?? null,
             sessionId: resolvedSessionId,
-            userId
+            userId,
+            promptTokens: tokenUsage.inputTokens || null,
+            completionTokens: tokenUsage.outputTokens || null,
+            totalTokens: totalTokens || null,
+            cacheReadTokens: tokenUsage.cacheReadTokens || null,
+            cacheCreationTokens: tokenUsage.cacheCreationTokens || null,
           }).catch((err: unknown) => {
             logger.error({ err }, "ai.chat.finalize_usage_error");
           })
