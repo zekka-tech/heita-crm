@@ -135,6 +135,10 @@ test("customer earns and redeems loyalty points end-to-end", async ({ page, requ
     expect(stepUpCode).toBeTruthy();
     await page.getByLabel(/verification code/i).fill(stepUpCode!);
     await page.getByRole("button", { name: /verify staff access/i }).click();
+    // Server Action always redirects to ?stepUp=verified or ?stepUp=invalid.
+    // If the URL doesn't change to include stepUp=, the action threw an exception.
+    await page.waitForURL(/stepUp=/, { timeout: 10_000 });
+    expect(page.url(), `Expected stepUp=verified but got: ${page.url()}`).toContain("stepUp=verified");
     await expect(page.getByText(/staff verification is active/i)).toBeVisible({
       timeout: 10_000
     });
