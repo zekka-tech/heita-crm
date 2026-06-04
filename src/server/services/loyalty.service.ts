@@ -1,5 +1,7 @@
 import { Prisma, TransactionType } from "@prisma/client";
 
+import { analyticsKeysForBusiness, cacheDel } from "@/lib/data-cache";
+import { captureEvent } from "@/lib/telemetry";
 import {
   applyTierPointMultiplier,
   calculatePointsExpiryDate,
@@ -213,9 +215,12 @@ function createEarnTransactionData(input: {
 }
 
 export async function earnPoints(input: EarnPointsInput) {
-  return withSpan("loyalty.earn_points", { "business.id": input.businessId, points: input.points }, () =>
+  const result = await withSpan("loyalty.earn_points", { "business.id": input.businessId, points: input.points }, () =>
     _earnPoints(input)
   );
+  cacheDel(...analyticsKeysForBusiness(input.businessId)).catch(() => undefined);
+  captureEvent({ userId: input.actorUserId, event: "loyalty.points_earned", properties: { businessId: input.businessId, points: input.points } });
+  return result;
 }
 
 async function _earnPoints(input: EarnPointsInput) {
@@ -314,9 +319,19 @@ async function _earnPoints(input: EarnPointsInput) {
 }
 
 export async function redeemPoints(input: RedeemPointsInput) {
-  return withSpan("loyalty.redeem_points", { "business.id": input.businessId }, () =>
+  const result = await withSpan("loyalty.redeem_points", { "business.id": input.businessId }, () =>
     _redeemPoints(input)
   );
+  cacheDel(...analyticsKeysForBusiness(input.businessId)).catch(() => undefined);
+  captureEvent({
+    userId: input.actorUserId,
+    event: "loyalty.points_redeemed",
+    properties: {
+      businessId: input.businessId,
+      ...("rewardId" in input ? { rewardId: input.rewardId } : { points: input.points }),
+    },
+  });
+  return result;
 }
 
 async function _redeemPoints(input: RedeemPointsInput) {
@@ -444,9 +459,11 @@ async function _redeemPoints(input: RedeemPointsInput) {
 }
 
 export async function refundTransaction(input: RefundTransactionInput) {
-  return withSpan("loyalty.refund_transaction", { "business.id": input.businessId, "transaction.id": input.transactionId }, () =>
+  const result = await withSpan("loyalty.refund_transaction", { "business.id": input.businessId, "transaction.id": input.transactionId }, () =>
     _refundTransaction(input)
   );
+  cacheDel(...analyticsKeysForBusiness(input.businessId)).catch(() => undefined);
+  return result;
 }
 
 async function _refundTransaction(input: RefundTransactionInput) {

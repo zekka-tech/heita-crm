@@ -18,6 +18,7 @@ Last reviewed: 2026-05-27
 | `OcrReceipt` | `userId`, `imageUrl`, `rawOcrText` | Automated receipt processing | 2 years | Consent |
 | `CustomerImportRun` | linked via `userId` | Bulk customer upload | 1 year | Legitimate interest |
 | `AiChatSession` / `AiChatMessage` | `userId`, free-text messages | AI co-worker conversations | 1 year | Consent |
+| `WebSource` / `BusinessDocument` (URL) | business-owned public web page text (no end-user PII) | AI knowledge grounding from a business&rsquo;s own website (SSRF-guarded crawl) | Until the source is deleted | Legitimate interest |
 | `UserConsent` | `userId`, `type`, `grantedAt` | Consent records | Lifetime of consent + 5 years | Legal obligation |
 
 ## Retention Schedule (automated via cron)
@@ -36,9 +37,8 @@ Last reviewed: 2026-05-27
 | Africa's Talking | Phone number, OTP | SMS / OTP delivery | AT DPA |
 | Meta (WhatsApp Cloud API) | Phone, message body | WhatsApp messaging | Meta DPA |
 | Anthropic (Claude API) | AI conversation turns | AI fallback | Anthropic DPA |
-| DeepSeek | Receipt image URL | OCR extraction (AI) | DeepSeek DPA |
-| Minimax | Receipt image URL | OCR extraction (AI fallback) | Minimax DPA |
-| AWS (Textract + S3/R2) | Receipt images, document uploads | OCR fallback, file storage | AWS DPA |
+| DeepSeek | Receipt image URL | Receipt OCR — cloud vision fallback only (primary OCR is on-device, in-browser via Tesseract.js) | DeepSeek DPA |
+| AWS (S3/R2) | Receipt images, document uploads | File storage | AWS DPA |
 | Cloudflare R2 | User uploads, business documents | Object storage | Cloudflare DPA |
 | Yoco | Business ID, plan ID, payment data | Billing / subscriptions | Yoco DPA |
 | Sentry | Error traces (PII redacted by pino) | Error monitoring | Sentry DPA |

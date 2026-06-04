@@ -213,7 +213,9 @@
     "repliesSent30d": "Antwoorde gestuur (30d)",
     "promotions": "Promosies",
     "events": "Geleenthede",
-    "viewFullAnalytics": "Sien volledige analise"
+    "viewFullAnalytics": "Sien volledige analise",
+    "setupChecklist": "Opstelkontrolelys",
+    "setupChecklistBlurb": "Voltooi hierdie stappe om die volle krag van Heita te ontsluit."
   },
   "promotions": {
     "title": "Promosies",

@@ -4,6 +4,7 @@ import { turnstileConfigured, verifyTurnstileToken } from "@/lib/turnstile";
 
 const originalSecret = process.env.TURNSTILE_SECRET_KEY;
 const originalSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+const originalE2eExposeDevOtp = process.env.E2E_EXPOSE_DEV_OTP;
 
 beforeEach(() => {
   vi.unstubAllGlobals();
@@ -20,6 +21,12 @@ afterEach(() => {
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   } else {
     process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = originalSiteKey;
+  }
+
+  if (originalE2eExposeDevOtp === undefined) {
+    delete process.env.E2E_EXPOSE_DEV_OTP;
+  } else {
+    process.env.E2E_EXPOSE_DEV_OTP = originalE2eExposeDevOtp;
   }
 });
 
@@ -38,6 +45,18 @@ describe("turnstileConfigured", () => {
 });
 
 describe("verifyTurnstileToken — production mode with partial config", () => {
+  it("bypasses verification when the CI OTP flag is enabled", async () => {
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "");
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "");
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("E2E_EXPOSE_DEV_OTP", "1");
+
+    const result = await verifyTurnstileToken({ token: null });
+    expect(result).toEqual({ ok: true, action: "bypass-e2e" });
+
+    vi.unstubAllEnvs();
+  });
+
   it("returns {ok:false} in production when only the site key is set (no secret)", async () => {
     vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-key-only");
     vi.stubEnv("TURNSTILE_SECRET_KEY", "");

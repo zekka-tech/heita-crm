@@ -20,6 +20,8 @@ type PhoneOtpAuthFormProps = {
   appleEnabled: boolean;
   turnstileSiteKey: string | null;
   oauthError?: string | null;
+  /** Pre-fetched token from the Server Component; removes dependency on document.cookie polling. */
+  serverCsrfToken?: string | null;
 };
 
 const OAUTH_ERROR_KEYS: Record<string, string> = {
@@ -42,10 +44,11 @@ export function PhoneOtpAuthForm({
   googleEnabled,
   appleEnabled,
   turnstileSiteKey,
-  oauthError
+  oauthError,
+  serverCsrfToken
 }: PhoneOtpAuthFormProps) {
   const t = useTranslations("auth");
-  const csrfToken = useCsrfToken();
+  const csrfToken = useCsrfToken(serverCsrfToken);
   const searchParams = useSearchParams();
   const callbackUrl = searchParams?.get("callbackUrl") ?? "/home";
 

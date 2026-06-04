@@ -15,19 +15,41 @@ import { createHmac } from "node:crypto";
 
 import { BusinessCategory, Province } from "@prisma/client";
 import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import { prisma } from "../../src/lib/prisma";
 import { createBusinessWithDefaults } from "../../src/server/services/business.service";
 
+test.setTimeout(60_000);
+
+async function readDevOtp(
+  payload: { devCode?: string },
+  chip: Locator
+): Promise<string | undefined> {
+  if (payload.devCode) {
+    return payload.devCode;
+  }
+
+  const chipText = await chip.textContent({ timeout: 2_000 }).catch(() => "");
+  return (chipText ?? "").match(/(\d{6})/)?.[1];
+}
+
 async function signInAs(page: Page, phone: string) {
+  // Clear any existing session first: this helper is called twice in the same
+  // page (customer, then staff), and an authenticated user hitting /sign-in is
+  // correctly redirected to /home by middleware — which would leave no phone
+  // field to fill. Cookie-consent lives in localStorage (storageState), so it
+  // survives clearCookies; the CSRF cookie is re-issued on the next page load.
+  await page.context().clearCookies();
   await page.goto("/sign-in");
   await page.getByLabel(/phone number/i).fill(phone);
-  await page.getByRole("button", { name: /send code/i }).click();
+  const otpResponsePromise = page.waitForResponse((response) =>
+    response.url().includes("/api/auth/request-otp") && response.request().method() === "POST"
+  );
+  await page.getByRole("button", { name: /send.*code/i }).click();
+  const otpPayload = (await (await otpResponsePromise).json()) as { devCode?: string };
   const devOtpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
-  await expect(devOtpChip).toBeVisible({ timeout: 10_000 });
-  const devOtpText = (await devOtpChip.textContent()) ?? "";
-  const devOtp = devOtpText.match(/(\d{6})/)?.[1];
+  const devOtp = await readDevOtp(otpPayload, devOtpChip);
   expect(devOtp).toBeTruthy();
   await page.getByLabel(/verification code|code/i).fill(devOtp!);
   await page.getByRole("button", { name: /verify and sign in|verify sign in/i }).click();
@@ -35,7 +57,7 @@ async function signInAs(page: Page, phone: string) {
 }
 
 test("customer earns and redeems loyalty points end-to-end", async ({ page, request }) => {
-  const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
   const ownerPhone = `+27830${suffix.slice(-6)}`;
   const customerPhone = `+27821${suffix.slice(-6)}`;
   const posSecret = process.env.POS_SHARED_SECRET ?? "e2e-pos-shared-secret";
@@ -120,22 +142,47 @@ test("customer earns and redeems loyalty points end-to-end", async ({ page, requ
     await signInAs(page, ownerPhone);
     await page.goto(`/dashboard/${business.id}/loyalty`);
 
-    // The redeem form targets a membership. Look for the customer name or a
-    // membership input and fill in the reward.
-    await page.getByLabel(/membership id/i).fill(membership.id);
-    await page.getByLabel(/reward/i).selectOption(reward.id);
-    await page.getByRole("button", { name: /redeem/i }).click();
+    // Mutating loyalty actions require a fresh staff step-up OTP. Request one,
+    // read the dev code from the JSON response, and verify to unlock the forms.
+    const stepUpResponsePromise = page.waitForResponse((response) =>
+      response.url().includes("/api/auth/request-staff-otp") &&
+      response.request().method() === "POST"
+    );
+    await page.getByRole("button", { name: /send staff otp/i }).click();
+    const stepUpPayload = (await (await stepUpResponsePromise).json()) as { devCode?: string };
+    const stepUpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
+    const stepUpCode = await readDevOtp(stepUpPayload, stepUpChip);
+    expect(stepUpCode).toBeTruthy();
+    await page.getByLabel(/verification code/i).fill(stepUpCode!);
+    await page.getByRole("button", { name: /verify staff access/i }).click();
+    await expect(page.getByText(/staff verification is active/i)).toBeVisible({
+      timeout: 10_000
+    });
 
-    // Expect a success confirmation on the page
-    await expect(
-      page.getByText(/redeemed|points deducted|success/i)
-    ).toBeVisible({ timeout: 10_000 });
+    // Redeem the reward's points cost on the customer's behalf. Both the "Issue
+    // points" and "Redeem manually" cards expose "Customer"/"Points" controls,
+    // so scope to the form that owns the "Redeem points" button.
+    const redeemForm = page.locator("form", {
+      has: page.getByRole("button", { name: /redeem points/i })
+    });
+    await redeemForm.getByLabel(/customer/i).selectOption(membership.id);
+    await redeemForm.getByLabel("Points", { exact: true }).fill(String(reward.pointsCost));
+    await redeemForm.getByRole("button", { name: /redeem points/i }).click();
 
     // ── Step 6: Verify DB balance post-redemption ─────────────────────────
-    const updatedMembership = await prisma.membership.findUniqueOrThrow({
-      where: { id: membership.id }
-    });
-    expect(updatedMembership.pointsBalance).toBe(EXPECTED_BALANCE - reward.pointsCost);
+    // The form action may complete without a client-observable navigation under
+    // Playwright timing, so the persisted balance is the authoritative signal.
+    await expect
+      .poll(
+        async () => {
+          const updatedMembership = await prisma.membership.findUniqueOrThrow({
+            where: { id: membership.id }
+          });
+          return updatedMembership.pointsBalance;
+        },
+        { timeout: 10_000 }
+      )
+      .toBe(EXPECTED_BALANCE - reward.pointsCost);
   } finally {
     await prisma.reward.deleteMany({ where: { id: reward.id } });
     await prisma.business.deleteMany({ where: { id: business.id } });
@@ -144,7 +191,7 @@ test("customer earns and redeems loyalty points end-to-end", async ({ page, requ
 });
 
 test("expired OTP cannot be replayed to earn points", async ({ request }) => {
-  const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
   const posSecret = process.env.POS_SHARED_SECRET ?? "e2e-pos-shared-secret";
 
   const payload = {

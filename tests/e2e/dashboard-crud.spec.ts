@@ -21,7 +21,7 @@ async function signInAs(
 ): Promise<void> {
   await page.goto("/sign-in");
   await page.getByLabel(/phone number/i).fill(phone);
-  await page.getByRole("button", { name: /send code/i }).click();
+  await page.getByRole("button", { name: /send.*code/i }).click();
 
   const devOtpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
   await expect(devOtpChip).toBeVisible({ timeout: 10_000 });
@@ -36,7 +36,7 @@ async function signInAs(
 
 test.describe("dashboard overview", () => {
   test("owner sees dashboard with business name and metric cards", async ({ page }) => {
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
     const ownerPhone = `+27832${suffix.slice(-6)}`;
 
     const owner = await prisma.user.create({
@@ -70,7 +70,7 @@ test.describe("dashboard overview", () => {
 
 test.describe("promotions CRUD", () => {
   test("owner can create a promotion and it appears in the list", async ({ page }) => {
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
     const ownerPhone = `+27833${suffix.slice(-6)}`;
 
     const owner = await prisma.user.create({
@@ -109,7 +109,7 @@ test.describe("promotions CRUD", () => {
 
 test.describe("events CRUD", () => {
   test("owner can create an event and it appears in the list", async ({ page }) => {
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
     const ownerPhone = `+27834${suffix.slice(-6)}`;
 
     const owner = await prisma.user.create({
@@ -161,7 +161,7 @@ test.describe("access control", () => {
   });
 
   test("authenticated non-staff user is denied the dashboard", async ({ page }) => {
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
     const ownerPhone = `+27835${suffix.slice(-6)}`;
     const strangerPhone = `+27836${suffix.slice(-6)}`;
 

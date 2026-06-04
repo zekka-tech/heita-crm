@@ -29,11 +29,13 @@ test.describe("cross-tenant isolation", () => {
   let bizAId: string;
   let bizBId: string;
   let managerAPhone: string;
+  let managerBPhone: string;
 
   test.beforeAll(async () => {
     const suffix = Date.now();
 
     managerAPhone = `+27800${String(suffix).slice(-6)}`;
+    managerBPhone = `+27801${String(suffix).slice(-6)}`;
 
     const userA = await prisma.user.create({
       data: {
@@ -46,7 +48,7 @@ test.describe("cross-tenant isolation", () => {
     const userB = await prisma.user.create({
       data: {
         name: `Manager B ${suffix}`,
-        phone: `+27801${String(suffix).slice(-6)}`,
+        phone: managerBPhone,
         phoneVerifiedAt: new Date()
       }
     });
@@ -83,7 +85,7 @@ test.describe("cross-tenant isolation", () => {
     // Clean up test data — order matters for FK constraints
     await prisma.staffMember.deleteMany({ where: { businessId: { in: [bizAId, bizBId] } } });
     await prisma.business.deleteMany({ where: { id: { in: [bizAId, bizBId] } } });
-    await prisma.user.deleteMany({ where: { phone: { in: [managerAPhone, undefined!] } } });
+    await prisma.user.deleteMany({ where: { phone: { in: [managerAPhone, managerBPhone] } } });
   });
 
   test("manager of Biz A is redirected away from all Biz B dashboard routes", async ({
@@ -91,17 +93,18 @@ test.describe("cross-tenant isolation", () => {
   }) => {
     // Sign in as Manager A using dev OTP flow
     await page.goto("/sign-in");
-    await page.fill('input[name="phone"]', managerAPhone);
-    await page.click('button[type="submit"]');
+    await page.getByLabel(/phone number/i).fill(managerAPhone);
+    await page.getByRole("button", { name: /send.*code/i }).click();
 
     // Dev mode exposes OTP on the page
-    const otpEl = page.locator('[data-testid="dev-otp"]');
-    await otpEl.waitFor({ timeout: 10_000 });
-    const otp = await otpEl.textContent();
+    const otpEl = page.getByText(/Dev OTP:\s*\d{6}/i);
+    await expect(otpEl).toBeVisible({ timeout: 10_000 });
+    const otpText = (await otpEl.textContent()) ?? "";
+    const otp = otpText.match(/(\d{6})/)?.[1];
     expect(otp).toBeTruthy();
 
-    await page.fill('input[name="code"]', otp!.trim());
-    await page.click('button[type="submit"]');
+    await page.getByLabel(/verification code|code/i).fill(otp!);
+    await page.getByRole("button", { name: /verify and sign in|verify sign in/i }).click();
     await page.waitForURL(/\/(home|dashboard)/, { timeout: 15_000 });
 
     // Now try to access each Biz B route

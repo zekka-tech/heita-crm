@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// The vector-store query is the cross-tenant guard; test it directly.
+// The vector-store queries are the cross-tenant guard; test them directly.
 
 const queryRawMock = vi.fn();
 
@@ -24,7 +24,13 @@ vi.mock("@prisma/client", async (importOriginal) => {
   };
 });
 
-const { findSimilarDocumentChunks } = await import("@/lib/ai/vector-store");
+// Redis is not needed in unit tests; mock it away so the embedding cache
+// has no effect on the vector-store isolation tests.
+vi.mock("@/lib/redis", () => ({
+  getRedis: () => null
+}));
+
+const { findSimilarDocumentChunks, findChunksByFts } = await import("@/lib/ai/vector-store");
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -41,7 +47,6 @@ describe("findSimilarDocumentChunks — businessId isolation", () => {
 
     expect(queryRawMock).toHaveBeenCalledOnce();
     const [sqlObj] = queryRawMock.mock.calls[0] as [{ values: unknown[] }];
-    // The businessId should appear somewhere in the interpolated values
     const flatValues = sqlObj.values.flat(Infinity);
     expect(flatValues).toContain("biz_target");
   });
@@ -64,13 +69,61 @@ describe("findSimilarDocumentChunks — businessId isolation", () => {
       queryEmbedding: Array.from({ length: 1024 }, () => 0)
     });
 
-    // Assert the calling code passes the correct businessId so the DB can enforce the filter.
     expect(queryRawMock).toHaveBeenCalledOnce();
     const [sqlObj] = queryRawMock.mock.calls[0] as [{ values: unknown[] }];
     const flatValues = sqlObj.values.flat(Infinity);
     expect(flatValues).toContain("biz_requester");
     expect(flatValues).not.toContain("biz_other");
-    // The raw return is the DB's responsibility — service trusts the filtered result.
+    // Similarity 0.99 clears the 0.25 threshold — row is returned.
     expect(results).toHaveLength(1);
+  });
+
+  it("filters out results below the similarity threshold", async () => {
+    queryRawMock.mockResolvedValue([
+      { id: "a", documentId: "d1", documentTitle: "T1", chunkIndex: 0, content: "x", metadata: null, similarity: 0.8 },
+      { id: "b", documentId: "d2", documentTitle: "T2", chunkIndex: 0, content: "y", metadata: null, similarity: 0.1 }
+    ]);
+
+    const results = await findSimilarDocumentChunks({
+      businessId: "biz_1",
+      queryEmbedding: Array.from({ length: 1024 }, () => 0),
+      threshold: 0.25
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.id).toBe("a");
+  });
+
+  it("returns empty when all results are below threshold", async () => {
+    queryRawMock.mockResolvedValue([
+      { id: "a", documentId: "d1", documentTitle: "T1", chunkIndex: 0, content: "x", metadata: null, similarity: 0.05 }
+    ]);
+
+    const results = await findSimilarDocumentChunks({
+      businessId: "biz_1",
+      queryEmbedding: Array.from({ length: 1024 }, () => 0)
+    });
+
+    expect(results).toHaveLength(0);
+  });
+});
+
+describe("findChunksByFts — businessId isolation", () => {
+  it("passes the requesting businessId into the FTS query", async () => {
+    queryRawMock.mockResolvedValue([]);
+
+    await findChunksByFts({ businessId: "biz_fts", queryText: "coffee" });
+
+    expect(queryRawMock).toHaveBeenCalledOnce();
+    const [sqlObj] = queryRawMock.mock.calls[0] as [{ values: unknown[] }];
+    const flatValues = sqlObj.values.flat(Infinity);
+    expect(flatValues).toContain("biz_fts");
+    expect(flatValues).toContain("coffee");
+  });
+
+  it("returns empty array for blank query without hitting DB", async () => {
+    const results = await findChunksByFts({ businessId: "biz_1", queryText: "   " });
+    expect(results).toHaveLength(0);
+    expect(queryRawMock).not.toHaveBeenCalled();
   });
 });

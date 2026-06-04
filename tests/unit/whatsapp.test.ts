@@ -32,7 +32,7 @@ afterEach(() => {
 
 describe("whatsapp client", () => {
   it("sends text payloads with normalized recipients", async () => {
-    const fetchMock = vi.fn(async (_input, init) => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       expect(body.to).toBe("27821234567");
       expect(body.type).toBe("text");
@@ -60,7 +60,7 @@ describe("whatsapp client", () => {
   });
 
   it("sends template payloads with body components", async () => {
-    const fetchMock = vi.fn(async (_input, init) => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       expect(body.type).toBe("template");
       expect(body.template.name).toBe("heita_join_invite");
@@ -95,7 +95,7 @@ describe("whatsapp client", () => {
   });
 
   it("sends interactive button payloads", async () => {
-    const fetchMock = vi.fn(async (_input, init) => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       expect(body.type).toBe("interactive");
       expect(body.interactive.type).toBe("button");
@@ -124,7 +124,7 @@ describe("whatsapp client", () => {
   });
 
   it("sends interactive list payloads", async () => {
-    const fetchMock = vi.fn(async (_input, init) => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       expect(body.type).toBe("interactive");
       expect(body.interactive.type).toBe("list");

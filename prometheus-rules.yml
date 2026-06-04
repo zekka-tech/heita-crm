@@ -145,3 +145,96 @@ groups:
         annotations:
           summary: "Dead-letter queue depth elevated"
           description: "{{ $value }} jobs in DLQ for more than 10 minutes."
+
+  # Multi-window, multi-burn-rate error-budget alerts — the enforcement layer for
+  # the SLOs in docs/SLO.md §2. Each alert fires only when BOTH a long window and
+  # a short confirmation window exceed the burn-rate threshold, which suppresses
+  # flapping on transient blips. Budget basis: 30-day rolling window.
+  #   burn_rate = error_ratio / (1 - SLO)   →   threshold = multiplier * (1 - SLO)
+  #   14.4x over 1h  ≈ 2% of budget in 1h   → page
+  #   6x   over 6h   ≈ 5% of budget in 6h   → ticket
+  - name: heita_crm_slo_burn_rate
+    interval: 30s
+    rules:
+      # ── A1 Availability (Tier 1) — SLO 99.9%, budget 0.001 ──────────────────
+      - alert: ErrorBudgetBurnFast
+        expr: |
+          (
+            sum(rate(heita_http_requests_total{status=~"5.."}[1h]))
+            / sum(rate(heita_http_requests_total[1h]))
+          ) > (14.4 * 0.001)
+          and
+          (
+            sum(rate(heita_http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(heita_http_requests_total[5m]))
+          ) > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+          action: page
+        annotations:
+          summary: "Fast error-budget burn (availability SLO)"
+          description: "Burning the 99.9% availability budget at >14.4x (≈2% in 1h). At this rate the 30-day budget is gone in ~2 days. Page on-call."
+
+      - alert: ErrorBudgetBurnSlow
+        expr: |
+          (
+            sum(rate(heita_http_requests_total{status=~"5.."}[6h]))
+            / sum(rate(heita_http_requests_total[6h]))
+          ) > (6 * 0.001)
+          and
+          (
+            sum(rate(heita_http_requests_total{status=~"5.."}[30m]))
+            / sum(rate(heita_http_requests_total[30m]))
+          ) > (6 * 0.001)
+        for: 15m
+        labels:
+          severity: warning
+          slo: availability
+          action: ticket
+        annotations:
+          summary: "Slow error-budget burn (availability SLO)"
+          description: "Burning the 99.9% availability budget at >6x (≈5% in 6h). Open a reliability ticket and pause non-critical releases per docs/SLO.md §2."
+
+      # ── A6 Webhook ingestion (Tier 1) — SLO 99.9%, budget 0.001 ─────────────
+      - alert: WebhookErrorBudgetBurnFast
+        expr: |
+          (
+            sum(rate(heita_webhook_events_total{status="error"}[1h]))
+            / sum(rate(heita_webhook_events_total[1h]))
+          ) > (14.4 * 0.001)
+          and
+          (
+            sum(rate(heita_webhook_events_total{status="error"}[5m]))
+            / sum(rate(heita_webhook_events_total[5m]))
+          ) > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: critical
+          slo: webhook_ingestion
+          action: page
+        annotations:
+          summary: "Fast error-budget burn (webhook ingestion SLO)"
+          description: "Webhook {{ $labels.provider }} burning the 99.9% ingestion budget at >14.4x. Inbound WhatsApp/Africa's Talking events are being lost — page on-call."
+
+      # ── A5 AI chat (Tier 2) — SLO 99.0%, budget 0.01 ───────────────────────
+      - alert: AiChatErrorBudgetBurnSlow
+        expr: |
+          (
+            sum(rate(heita_ai_chat_requests_total{status="error"}[6h]))
+            / sum(rate(heita_ai_chat_requests_total[6h]))
+          ) > (6 * 0.01)
+          and
+          (
+            sum(rate(heita_ai_chat_requests_total{status="error"}[30m]))
+            / sum(rate(heita_ai_chat_requests_total[30m]))
+          ) > (6 * 0.01)
+        for: 15m
+        labels:
+          severity: warning
+          slo: ai_chat
+          action: ticket
+        annotations:
+          summary: "Slow error-budget burn (AI chat SLO)"
+          description: "AI chat burning the 99.0% budget at >6x even after Ollama→Anthropic fallback. Check both runtimes; open a ticket per docs/SLO.md §2."

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
+import { e2eDevOtpEnabled } from "@/lib/e2e";
 import { prisma } from "@/lib/prisma";
 import { requestStaffStepUpOtp, requireFreshStaffStepUp, verifyStaffStepUpOtp } from "@/lib/staff-step-up";
 import { requireRole } from "@/lib/staff";
@@ -48,7 +49,11 @@ export async function requestStaffStepUpAction(formData: FormData) {
   const params = new URLSearchParams({
     stepUp: "requested"
   });
-  if (process.env.NODE_ENV !== "production") {
+  // NODE_ENV is inlined at build time, so the standalone/prod build strips this
+  // branch entirely — e2eDevOtpEnabled() is the runtime gate that lets the
+  // smoke/e2e suite read the step-up code (same pattern as the request-otp
+  // handler). Must never be enabled in a real production deploy.
+  if (process.env.NODE_ENV !== "production" || e2eDevOtpEnabled()) {
     params.set("devCode", code);
   }
 

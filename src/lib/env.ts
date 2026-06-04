@@ -38,6 +38,7 @@ const envSchema = z
     OLLAMA_BASE_URL: z.string().optional(),
     OLLAMA_CHAT_MODEL: z.string().optional(),
     OLLAMA_EMBED_MODEL: z.string().optional(),
+    OLLAMA_RERANK_MODEL: z.string().optional(),
 
     // Circuit breaker
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.coerce.number().int().min(1).max(20).default(5),
@@ -116,6 +117,14 @@ const envSchema = z
     // Bot protection
     TURNSTILE_SECRET_KEY: z.string().optional(),
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
+    E2E_EXPOSE_DEV_OTP: z.enum(["0", "1"]).optional(),
+
+    // Product analytics (PostHog)
+    NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
+    NEXT_PUBLIC_POSTHOG_HOST: z.string().url().optional(),
+
+    // CDN hostname for dns-prefetch (e.g. "pub-abc.r2.dev" or "cdn.heita.co.za")
+    NEXT_PUBLIC_R2_HOST: z.string().optional(),
 
     // Public app config
     NEXT_PUBLIC_APP_URL: z.string().url().optional(),
@@ -218,6 +227,26 @@ const envSchema = z
         code: z.ZodIssueCode.custom,
         message: "AWS_ACCESS_KEY_ID is required when AWS_SECRET_ACCESS_KEY is set.",
         path: ["AWS_ACCESS_KEY_ID"]
+      });
+    }
+
+    // Yoco billing keys travel together: the checkout API needs the secret
+    // key and the webhook needs the signing secret to verify callbacks. A
+    // half-configured pair only surfaces when a real payment/webhook arrives,
+    // so enforce both-or-neither in production to fail fast at boot instead.
+    const yocoConfigured = Boolean(data.YOCO_SECRET_KEY || data.YOCO_WEBHOOK_SECRET);
+    if (isProduction && yocoConfigured && !data.YOCO_SECRET_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "YOCO_SECRET_KEY is required when Yoco billing is enabled in production — it authenticates checkout-session creation.",
+        path: ["YOCO_SECRET_KEY"]
+      });
+    }
+    if (isProduction && yocoConfigured && !data.YOCO_WEBHOOK_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "YOCO_WEBHOOK_SECRET is required when Yoco billing is enabled in production — it verifies payment webhook signatures.",
+        path: ["YOCO_WEBHOOK_SECRET"]
       });
     }
 

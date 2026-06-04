@@ -57,6 +57,7 @@ export function DashboardBottomNav({ businessId }: Props) {
           <Link
             key={segment || "home"}
             href={href}
+            prefetch={true}
             aria-current={active ? "page" : undefined}
             className={cn(
               "flex flex-col items-center gap-0.5 px-2 py-3 text-[0.625rem] font-semibold transition-colors",
@@ -84,6 +85,7 @@ function SidebarNavItem({ label, icon: Icon, active, href }: SidebarItem) {
   return (
     <Link
       href={href}
+      prefetch={true}
       aria-current={active ? "page" : undefined}
       className={cn(
         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",

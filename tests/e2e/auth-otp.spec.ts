@@ -39,7 +39,7 @@ test("OTP endpoint enforces rate limits on rapid requests", async ({ request }) 
 });
 
 test("successful OTP sign-in redirects to /home", async ({ page }) => {
-  const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
   const phone = `+27800${suffix.slice(-6)}`;
 
   const user = await prisma.user.create({
@@ -53,7 +53,7 @@ test("successful OTP sign-in redirects to /home", async ({ page }) => {
   try {
     await page.goto("/sign-in");
     await page.getByLabel(/phone number/i).fill(phone);
-    await page.getByRole("button", { name: /send code/i }).click();
+    await page.getByRole("button", { name: /send.*code/i }).click();
 
     const devOtpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
     await expect(devOtpChip).toBeVisible({ timeout: 10_000 });

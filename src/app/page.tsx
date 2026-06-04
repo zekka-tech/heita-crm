@@ -55,7 +55,9 @@ const features = [
   }
 ];
 
-export const dynamic = "force-dynamic";
+// No auth or cookie reads — this page can be statically generated and
+// revalidated on demand. Featured categories change at most a few times a day.
+export const revalidate = 3600;
 
 export default async function LandingPage() {
   const featuredCategories = await listFeaturedCategories().catch(() => []);
@@ -135,17 +137,17 @@ export default async function LandingPage() {
               </Button>
             </div>
             <div className="mt-8 grid max-w-md grid-cols-3 gap-3 text-white/85">
-              <div>
+              <div className="min-w-0">
                 <p className="metric-value text-white">9</p>
                 <p className="metric-label text-white/70">Provinces ready</p>
               </div>
-              <div>
-                <p className="font-display text-lg font-bold leading-tight text-white sm:text-[1.875rem]">
+              <div className="min-w-0">
+                <p className="font-display text-sm font-bold leading-tight text-white sm:text-2xl">
                   WhatsApp
                 </p>
                 <p className="metric-label text-white/70">Cloud API native</p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="metric-value text-white">PWA</p>
                 <p className="metric-label text-white/70">Installable</p>
               </div>

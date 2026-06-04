@@ -9,6 +9,11 @@ import { handleYocoWebhook } from "@/server/services/billing.service";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const signature = request.headers.get("x-yoco-signature");
+  if (!signature) {
+    return NextResponse.json({ error: "Missing signature." }, { status: 401 });
+  }
+
   const secret = process.env.YOCO_WEBHOOK_SECRET;
   if (!secret) {
     logger.error({}, "yoco.webhook.no_secret");
@@ -16,12 +21,7 @@ export async function POST(request: NextRequest) {
   }
 
   const rawBody = await request.text();
-  const signature = request.headers.get("x-yoco-signature") ?? undefined;
   const timestampHeader = request.headers.get("x-yoco-timestamp");
-
-  if (!signature) {
-    return NextResponse.json({ error: "Missing signature." }, { status: 401 });
-  }
 
   // Reject replayed webhooks: timestamp must be within 5 minutes of now
   if (timestampHeader !== null) {

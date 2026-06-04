@@ -1,6 +1,30 @@
 import { createHash } from "node:crypto";
 
 import { logger } from "@/lib/logger";
+import { getRedis } from "@/lib/redis";
+
+const EMBED_CACHE_TTL_S = 60 * 60; // 1 hour — embeddings are deterministic per model
+
+async function getCachedEmbedding(key: string): Promise<number[] | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    const raw = await redis.get(key);
+    return raw ? (JSON.parse(raw) as number[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function setCachedEmbedding(key: string, embedding: number[]): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.setex(key, EMBED_CACHE_TTL_S, JSON.stringify(embedding));
+  } catch {
+    // non-fatal
+  }
+}
 
 const DEFAULT_DIMENSIONS = 1024;
 
@@ -91,7 +115,16 @@ export async function embedTexts(input: string[], signal?: AbortSignal) {
 }
 
 export async function embedText(input: string, signal?: AbortSignal): Promise<number[]> {
+  const cacheKey = `embed:v1:${createHash("sha256").update(input).digest("hex")}`;
+
+  const cached = await getCachedEmbedding(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
   const results = await embedTexts([input], signal);
-  // embedTexts always returns one embedding per input string
-  return results[0] ?? [];
+  const embedding = results[0] ?? [];
+
+  await setCachedEmbedding(cacheKey, embedding);
+  return embedding;
 }

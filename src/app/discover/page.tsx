@@ -12,8 +12,19 @@ import { GeoDiscoveryButton } from "@/components/discover/geo-discovery-button";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
+import { unstable_cache } from "next/cache";
 import { businessCategories, formatEnumLabel, provinces } from "@/lib/business";
 import { discoverBusinesses } from "@/server/services/discovery.service";
+import { auth } from "@/lib/auth";
+
+// Cache the unfiltered business list (most common landing) for 5 min.
+// Filtered queries (q, category, province) bypass the cache since they're
+// user-specific search results that should stay fresh.
+const getCachedAllBusinesses = unstable_cache(
+  () => discoverBusinesses({}).catch(() => []),
+  ["discover-all"],
+  { revalidate: 300, tags: ["businesses"] }
+);
 
 type DiscoverPageProps = {
   searchParams?: Promise<{
@@ -35,12 +46,16 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     ? (params.province as Province)
     : null;
 
-  const businesses = await discoverBusinesses({
-    query: params.q ?? null,
-    category,
-    province,
-    city: params.city ?? null
-  }).catch(() => []);
+  const hasFilter = params.q || params.category || params.province || params.city;
+
+  const [businesses, session] = await Promise.all([
+    hasFilter
+      ? discoverBusinesses({ query: params.q ?? null, category, province, city: params.city ?? null }).catch(() => [])
+      : getCachedAllBusinesses(),
+    auth()
+  ]);
+
+  const backHref = session?.user ? "/home" : "/";
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
@@ -109,7 +124,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
 
       <div className="mt-6">
         <Button asChild variant="secondary">
-          <Link href="/">Back to Heita</Link>
+          <Link href={backHref}>Back to Heita</Link>
         </Button>
       </div>
     </main>

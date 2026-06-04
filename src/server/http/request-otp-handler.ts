@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getOtpPurposeForMode, type AuthOtpMode } from "@/lib/auth-intent";
 import { csrfFailureResponse } from "@/lib/csrf";
+import { e2eDevOtpEnabled } from "@/lib/e2e";
 import { logger } from "@/lib/logger";
 import { incrementOtpMetric, observeHttpRoute } from "@/lib/metrics";
 import { issueOtpCode } from "@/lib/otp";
@@ -18,14 +19,16 @@ import { verifyTurnstileToken } from "@/lib/turnstile";
 const RequestOtpSchema = z.object({
   phone: z.string().min(8).max(20),
   mode: z.enum(["sign-in", "sign-up"]).default("sign-in"),
-  turnstileToken: z.string().optional()
+  // nullish(): the client sends `null` when no Turnstile widget is mounted
+  // (e.g. Turnstile unconfigured in dev/CI). Accepting null avoids a spurious
+  // schema failure; absent/null tokens are still rejected by verifyTurnstileToken
+  // when Turnstile is configured in production.
+  turnstileToken: z.string().nullish()
 });
 
 const OTP_PER_PHONE_PER_HOUR = 5;
 const OTP_PER_IP_PER_HOUR = 20;
 const OTP_PER_PHONE_PER_MINUTE = 1;
-const EXPOSE_DEV_OTP =
-  process.env.NODE_ENV !== "production" && process.env.E2E_EXPOSE_DEV_OTP === "1";
 
 // Generic response returned in every case where a code would be sent.
 // Using identical text and status for both "account found" and "not found"
@@ -270,7 +273,7 @@ async function _handleRequestOtp(request: Request) {
       ...GENERIC_OTP_SENT_BODY,
       code: "ok",
       expiresAt: expiresAt.toISOString(),
-      devCode: EXPOSE_DEV_OTP ? code : undefined
+      devCode: e2eDevOtpEnabled() ? code : undefined
     },
     {
       headers: {

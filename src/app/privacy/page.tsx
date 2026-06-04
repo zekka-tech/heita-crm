@@ -67,7 +67,16 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>Receipt images</strong> — photographs of purchase receipts uploaded
-              for OCR-based points allocation.
+              for points allocation. Text is read from your receipt on your own device,
+              in your browser, before any image leaves it (see &ldquo;How receipt scanning
+              works&rdquo; below).
+            </li>
+            <li>
+              <strong>Business website content</strong> — when a business owner adds their
+              own website as an AI knowledge source, we fetch the public text of those pages
+              and store it so the AI can answer customer questions from the business&rsquo;s
+              real material. Only publicly reachable pages on the owner&rsquo;s chosen domain
+              are crawled, and only by that business&rsquo;s authorised staff.
             </li>
             <li>
               <strong>Security data</strong> — IP addresses used for rate limiting and
@@ -180,9 +189,33 @@ export default function PrivacyPage() {
               <strong>Meta Platforms (United States)</strong> — WhatsApp Business API for
               messaging between businesses and customers.
             </li>
+            <li>
+              <strong>DeepSeek</strong> — cloud vision model used only as a fallback to read
+              a receipt when on-device scanning cannot extract a clear total (see
+              &ldquo;How receipt scanning works&rdquo; below).
+            </li>
           </ul>
           <p className="text-sm leading-6 text-ink-muted">
             We do not sell your personal information to any third party.
+          </p>
+        </Card>
+
+        {/* 5b. How receipt scanning works */}
+        <Card variant="surface" className="space-y-3">
+          <h2 className="section-title">How receipt scanning works</h2>
+          <p className="text-sm leading-6 text-ink-muted">
+            When you upload a receipt, the initial text extraction runs{" "}
+            <strong>on your device, in your browser</strong>, using an on-device OCR engine
+            (Tesseract.js). The detected text — not the image — is what we use to work out
+            the purchase total and award points. This means that, in the normal case, the
+            content of your receipt is read locally and the photo itself is not sent to any
+            third-party processor for analysis.
+          </p>
+          <p className="text-sm leading-6 text-ink-muted">
+            Only when on-device scanning cannot read a clear total (for example, a blurry or
+            unusual receipt) do we fall back to a cloud vision service (DeepSeek) to read the
+            image. The original receipt image is always stored in our object storage so staff
+            can review and approve points.
           </p>
         </Card>
 

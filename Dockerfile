@@ -4,10 +4,14 @@
 ARG NODE_VERSION=22.12.0
 
 FROM node:${NODE_VERSION}-alpine AS deps
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
+# scripts/ is needed because the postinstall hook runs
+# scripts/copy-tesseract-assets.mjs (Tesseract worker/WASM → public/, see the
+# script header for the CSP rationale).
+COPY scripts ./scripts
 RUN --mount=type=cache,target=/root/.npm npm ci --prefer-offline --no-audit --progress=false
 
 FROM node:${NODE_VERSION}-alpine AS builder
@@ -27,7 +31,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-RUN apk add --no-cache dumb-init \
+RUN apk upgrade --no-cache \
+ && apk add --no-cache dumb-init \
  && addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
 

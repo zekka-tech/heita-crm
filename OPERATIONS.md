@@ -186,6 +186,14 @@ If verification fails, refuse to roll out and open a security incident.
 - Postmortem template lives under `docs/incidents/TEMPLATE.md` (add as needed).
 - Sentry release tag must be referenced in every incident note.
 - Game-day learnings amend this playbook directly — no separate runbook.
+- **Recurring evidence:** the `Chaos Game Day` workflow (`.github/workflows/game-day.yml`)
+  opens a quarterly drill issue from this playbook; closed issues are the audit
+  trail that drills were executed, not just documented.
+
+## Service levels & release gate
+
+SLOs, error budgets, RTO/RPO targets, and the release go/no-go checklist live in
+[`docs/SLO.md`](docs/SLO.md). No release ships unless that gate passes.
 
 ---
 
@@ -203,7 +211,7 @@ Rotate secrets on a **90-day cycle** or immediately after any suspected compromi
 | `DATABASE_URL` | GitHub + database host | 1. Create new DB user with same grants. 2. Update `DATABASE_URL` secret. 3. Deploy. 4. Verify health endpoint. 5. Drop old DB user after 24 h. |
 | `BACKUP_AWS_ACCESS_KEY_ID` + `BACKUP_AWS_SECRET_ACCESS_KEY` | GitHub + AWS IAM | 1. Create new IAM access key. 2. Update GitHub secrets. 3. Trigger manual `backup.yml` run. 4. Verify backup lands in S3. 5. Deactivate old key. |
 | `REDIS_URL` | GitHub + Redis provider | 1. Rotate AUTH password on Redis. 2. Update `REDIS_URL`. 3. Deploy. 4. Confirm BullMQ queue connectivity via health endpoint. |
-| `DEEPSEEK_API_KEY` / `MINIMAX_API_KEY` | GitHub | Regenerate via provider dashboard, update secret, redeploy. |
+| `DEEPSEEK_API_KEY` (receipt OCR vision fallback) | GitHub | Regenerate via provider dashboard, update secret, redeploy. |
 | VAPID keys (`VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY`) | GitHub | 1. `npm run vapid:generate`. 2. Update secrets. 3. Deploy. **Note:** all existing push subscriptions become invalid — users must re-subscribe. |
 
 ### Rotation checklist

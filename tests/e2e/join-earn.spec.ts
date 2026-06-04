@@ -10,7 +10,7 @@ test("customer can sign in, join a business, and receive earned points", async (
   page,
   request
 }) => {
-  const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
   const ownerPhone = `+27830${suffix.slice(-6)}`;
   const customerPhone = `+27820${suffix.slice(-6)}`;
   const posSecret = process.env.POS_SHARED_SECRET ?? "e2e-pos-shared-secret";
@@ -43,7 +43,7 @@ test("customer can sign in, join a business, and receive earned points", async (
   try {
     await page.goto("/sign-in");
     await page.getByLabel(/phone number/i).fill(customerPhone);
-    await page.getByRole("button", { name: /send code/i }).click();
+    await page.getByRole("button", { name: /send.*code/i }).click();
 
     const devOtpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
     await expect(devOtpChip).toBeVisible();

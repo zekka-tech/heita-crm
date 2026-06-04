@@ -213,7 +213,9 @@
     "repliesSent30d": "Izimpendulo ezithunyelwe (30d)",
     "promotions": "Izikhuthazi",
     "events": "Imicimbi",
-    "viewFullAnalytics": "Buka ukuhlaziywa okugcwele"
+    "viewFullAnalytics": "Buka ukuhlaziywa okugcwele",
+    "setupChecklist": "Uhlu lokusetha",
+    "setupChecklistBlurb": "Qedela lezi zinyathelo ukuvula amandla amaXhosa e-Heita."
   },
   "promotions": {
     "title": "Izikhuthazi",

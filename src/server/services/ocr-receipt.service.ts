@@ -1,9 +1,6 @@
-import { TextractClient, AnalyzeExpenseCommand } from "@aws-sdk/client-textract";
-
 import { appendTraceHeaders } from "@/lib/tracing";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-import { assertOwnedStorageUrl } from "@/lib/security";
 import { recalculateTier } from "@/server/services/loyalty.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
@@ -79,141 +76,183 @@ async function ocrWithDeepSeek(imageUrl: string): Promise<OcrResult> {
   return parseOcrJson(text);
 }
 
-async function ocrWithMinimax(imageUrl: string): Promise<OcrResult> {
-  const apiKey = process.env.MINIMAX_API_KEY;
-  const groupId = process.env.MINIMAX_GROUP_ID;
-  if (!apiKey) throw new Error("MINIMAX_API_KEY not set");
+// Currency/total keywords that mark a grand-total line on a ZA receipt.
+// Ordered loosely by specificity; matching is case-insensitive.
+const TOTAL_KEYWORDS = [
+  "amount due",
+  "balance due",
+  "grand total",
+  "total due",
+  "total",
+  "balance",
+  "amount payable",
+  "to pay"
+];
 
-  const url = groupId
-    ? `https://api.minimax.chat/v1/text/chatcompletion_v2?GroupId=${groupId}`
-    : "https://api.minimax.chat/v1/text/chatcompletion_v2";
+// Lines we never treat as a business name (common header noise).
+const BUSINESS_NAME_BLOCKLIST = [
+  "tax invoice",
+  "invoice",
+  "receipt",
+  "vat reg",
+  "vat no",
+  "tel",
+  "www.",
+  "http"
+];
 
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: appendTraceHeaders({
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    }),
-    body: JSON.stringify({
-      model: "MiniMax-VL-01",
-      max_tokens: 512,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "image_url", image_url: { url: imageUrl } },
-            { type: "text", text: OCR_PROMPT }
-          ]
-        }
-      ]
-    }),
-    signal: AbortSignal.timeout(30_000)
-  });
+/**
+ * Parse a number out of a ZAR-formatted amount fragment.
+ * Handles "R 1 234,56", "R1,234.56", "1234.56", "1.234,56".
+ * Returns null if no plausible number is found.
+ */
+function parseZarAmount(fragment: string): number | null {
+  // Keep only the part after the last currency-ish marker, then strip to digits/sep.
+  const cleaned = fragment.replace(/[Rr]\s?/g, " ");
+  // Grab the last number-looking token on the line (totals sit at the end).
+  const matches = cleaned.match(/\d[\d\s.,]*\d|\d/g);
+  const lastMatch = matches?.[matches.length - 1];
+  if (!lastMatch) return null;
 
-  if (!resp.ok) {
-    const body = await resp.text();
-    logger.warn({ status: resp.status, body }, "ocr.minimax.error");
-    throw new Error(`Minimax OCR error: ${resp.status}`);
+  const token = lastMatch.replace(/\s/g, "");
+
+  // Determine decimal separator: if both '.' and ',' present, the last one is decimal.
+  let normalised = token;
+  const lastDot = token.lastIndexOf(".");
+  const lastComma = token.lastIndexOf(",");
+  if (lastDot !== -1 && lastComma !== -1) {
+    if (lastComma > lastDot) {
+      // European style: '.' thousands, ',' decimal
+      normalised = token.replace(/\./g, "").replace(",", ".");
+    } else {
+      // US style: ',' thousands, '.' decimal
+      normalised = token.replace(/,/g, "");
+    }
+  } else if (lastComma !== -1) {
+    // Only commas. Treat as decimal if exactly 2 digits follow the last comma,
+    // otherwise as a thousands separator.
+    const after = token.length - lastComma - 1;
+    normalised = after === 2 ? token.replace(",", ".") : token.replace(/,/g, "");
+  } else {
+    // Only dots (or none). Treat a lone dot with !=3 trailing digits as decimal;
+    // multiple dots => thousands separators.
+    const dotCount = (token.match(/\./g) ?? []).length;
+    if (dotCount > 1) normalised = token.replace(/\./g, "");
   }
 
-  const data = (await resp.json()) as {
-    choices: Array<{ message: { content: string } }>;
-  };
-  const text = data.choices[0]?.message.content ?? "{}";
-  return parseOcrJson(text);
+  const value = parseFloat(normalised);
+  if (!Number.isFinite(value)) return null;
+  return value;
 }
 
-async function ocrWithTextract(imageUrl: string): Promise<OcrResult> {
-  const region = process.env.AWS_REGION ?? "us-east-1";
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+/**
+ * Heuristically extract the grand total and business name from raw receipt text.
+ * Used for client-side (Tesseract.js) OCR output before falling back to a cloud
+ * vision model.
+ */
+export function parseReceiptText(rawText: string): {
+  total: number | null;
+  businessName: string | null;
+  confidence: "high" | "medium" | "low";
+} {
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
 
-  if (!accessKeyId || !secretAccessKey) {
-    throw new Error("AWS credentials not set for Textract fallback");
+  // --- Total: scan keyword lines, collect candidates, pick the largest plausible. ---
+  const candidates: number[] = [];
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    if (!TOTAL_KEYWORDS.some((kw) => lower.includes(kw))) continue;
+    // Skip obvious non-grand-total lines (subtotal, vat total) where a better
+    // grand total usually also exists; we still record them but they rarely win
+    // because the grand total is the largest.
+    const amount = parseZarAmount(line);
+    if (amount !== null && amount > 0 && amount < 10_000_000) {
+      candidates.push(amount);
+    }
   }
+  const total = candidates.length > 0 ? Math.max(...candidates) : null;
 
-  // Guard against SSRF: only fetch from Heita's own storage buckets.
-  assertOwnedStorageUrl(imageUrl);
-
-  // Download the image bytes
-  const imgResp = await fetch(imageUrl, { signal: AbortSignal.timeout(20_000) });
-  if (!imgResp.ok) throw new Error(`Failed to fetch image for Textract: ${imgResp.status}`);
-  const imgBuffer = Buffer.from(await imgResp.arrayBuffer());
-
-  const client = new TextractClient({
-    region,
-    credentials: { accessKeyId, secretAccessKey }
-  });
-
-  const command = new AnalyzeExpenseCommand({
-    Document: { Bytes: imgBuffer }
-  });
-
-  const result = await client.send(command);
-
-  let total: number | null = null;
+  // --- Business name: first meaningful non-blocklisted line near the top. ---
   let businessName: string | null = null;
-  const rawLines: string[] = [];
-
-  for (const doc of result.ExpenseDocuments ?? []) {
-    for (const field of doc.SummaryFields ?? []) {
-      const type = field.Type?.Text?.toUpperCase();
-      const value = field.LabelDetection?.Text ?? field.ValueDetection?.Text ?? "";
-      rawLines.push(value);
-      if (type === "TOTAL") {
-        const num = parseFloat(value.replace(/[^0-9.]/g, ""));
-        if (!isNaN(num)) total = num;
-      }
-      if (type === "VENDOR_NAME" || type === "NAME") {
-        businessName = value || null;
-      }
-    }
-    for (const lineItem of doc.LineItemGroups ?? []) {
-      for (const row of lineItem.LineItems ?? []) {
-        for (const field of row.LineItemExpenseFields ?? []) {
-          rawLines.push(field.ValueDetection?.Text ?? "");
-        }
-      }
-    }
+  for (const line of lines.slice(0, 5)) {
+    const lower = line.toLowerCase();
+    if (BUSINESS_NAME_BLOCKLIST.some((b) => lower.includes(b))) continue;
+    // Never treat a total/amount line as the business name.
+    if (TOTAL_KEYWORDS.some((kw) => lower.includes(kw))) continue;
+    // Skip lines that are mostly digits (addresses, phone numbers, dates).
+    const letters = (line.match(/[A-Za-z]/g) ?? []).length;
+    const digits = (line.match(/\d/g) ?? []).length;
+    if (letters < 2 || digits > letters) continue;
+    businessName = line;
+    break;
   }
 
-  const confidence: OcrResult["confidence"] =
+  const confidence: "high" | "medium" | "low" =
     total !== null && businessName !== null ? "high" : total !== null ? "medium" : "low";
 
-  return { total, businessName, rawText: rawLines.filter(Boolean).join("\n"), confidence };
+  return { total, businessName, confidence };
 }
 
-export async function extractReceiptData(imageUrl: string): Promise<OcrResult> {
-  const providers: Array<{ name: string; fn: () => Promise<OcrResult> }> = [
-    { name: "deepseek", fn: () => ocrWithDeepSeek(imageUrl) },
-    { name: "minimax", fn: () => ocrWithMinimax(imageUrl) },
-    { name: "textract", fn: () => ocrWithTextract(imageUrl) }
-  ];
+/**
+ * Extract structured receipt data. Primary path is client-side OCR text
+ * (Tesseract.js, parsed server-side). When that text is missing or yields a
+ * low-confidence / total-less result, fall back to the DeepSeek cloud vision
+ * API. Never throws on OCR failure — returns a low-confidence empty result.
+ */
+export async function extractReceiptData(input: {
+  imageUrl: string;
+  clientRawText?: string | null;
+}): Promise<OcrResult> {
+  const { imageUrl, clientRawText } = input;
+  const trimmedClientText = clientRawText?.trim() ?? "";
 
-  let lastError: unknown;
-  for (const { name, fn } of providers) {
-    try {
-      const result = await fn();
-      logger.info({ provider: name, imageUrl }, "ocr.receipt.success");
-      return result;
-    } catch (err) {
-      logger.warn({ provider: name, err }, "ocr.provider.failed");
-      lastError = err;
+  if (trimmedClientText.length > 0) {
+    const parsed = parseReceiptText(trimmedClientText);
+    if (parsed.confidence !== "low" && parsed.total !== null) {
+      logger.info({ source: "client-tesseract", imageUrl }, "ocr.receipt.success");
+      return {
+        total: parsed.total,
+        businessName: parsed.businessName,
+        rawText: trimmedClientText,
+        confidence: parsed.confidence
+      };
     }
+    logger.info(
+      { imageUrl, parsedConfidence: parsed.confidence, hasTotal: parsed.total !== null },
+      "ocr.client.insufficient.fallback"
+    );
   }
 
-  logger.error({ imageUrl, lastError }, "ocr.all.providers.failed");
-  return { total: null, businessName: null, rawText: "", confidence: "low" };
+  // Fall back to the cloud vision model.
+  try {
+    const result = await ocrWithDeepSeek(imageUrl);
+    logger.info({ source: "deepseek", imageUrl }, "ocr.receipt.success");
+    return result;
+  } catch (err) {
+    logger.warn({ imageUrl, err }, "ocr.deepseek.failed");
+  }
+
+  logger.error({ imageUrl }, "ocr.all.providers.failed");
+  return {
+    total: null,
+    businessName: null,
+    rawText: trimmedClientText,
+    confidence: "low"
+  };
 }
 
 export async function submitOcrReceipt(input: {
   businessId: string;
   userId: string;
   imageUrl: string;
+  clientRawText?: string | null;
 }) {
-  const { businessId, userId, imageUrl } = input;
+  const { businessId, userId, imageUrl, clientRawText } = input;
 
-  const ocrResult = await extractReceiptData(imageUrl);
+  const ocrResult = await extractReceiptData({ imageUrl, clientRawText });
 
   const pointsToAward =
     ocrResult.total !== null && ocrResult.confidence !== "low"

@@ -109,6 +109,19 @@ export async function readCsrfCookie(): Promise<string | null> {
   return isValidCsrfToken(value) ? value : null;
 }
 
+/**
+ * Read the CSRF token that middleware injected into the forwarded request
+ * headers. This is reliable on first load because cookies() only sees the
+ * incoming request cookie jar, which doesn't yet contain a cookie that
+ * middleware just generated for the response.
+ */
+export async function readCsrfFromRequestHeaders(): Promise<string | null> {
+  const { headers } = await import("next/headers");
+  const store = await headers();
+  const value = store.get(CSRF_HEADER) ?? null;
+  return isValidCsrfToken(value) ? value : null;
+}
+
 export function readCsrfCookieFromRequest(request: Request): string | null {
   const value = getCookieValue(request.headers.get("cookie"), CSRF_COOKIE);
   return isValidCsrfToken(value) ? value : null;

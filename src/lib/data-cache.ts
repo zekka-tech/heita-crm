@@ -11,6 +11,9 @@ import { getRedis } from "@/lib/redis";
 const ANALYTICS_TTL_S = 5 * 60; // 5 minutes
 const BUSINESS_PROFILE_TTL_S = 10 * 60; // 10 minutes
 
+// All possible analytics window sizes — used for bulk cache invalidation on writes.
+const ANALYTICS_WEEK_OPTIONS = [4, 8, 12, 26] as const;
+
 async function cacheGet<T>(key: string): Promise<T | null> {
   const redis = getRedis();
   if (!redis) return null;
@@ -42,8 +45,13 @@ export async function cacheDel(...keys: string[]): Promise<void> {
   }
 }
 
-export function analyticsKey(businessId: string): string {
-  return `analytics:dashboard:${businessId}`;
+export function analyticsKey(businessId: string, weeks: number): string {
+  return `analytics:dashboard:${businessId}:${weeks}w`;
+}
+
+/** Invalidate every week-window variant for a business (call on loyalty/membership writes). */
+export function analyticsKeysForBusiness(businessId: string): string[] {
+  return ANALYTICS_WEEK_OPTIONS.map((w) => analyticsKey(businessId, w));
 }
 
 export function businessProfileKey(businessId: string): string {
@@ -52,9 +60,10 @@ export function businessProfileKey(businessId: string): string {
 
 export async function withAnalyticsCache<T>(
   businessId: string,
+  weeks: number,
   fetch: () => Promise<T>
 ): Promise<T> {
-  const key = analyticsKey(businessId);
+  const key = analyticsKey(businessId, weeks);
   const cached = await cacheGet<T>(key);
   if (cached !== null) return cached;
   const value = await fetch();

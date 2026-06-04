@@ -4,10 +4,9 @@ import { Gift, Plus, Receipt, Users } from "lucide-react";
 import {
   createRewardAction,
   queueCustomerImportAction,
-  requestStaffStepUpAction,
-  updateTierPerksAction,
-  verifyStaffStepUpAction
+  updateTierPerksAction
 } from "@/app/dashboard/[businessId]/loyalty/actions";
+import { StaffStepUpRequest } from "@/components/loyalty/staff-step-up-request";
 import { EarnPointsForm } from "@/app/dashboard/[businessId]/loyalty/earn-points-form";
 import { RedeemPointsForm } from "@/app/dashboard/[businessId]/loyalty/redeem-points-form";
 import { RefundTransactionForm } from "@/app/dashboard/[businessId]/loyalty/refund-transaction-form";
@@ -22,12 +21,10 @@ import { describeTierPerks } from "@/lib/loyalty";
 
 type LoyaltyDashboardPageProps = {
   params: Promise<{ businessId: string }>;
-  searchParams?: Promise<{ stepUp?: string; devCode?: string }>;
 };
 
 export default async function LoyaltyDashboardPage({
-  params,
-  searchParams
+  params
 }: LoyaltyDashboardPageProps) {
   const { businessId } = await params;
 
@@ -40,7 +37,6 @@ export default async function LoyaltyDashboardPage({
     import("@/lib/prisma"),
     import("@/lib/staff-step-up")
   ]);
-  const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = await auth();
 
   if (!session?.user?.id) {
@@ -120,40 +116,7 @@ export default async function LoyaltyDashboardPage({
               Enter a fresh OTP before issuing points, redeeming balances, or changing the
               reward catalogue. The verification stays valid for 15 minutes.
             </p>
-            <div className="grid gap-3 md:grid-cols-2">
-              <form action={requestStaffStepUpAction} className="grid gap-3">
-                <CsrfField />
-                <input type="hidden" name="businessId" value={business.id} />
-                <SubmitButton variant="secondary">
-                  Send staff OTP
-                </SubmitButton>
-              </form>
-              <form action={verifyStaffStepUpAction} className="grid gap-3">
-                <CsrfField />
-                <input type="hidden" name="businessId" value={business.id} />
-                <Input
-                  name="code"
-                  label="Verification code"
-                  inputMode="numeric"
-                  pattern="\d{6}"
-                  placeholder="123456"
-                  required
-                />
-                <SubmitButton variant="primary">
-                  Verify staff access
-                </SubmitButton>
-              </form>
-            </div>
-            {resolvedSearchParams.stepUp ? (
-              <p className="text-sm text-ink-muted">
-                {resolvedSearchParams.stepUp === "requested"
-                  ? "Verification code sent."
-                  : resolvedSearchParams.stepUp === "invalid"
-                    ? "Verification failed. Request a new code and try again."
-                    : "Staff verification completed."}
-                {resolvedSearchParams.devCode ? ` Dev OTP: ${resolvedSearchParams.devCode}` : ""}
-              </p>
-            ) : null}
+            <StaffStepUpRequest businessId={business.id} />
           </Card>
         ) : (
           <Card variant="surface" className="text-sm text-success">

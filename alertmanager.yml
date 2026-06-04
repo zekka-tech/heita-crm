@@ -1,0 +1,68 @@
+# Alertmanager routing for Heita CRM.
+# Pairs with prometheus-rules.yml. Burn-rate alerts (docs/SLO.md §2) carry an
+# `action` label — `page` routes to PagerDuty, `ticket` routes to Slack.
+#
+# Secrets are injected from the environment by Alertmanager at start
+# (use `--config.expand-env` or render this file via your secrets tooling):
+#   PAGERDUTY_ROUTING_KEY, SLACK_WEBHOOK_URL
+#
+# Sentry covers application error/exception events separately (see
+# sentry.server.config.ts); this file governs Prometheus SLO/burn-rate alerts.
+
+global:
+  resolve_timeout: 5m
+  slack_api_url: "${SLACK_WEBHOOK_URL}"
+
+route:
+  receiver: slack-warnings
+  group_by: ["alertname", "slo"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # Anything that must wake a human — fast burn or any critical.
+    - matchers:
+        - action = "page"
+      receiver: pagerduty-critical
+      group_wait: 0s
+      repeat_interval: 1h
+      continue: true
+    - matchers:
+        - severity = "critical"
+      receiver: pagerduty-critical
+      group_wait: 0s
+      repeat_interval: 1h
+    # Slow burn / warnings — ticket + Slack, no paging.
+    - matchers:
+        - severity = "warning"
+      receiver: slack-warnings
+
+receivers:
+  - name: pagerduty-critical
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_ROUTING_KEY}"
+        severity: critical
+        description: '{{ .CommonAnnotations.summary }}'
+        details:
+          slo: '{{ .CommonLabels.slo }}'
+          action: '{{ .CommonLabels.action }}'
+          runbook: "https://github.com/zekka-tech/heita-crm/blob/main/docs/SLO.md"
+
+  - name: slack-warnings
+    slack_configs:
+      - channel: "#heita-alerts"
+        send_resolved: true
+        title: '[{{ .Status | toUpper }}] {{ .CommonAnnotations.summary }}'
+        text: >-
+          {{ range .Alerts }}{{ .Annotations.description }}
+          {{ end }}
+          SLO: {{ .CommonLabels.slo }} · see docs/SLO.md §2
+
+inhibit_rules:
+  # When a fast burn is already paging, suppress the slow-burn ticket for the
+  # same SLO to avoid double-noise on the same incident.
+  - source_matchers:
+      - action = "page"
+    target_matchers:
+      - action = "ticket"
+    equal: ["slo"]

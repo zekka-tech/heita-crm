@@ -170,6 +170,8 @@ export async function finalizeAiTokenUsage(input: {
   promptTokens?: number | null;
   completionTokens?: number | null;
   totalTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cacheCreationTokens?: number | null;
 }) {
   return prisma.aiTokenUsage.update({
     where: {
@@ -182,7 +184,9 @@ export async function finalizeAiTokenUsage(input: {
       userId: input.userId ?? null,
       promptTokens: input.promptTokens ?? null,
       completionTokens: input.completionTokens ?? null,
-      totalTokens: input.totalTokens ?? null
+      totalTokens: input.totalTokens ?? null,
+      cacheReadTokens: input.cacheReadTokens ?? null,
+      cacheCreationTokens: input.cacheCreationTokens ?? null,
     }
   });
 }

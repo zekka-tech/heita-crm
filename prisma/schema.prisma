@@ -7,39 +7,39 @@ datasource db {
 }
 
 model User {
-  id                String              @id @default(cuid())
-  name              String?
-  email             String?             @unique
-  emailVerified     DateTime?
-  image             String?
-  phone             String?             @unique
-  phoneVerifiedAt   DateTime?
-  preferredAiMode   String?             @default("auto")
-  pendingEmail      String?
+  id                      String                @id @default(cuid())
+  name                    String?
+  email                   String?               @unique
+  emailVerified           DateTime?
+  image                   String?
+  phone                   String?               @unique
+  phoneVerifiedAt         DateTime?
+  preferredAiMode         String?               @default("auto")
+  pendingEmail            String?
   notificationPreferences Json?
-  sessionVersion    Int                 @default(0)
-  deletedAt         DateTime?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  accounts          Account[]
-  sessions          Session[]
-  memberships       Membership[]
-  staffMemberships  StaffMember[]
-  staffInvitesSent  StaffInvite[]       @relation("StaffInviteIssuer")
-  notifications     Notification[]
-  pushSubscriptions PushSubscription[]
-  otpCodes          OtpCode[]
-  aiChatSessions    AiChatSession[]
-  loyaltyEvents     LoyaltyTransaction[]
-  messages          Message[]
-  consents              UserConsent[]
-  promotionRedemptions  PromotionRedemption[]
-  aiTokenUsages         AiTokenUsage[]
-  staffAuditLogs        StaffAuditLog[]      @relation("StaffAuditActor")
-  referralCodesOwned ReferralCode[]
-  importRuns        CustomerImportRun[]  @relation("CustomerImportActor")
-  ocrReceipts       OcrReceipt[]
-  reviewedReceipts  OcrReceipt[]         @relation("OcrReceiptReviewer")
+  sessionVersion          Int                   @default(0)
+  deletedAt               DateTime?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  accounts                Account[]
+  sessions                Session[]
+  memberships             Membership[]
+  staffMemberships        StaffMember[]
+  staffInvitesSent        StaffInvite[]         @relation("StaffInviteIssuer")
+  notifications           Notification[]
+  pushSubscriptions       PushSubscription[]
+  otpCodes                OtpCode[]
+  aiChatSessions          AiChatSession[]
+  loyaltyEvents           LoyaltyTransaction[]
+  messages                Message[]
+  consents                UserConsent[]
+  promotionRedemptions    PromotionRedemption[]
+  aiTokenUsages           AiTokenUsage[]
+  staffAuditLogs          StaffAuditLog[]       @relation("StaffAuditActor")
+  referralCodesOwned      ReferralCode[]
+  importRuns              CustomerImportRun[]   @relation("CustomerImportActor")
+  ocrReceipts             OcrReceipt[]
+  reviewedReceipts        OcrReceipt[]          @relation("OcrReceiptReviewer")
 }
 
 model Account {
@@ -95,104 +95,105 @@ model OtpCode {
 }
 
 model Business {
-  id                    String               @id @default(cuid())
-  planId                BusinessPlanId       @default(FREE)
-  slug                  String               @unique
-  name                  String
-  legalName             String?
-  description           String?
-  category              BusinessCategory
-  province              Province
-  phone                 String?
-  email                 String?
-  logoUrl               String?
-  coverImageUrl         String?
-  loyaltySignupBonus    Int                  @default(0)
-  pointsExpiryDays      Int                  @default(365)
-  wabaPhoneId           String?              @unique
-  whatsappPhoneNumber   String?
-  addressLine1          String?
-  addressLine2          String?
-  suburb                String?
-  city                  String?
-  postalCode            String?
-  isActive              Boolean              @default(true)
-  deletedAt             DateTime?
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-  qrCodes               QrCode[]
-  joinLinks             JoinLink[]
-  memberships           Membership[]
-  staffMembers          StaffMember[]
-  aiWorkspace           AiWorkspace?
-  documents             BusinessDocument[]
-  documentChunks        DocumentChunk[]
-  aiChatSessions        AiChatSession[]
-  loyaltyTiers          LoyaltyTier[]
-  rewards               Reward[]
-  promotions            Promotion[]
-  events                Event[]
-  messages              Message[]
-  loyaltyTransactions   LoyaltyTransaction[]
-  consents              UserConsent[]
-  promotionRedemptions  PromotionRedemption[]
-  staffInvites          StaffInvite[]
-  aiTokenUsages         AiTokenUsage[]
-  staffAuditLogs        StaffAuditLog[]
-  referralCodes         ReferralCode[]
-  importRuns            CustomerImportRun[]
-  subscriptions         BusinessSubscription[]
-  invoices              BusinessInvoice[]
-  ocrReceipts           OcrReceipt[]
+  id                   String                 @id @default(cuid())
+  planId               BusinessPlanId         @default(FREE)
+  slug                 String                 @unique
+  name                 String
+  legalName            String?
+  description          String?
+  category             BusinessCategory
+  province             Province
+  phone                String?
+  email                String?
+  logoUrl              String?
+  coverImageUrl        String?
+  loyaltySignupBonus   Int                    @default(0)
+  pointsExpiryDays     Int                    @default(365)
+  wabaPhoneId          String?                @unique
+  whatsappPhoneNumber  String?
+  addressLine1         String?
+  addressLine2         String?
+  suburb               String?
+  city                 String?
+  postalCode           String?
+  isActive             Boolean                @default(true)
+  deletedAt            DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  qrCodes              QrCode[]
+  joinLinks            JoinLink[]
+  memberships          Membership[]
+  staffMembers         StaffMember[]
+  aiWorkspace          AiWorkspace?
+  documents            BusinessDocument[]
+  webSources           WebSource[]
+  documentChunks       DocumentChunk[]
+  aiChatSessions       AiChatSession[]
+  loyaltyTiers         LoyaltyTier[]
+  rewards              Reward[]
+  promotions           Promotion[]
+  events               Event[]
+  messages             Message[]
+  loyaltyTransactions  LoyaltyTransaction[]
+  consents             UserConsent[]
+  promotionRedemptions PromotionRedemption[]
+  staffInvites         StaffInvite[]
+  aiTokenUsages        AiTokenUsage[]
+  staffAuditLogs       StaffAuditLog[]
+  referralCodes        ReferralCode[]
+  importRuns           CustomerImportRun[]
+  subscriptions        BusinessSubscription[]
+  invoices             BusinessInvoice[]
+  ocrReceipts          OcrReceipt[]
 }
 
 model QrCode {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   businessId  String
   name        String
-  token       String    @unique
+  token       String   @unique
   description String?
-  scanCount   Int       @default(0)
-  isPrimary   Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  scanCount   Int      @default(0)
+  isPrimary   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
 }
 
 model JoinLink {
-  id          String      @id @default(cuid())
-  businessId  String
-  token       String      @unique
-  name        String
-  channel     JoinChannel
-  clickCount  Int         @default(0)
-  isActive    Boolean     @default(true)
-  expiresAt   DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id         String      @id @default(cuid())
+  businessId String
+  token      String      @unique
+  name       String
+  channel    JoinChannel
+  clickCount Int         @default(0)
+  isActive   Boolean     @default(true)
+  expiresAt  DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId, channel])
 }
 
 model Membership {
-  id             String               @id @default(cuid())
-  businessId     String
-  userId         String
-  joinChannel    JoinChannel
-  joinedAt       DateTime             @default(now())
-  pointsBalance  Int                  @default(0)
-  tierId         String?
-  referredByCodeId String?
+  id                 String               @id @default(cuid())
+  businessId         String
+  userId             String
+  joinChannel        JoinChannel
+  joinedAt           DateTime             @default(now())
+  pointsBalance      Int                  @default(0)
+  tierId             String?
+  referredByCodeId   String?
   referralRewardedAt DateTime?
-  isActive       Boolean              @default(true)
-  business       Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tier           LoyaltyTier?         @relation(fields: [tierId], references: [id], onDelete: SetNull)
-  transactions   LoyaltyTransaction[]
-  referredByCode ReferralCode?        @relation("ReferralAttribution", fields: [referredByCodeId], references: [id], onDelete: SetNull)
+  isActive           Boolean              @default(true)
+  business           Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier               LoyaltyTier?         @relation(fields: [tierId], references: [id], onDelete: SetNull)
+  transactions       LoyaltyTransaction[]
+  referredByCode     ReferralCode?        @relation("ReferralAttribution", fields: [referredByCodeId], references: [id], onDelete: SetNull)
 
   @@unique([businessId, userId])
   @@index([userId])
@@ -245,123 +246,152 @@ enum StaffInviteStatus {
 }
 
 model AiWorkspace {
-  id               String            @id @default(cuid())
-  businessId       String            @unique
+  id               String             @id @default(cuid())
+  businessId       String             @unique
   systemPrompt     String?
-  preferredRuntime String            @default("auto")
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  preferredRuntime String             @default("auto")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  business         Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
   documents        BusinessDocument[]
+  webSources       WebSource[]
   chatSessions     AiChatSession[]
 }
 
 model BusinessDocument {
-  id             String          @id @default(cuid())
-  workspaceId    String
-  businessId     String
-  title          String
-  fileName       String
-  mimeType       String
-  storageKey     String          @unique
-  sizeBytes      Int
-  status         DocumentStatus  @default(PENDING)
-  sourceUrl      String?
-  errorMessage   String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  workspace      AiWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  chunks         DocumentChunk[]
+  id           String             @id @default(cuid())
+  workspaceId  String
+  businessId   String
+  title        String
+  fileName     String
+  mimeType     String
+  storageKey   String             @unique
+  sizeBytes    Int
+  status       DocumentStatus     @default(PENDING)
+  sourceType   DocumentSourceType @default(FILE)
+  sourceUrl    String?
+  webSourceId  String?
+  contentHash  String?
+  errorMessage String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  workspace    AiWorkspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  business     Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  webSource    WebSource?         @relation(fields: [webSourceId], references: [id], onDelete: Cascade)
+  chunks       DocumentChunk[]
 
   @@index([workspaceId, status])
   @@index([businessId, createdAt])
+  @@index([webSourceId])
+}
+
+model WebSource {
+  id                  String             @id @default(cuid())
+  workspaceId         String
+  businessId          String
+  rootUrl             String
+  domain              String
+  maxDepth            Int                @default(2)
+  maxPages            Int                @default(25)
+  refreshIntervalDays Int                @default(0)
+  status              WebSourceStatus    @default(PENDING)
+  lastCrawledAt       DateTime?
+  pageCount           Int                @default(0)
+  errorMessage        String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  workspace           AiWorkspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  business            Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  documents           BusinessDocument[]
+
+  @@index([businessId, status])
+  @@index([status, lastCrawledAt])
 }
 
 model DocumentChunk {
-  id           String                     @id @default(cuid())
-  documentId   String
-  businessId   String
-  chunkIndex   Int
-  content      String
-  metadata     Json?
-  embedding    Unsupported("vector(1024)")?
-  createdAt    DateTime                   @default(now())
-  document     BusinessDocument           @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  business     Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id         String                       @id @default(cuid())
+  documentId String
+  businessId String
+  chunkIndex Int
+  content    String
+  metadata   Json?
+  embedding  Unsupported("vector(1024)")?
+  createdAt  DateTime                     @default(now())
+  document   BusinessDocument             @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  business   Business                     @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, chunkIndex])
   @@index([businessId])
 }
 
 model AiChatSession {
-  id           String          @id @default(cuid())
-  workspaceId  String
-  businessId   String
-  userId       String?
-  title        String?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  workspace    AiWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user         User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
-  messages     AiChatMessage[]
-  tokenUsage   AiTokenUsage[]
+  id          String          @id @default(cuid())
+  workspaceId String
+  businessId  String
+  userId      String?
+  title       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  workspace   AiWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  business    Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages    AiChatMessage[]
+  tokenUsage  AiTokenUsage[]
 
   @@index([businessId, createdAt])
 }
 
 model AiChatMessage {
-  id         String        @id @default(cuid())
-  sessionId  String
-  role       String
-  content    String
-  model      String?
-  latencyMs  Int?
-  promptTokens Int?
+  id               String        @id @default(cuid())
+  sessionId        String
+  role             String
+  content          String
+  model            String?
+  latencyMs        Int?
+  promptTokens     Int?
   completionTokens Int?
-  metadata   Json?
-  createdAt  DateTime      @default(now())
-  session    AiChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  metadata         Json?
+  createdAt        DateTime      @default(now())
+  session          AiChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId, createdAt])
 }
 
 model LoyaltyTier {
-  id            String        @id @default(cuid())
-  businessId    String
-  name          String
-  minPoints     Int
-  perks         Json?
-  rank          Int
-  colorHex      String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  memberships   Membership[]
+  id          String       @id @default(cuid())
+  businessId  String
+  name        String
+  minPoints   Int
+  perks       Json?
+  rank        Int
+  colorHex    String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  memberships Membership[]
 
   @@unique([businessId, name])
   @@unique([businessId, rank])
 }
 
 model Reward {
-  id            String      @id @default(cuid())
-  businessId    String
-  title         String
-  description   String?
-  pointsCost    Int
-  stock         Int?
-  imageUrl      String?
-  isActive      Boolean     @default(true)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  business      Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  businessId  String
+  title       String
+  description String?
+  pointsCost  Int
+  stock       Int?
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId, isActive])
 }
 
 model Promotion {
-  id              String                 @id @default(cuid())
+  id              String                @id @default(cuid())
   businessId      String
   title           String
   description     String?
@@ -370,13 +400,13 @@ model Promotion {
   endsAt          DateTime
   imageUrl        String?
   code            String?
-  targetTierIds   String[]               @default([])
+  targetTierIds   String[]              @default([])
   broadcastAt     DateTime?
   broadcastSentBy String?
-  isActive        Boolean                @default(true)
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  business        Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  isActive        Boolean               @default(true)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  business        Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
   redemptions     PromotionRedemption[]
 
   @@unique([businessId, code], name: "Promotion_businessId_code_key")
@@ -399,51 +429,51 @@ model PromotionRedemption {
 }
 
 model Event {
-  id              String      @id @default(cuid())
-  businessId      String
-  title           String
-  description     String?
-  startsAt        DateTime
-  endsAt          DateTime?
-  location        String?
-  isReminderOn    Boolean     @default(true)
-  reminderSentAt  DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  business        Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id             String    @id @default(cuid())
+  businessId     String
+  title          String
+  description    String?
+  startsAt       DateTime
+  endsAt         DateTime?
+  location       String?
+  isReminderOn   Boolean   @default(true)
+  reminderSentAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId, startsAt])
   @@index([startsAt, isReminderOn, reminderSentAt])
 }
 
 model Message {
-  id             String          @id @default(cuid())
-  businessId     String
-  userId         String?
-  contactPhone   String?
-  channel        MessageChannel
-  direction      String
-  externalId     String?
-  status         MessageStatus?
-  body           String
-  metadata       Json?
-  sentAt         DateTime?
-  readByStaffAt  DateTime?
-  createdAt      DateTime        @default(now())
-  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user           User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
-  attachments    MessageAttachment[]
+  id            String              @id @default(cuid())
+  businessId    String
+  userId        String?
+  contactPhone  String?
+  channel       MessageChannel
+  direction     String
+  externalId    String?
+  status        MessageStatus?
+  body          String
+  metadata      Json?
+  sentAt        DateTime?
+  readByStaffAt DateTime?
+  createdAt     DateTime            @default(now())
+  business      Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user          User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attachments   MessageAttachment[]
 
+  @@unique([channel, externalId])
   @@index([businessId, channel, createdAt])
   @@index([businessId, direction, createdAt])
   @@index([businessId, contactPhone, createdAt])
   @@index([businessId, readByStaffAt])
   @@index([userId])
-  @@unique([channel, externalId])
 }
 
 model LoyaltyTransaction {
-  id             String            @id @default(cuid())
+  id             String              @id @default(cuid())
   businessId     String
   membershipId   String
   userId         String?
@@ -451,13 +481,13 @@ model LoyaltyTransaction {
   pointsDelta    Int
   description    String?
   expiresAt      DateTime?
-  refundSourceId String?           @unique
-  expirySourceId String?           @unique
+  refundSourceId String?             @unique
+  expirySourceId String?             @unique
   metadata       Json?
-  createdAt      DateTime          @default(now())
-  business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  membership     Membership        @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  user           User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt      DateTime            @default(now())
+  business       Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  membership     Membership          @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  user           User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
   refundSource   LoyaltyTransaction? @relation("RefundSource", fields: [refundSourceId], references: [id], onDelete: SetNull)
   refundTarget   LoyaltyTransaction? @relation("RefundSource")
   expirySource   LoyaltyTransaction? @relation("ExpirySource", fields: [expirySourceId], references: [id], onDelete: SetNull)
@@ -487,17 +517,17 @@ model MessageAttachment {
 }
 
 model Notification {
-  id          String    @id @default(cuid())
-  userId      String
-  title       String
-  body        String
-  type        String
-  isRead      Boolean   @default(false)
-  actionUrl   String?
-  metadata    Json?
-  createdAt   DateTime  @default(now())
-  readAt      DateTime?
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      String
+  isRead    Boolean   @default(false)
+  actionUrl String?
+  metadata  Json?
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead, createdAt])
 }
@@ -542,30 +572,30 @@ model CustomerImportRun {
 }
 
 model PushSubscription {
-  id          String    @id @default(cuid())
-  userId      String
-  endpoint    String    @unique
-  p256dh      String
-  auth        String
-  userAgent   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model UserConsent {
-  id         String       @id @default(cuid())
+  id         String         @id @default(cuid())
   userId     String
   businessId String?
   type       ConsentType
   channel    ConsentChannel
   source     String
-  grantedAt  DateTime     @default(now())
+  grantedAt  DateTime       @default(now())
   revokedAt  DateTime?
-  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business   Business?    @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business   Business?      @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
   @@index([userId, type, grantedAt])
   @@index([businessId, type])
@@ -578,10 +608,12 @@ model AiTokenUsage {
   userId           String?
   runtime          String
   model            String?
-  messageUnits     Int            @default(1)
-  promptTokens     Int?
-  completionTokens Int?
-  totalTokens      Int?
+  messageUnits         Int            @default(1)
+  promptTokens         Int?
+  completionTokens     Int?
+  totalTokens          Int?
+  cacheReadTokens      Int?
+  cacheCreationTokens  Int?
   createdAt        DateTime       @default(now())
   business         Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   session          AiChatSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
@@ -600,8 +632,8 @@ model StaffAuditLog {
   targetId    String?
   metadata    Json?
   createdAt   DateTime @default(now())
-  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  actorUser   User?     @relation("StaffAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actorUser   User?    @relation("StaffAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([businessId, createdAt])
   @@index([actorUserId, createdAt])
@@ -688,6 +720,18 @@ enum DocumentStatus {
   FAILED
 }
 
+enum DocumentSourceType {
+  FILE
+  URL
+}
+
+enum WebSourceStatus {
+  PENDING
+  CRAWLING
+  READY
+  FAILED
+}
+
 enum PromotionType {
   FLASH_SALE
   DISCOUNT
@@ -720,24 +764,24 @@ enum BusinessCategory {
 }
 
 model OcrReceipt {
-  id              String              @id @default(cuid())
-  businessId      String
-  userId          String
-  membershipId    String?
-  imageUrl        String
-  rawOcrText      String?
-  parsedTotal     Decimal?          @db.Decimal(10, 2)
-  parsedBusiness  String?
-  pointsToAward   Int?
-  status          OcrReceiptStatus    @default(PENDING_REVIEW)
-  reviewedAt      DateTime?
-  reviewedBy      String?
-  transactionId   String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  business        Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reviewer        User?               @relation("OcrReceiptReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  id             String           @id @default(cuid())
+  businessId     String
+  userId         String
+  membershipId   String?
+  imageUrl       String
+  rawOcrText     String?
+  parsedTotal    Decimal?         @db.Decimal(10, 2)
+  parsedBusiness String?
+  pointsToAward  Int?
+  status         OcrReceiptStatus @default(PENDING_REVIEW)
+  reviewedAt     DateTime?
+  reviewedBy     String?
+  transactionId  String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  business       Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewer       User?            @relation("OcrReceiptReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
 
   @@index([businessId, status, createdAt])
   @@index([userId])
@@ -751,35 +795,35 @@ enum OcrReceiptStatus {
 }
 
 model BusinessSubscription {
-  id                String                   @id @default(cuid())
-  businessId        String
-  planId            BusinessPlanId
-  status            SubscriptionStatus       @default(ACTIVE)
-  yocoCustomerId    String?
-  yocoSubscriptionId String?                 @unique
+  id                 String             @id @default(cuid())
+  businessId         String
+  planId             BusinessPlanId
+  status             SubscriptionStatus @default(ACTIVE)
+  yocoCustomerId     String?
+  yocoSubscriptionId String?            @unique
   currentPeriodStart DateTime
-  currentPeriodEnd  DateTime
-  cancelAtPeriodEnd Boolean                  @default(false)
-  createdAt         DateTime                 @default(now())
-  updatedAt         DateTime                 @updatedAt
-  business          Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  business           Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([status])
 }
 
 model BusinessInvoice {
-  id             String          @id @default(cuid())
-  businessId     String
-  planId         BusinessPlanId
-  amountZar      Int
-  status         InvoiceStatus   @default(PENDING)
-  yocoPaymentId  String?         @unique
-  issuedAt       DateTime        @default(now())
-  paidAt         DateTime?
-  periodStart    DateTime
-  periodEnd      DateTime
-  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id            String         @id @default(cuid())
+  businessId    String
+  planId        BusinessPlanId
+  amountZar     Int
+  status        InvoiceStatus  @default(PENDING)
+  yocoPaymentId String?        @unique
+  issuedAt      DateTime       @default(now())
+  paidAt        DateTime?
+  periodStart   DateTime
+  periodEnd     DateTime
+  business      Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([status])

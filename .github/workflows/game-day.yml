@@ -1,0 +1,90 @@
+name: Chaos Game Day
+
+# Converts the chaos-drill playbook (OPERATIONS.md §E-02) into recurring,
+# executed evidence: every quarter this opens a tracking issue with the drill
+# checklist. The team runs the drills, records RTO/RPO and observations in the
+# issue, then closes it. Closed issues are the audit trail that drills actually
+# ran — not just that a playbook exists.
+
+on:
+  schedule:
+    # 09:00 UTC on the 1st of Jan / Apr / Jul / Oct
+    - cron: "0 9 1 1,4,7,10 *"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Where the drill runs"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  open-drill:
+    name: Open quarterly drill issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Create game-day tracking issue
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const env = context.payload.inputs?.environment || 'staging';
+            const q = Math.floor((new Date().getUTCMonth()) / 3) + 1;
+            const year = new Date().getUTCFullYear();
+            const title = `Chaos Game Day — ${year} Q${q} (${env})`;
+
+            const body = [
+              `Quarterly chaos game day per **OPERATIONS.md §E-02**. Assign an`,
+              `incident lead and an observer. Capture metrics/Sentry snapshots and`,
+              `record results inline, then close this issue as the executed evidence.`,
+              ``,
+              `**Targets:** RTO ≤ 1h, RPO ≤ 15m (see docs/SLO.md §3).`,
+              `**Environment:** ${env}`,
+              ``,
+              `### Roles`,
+              `- Incident lead: @`,
+              `- Observer: @`,
+              `- Sentry release tag: `,
+              ``,
+              `### Drill 1 — Redis blackout (15m)`,
+              `- [ ] /api/health?deep=1 returns 503 with checks.redis.ok=false`,
+              `- [ ] OTP request still succeeds (in-memory fallback)`,
+              `- [ ] Loyalty earn/redeem still succeed`,
+              `- [ ] WhatsApp inbound webhook still returns 200`,
+              `- [ ] Redis restored; BullMQ resumes`,
+              ``,
+              `### Drill 2 — Ollama outage (10m)`,
+              `- [ ] Anthropic fallback answers /api/ai/chat`,
+              `- [ ] metrics show runtime="anthropic" incrementing`,
+              `- [ ] rag.ollama_fallback breadcrumb in Sentry`,
+              `- [ ] Primary runtime restored`,
+              ``,
+              `### Drill 3 — Postgres partition (20m)`,
+              `- [ ] Writes return 503; checks.database.ok=false`,
+              `- [ ] Replica promotion executed`,
+              `- [ ] **Achieved RTO: ___ / RPO: ___** (vs 1h / 15m)`,
+              `- [ ] Old primary rejoins as replica`,
+              ``,
+              `### Drill 4 — Cosign verification (5m)`,
+              `- [ ] Latest image digest verifies against the GitHub OIDC identity`,
+              ``,
+              `### Outcome`,
+              `- [ ] Observations recorded; playbook amended if needed`,
+              `- [ ] Follow-up issues opened for any regression`,
+            ].join('\n');
+
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['game-day', 'reliability'],
+            });
+            core.notice(`Opened ${title}: ${issue.html_url}`);

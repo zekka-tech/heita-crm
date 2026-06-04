@@ -4,6 +4,7 @@ import NextAuth from "next-auth";
 import { authBaseConfig } from "@/lib/auth.config";
 import {
   CSRF_COOKIE,
+  CSRF_HEADER,
   generateCsrfToken,
   isValidCsrfToken
 } from "@/lib/csrf";
@@ -50,11 +51,18 @@ function buildCsp(nonce: string): string {
     // strict-dynamic: scripts loaded via the nonce may load other scripts.
     // unsafe-inline is ignored in CSP3 browsers when strict-dynamic is present.
     // https: covers legacy browsers that don't support strict-dynamic.
-    `script-src 'strict-dynamic' 'nonce-${nonce}' https: 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
+    // 'wasm-unsafe-eval' lets the client-side receipt OCR engine (Tesseract.js)
+    // compile its self-hosted WebAssembly core. It only permits WASM
+    // compilation/instantiation — not arbitrary JS eval — so it is far tighter
+    // than 'unsafe-eval' and the standard way to allow WASM under a strict CSP.
+    `script-src 'strict-dynamic' 'nonce-${nonce}' 'wasm-unsafe-eval' https: 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     `img-src 'self' data: blob: ${IMG_SRC_DOMAINS}`,
     "font-src 'self' data: https://fonts.gstatic.com",
     `connect-src 'self' ${CONNECT_SRC_DOMAINS}`,
+    // Tesseract.js spawns its (self-hosted /tesseract/worker.min.js) Web Worker
+    // from a same-origin blob: URL (workerBlobURL). 'self' alone is insufficient.
+    "worker-src 'self' blob:",
     "frame-ancestors 'none'",
     "form-action 'self'",
     "base-uri 'self'",
@@ -190,19 +198,34 @@ export default auth((request) => {
     return decorateApiResponse(response, requestId);
   }
 
+  // Pre-compute the CSRF token so it can be injected into the forwarded
+  // request headers. Server Components read cookies() from the REQUEST,
+  // not the response, so they never see a cookie set for the first time
+  // by middleware. Forwarding via request headers (like x-nonce) is the
+  // only reliable path on first load.
+  const csrfToken = isValidCsrfToken(incomingCsrf) ? incomingCsrf : generateCsrfToken();
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(requestIdHeader, requestId);
-  // Pass nonce to Server Components via request header
   requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set(CSRF_HEADER, csrfToken);
   const response = NextResponse.next({
     request: {
       headers: requestHeaders
     }
   });
-  const token = ensureCsrfCookie(response, incomingCsrf);
-  return decoratePageResponse(response, requestId, token, nonce);
+  if (!isValidCsrfToken(incomingCsrf)) {
+    response.cookies.set(CSRF_COOKIE, csrfToken, {
+      httpOnly: false,
+      sameSite: "strict",
+      secure: true,
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7
+    });
+  }
+  return decoratePageResponse(response, requestId, csrfToken, nonce);
 });
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"]
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/health).*)"]
 };

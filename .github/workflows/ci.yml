@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "release/**"]
   pull_request:
-    branches: [main]
+    branches: [main, "release/**"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -42,7 +42,7 @@ jobs:
       DATABASE_URL: "postgresql://heita:heita@localhost:5432/heita"
       NODE_ENV: "production"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -51,6 +51,8 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --progress=false
+        env:
+          NODE_ENV: development
 
       - name: Prisma generate
         run: npx prisma generate
@@ -69,9 +71,14 @@ jobs:
           # Business_name_trgm_idx (GIN) and DocumentChunk_embedding_hnsw_idx (HNSW)
           # cannot be expressed in schema.prisma — they are Prisma-unmanaged and are
           # intentionally created via raw SQL in migrations 0006 and 0016.
+          # NOTE: the trailing `|| true` is required. This step runs under
+          # `bash -e`; when there is no meaningful drift the final `grep -v`
+          # filters out every line and exits 1, which (as a command-substitution
+          # in an assignment) would abort the step BEFORE the `if` below — failing
+          # CI on a clean schema. `|| true` keeps MEANINGFUL empty without aborting.
           MEANINGFUL=$(echo "$DRIFT" \
             | grep -E "^(ALTER TABLE|DROP TABLE|CREATE TABLE|DROP INDEX|CREATE INDEX|ADD CONSTRAINT|DROP CONSTRAINT)" \
-            | grep -vE "Business_name_trgm_idx|DocumentChunk_embedding_hnsw_idx")
+            | grep -vE "Business_name_trgm_idx|DocumentChunk_embedding_hnsw_idx" || true)
 
           if [ -n "$MEANINGFUL" ]; then
             echo "::error::Unexpected schema drift detected:"
@@ -122,9 +129,13 @@ jobs:
 
       - name: Unit tests with coverage enforcement
         run: npm run test:coverage
+        env:
+          NODE_ENV: test
 
       - name: Accessibility smoke tests (axe-core, WCAG AA)
         run: npm run test:a11y
+        env:
+          NODE_ENV: test
 
       - name: Build
         env:
@@ -168,9 +179,9 @@ jobs:
       REDIS_URL: "redis://localhost:6379"
       NODE_ENV: "test"
       # Dev OTP mode so Playwright can read OTP from the page
-      AUTH_DEV_OTP: "true"
+      E2E_EXPOSE_DEV_OTP: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -181,7 +192,12 @@ jobs:
         run: npm ci --prefer-offline --no-audit --progress=false
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx playwright install --with-deps chromium
+          else
+            npx playwright install --with-deps
+          fi
 
       - name: Prisma generate + migrate
         run: npx prisma generate && npx prisma migrate deploy
@@ -190,7 +206,12 @@ jobs:
         run: npm run build
 
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx playwright test --project=smoke
+          else
+            npm run test:e2e
+          fi
 
       - name: Upload Playwright report on failure
         if: failure()
@@ -235,10 +256,10 @@ jobs:
       DATABASE_URL: "postgresql://heita:heita@localhost:5432/heita"
       REDIS_URL: "redis://localhost:6379"
       NODE_ENV: "test"
-      AUTH_DEV_OTP: "true"
+      E2E_EXPOSE_DEV_OTP: "1"
       PLAYWRIGHT_SMOKE: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -273,7 +294,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          # Full history so gitleaks can resolve the PR commit range
+          # (<base>^..<head>); a shallow clone fails with "unknown revision".
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -323,7 +348,7 @@ jobs:
       DATABASE_URL: "postgresql://heita:heita@localhost:5432/heita"
       NODE_ENV: "production"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -332,6 +357,8 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --progress=false
+        env:
+          NODE_ENV: development
 
       - name: Prisma generate
         run: npx prisma generate
@@ -346,19 +373,20 @@ jobs:
       - name: Check bundle size budgets
         run: npm run bundle-check
 
-  lighthouse:
-    name: Lighthouse CI (Web Vitals)
+  rag-eval:
+    name: RAG eval harness (informational)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
+    # Non-blocking: a score regression surfaces in the job summary but does
+    # NOT prevent merging. Raise thresholds in retrieval.eval.ts once the
+    # pipeline stabilises.
+    continue-on-error: true
     if: github.event_name == 'pull_request'
     needs: quality
     env:
       NEXT_TELEMETRY_DISABLED: "1"
-      AUTH_SECRET: "ci-only-secret"
-      DATABASE_URL: "postgresql://heita:heita@localhost:5432/heita"
-      NODE_ENV: "production"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -368,8 +396,57 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --progress=false
 
+      - name: Run RAG eval harness
+        run: npm run test:eval
+
+  lighthouse:
+    name: Lighthouse CI (Web Vitals)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: github.event_name == 'pull_request'
+    needs: quality
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: heita
+          POSTGRES_PASSWORD: heita
+          POSTGRES_DB: heita
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U heita -d heita"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      AUTH_SECRET: "ci-only-secret"
+      DATABASE_URL: "postgresql://heita:heita@localhost:5432/heita"
+      NODE_ENV: "production"
+      POS_SHARED_SECRET: "ci-lighthouse-pos-secret"
+      METRICS_BEARER_TOKEN: "ci-lighthouse-metrics-token"
+      CRON_SECRET: "ci-lighthouse-cron-secret-not-for-prod"
+      TURNSTILE_SECRET_KEY: "ci-lighthouse-turnstile-key"
+      OLLAMA_BASE_URL: "http://localhost:11434"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit --progress=false
+        env:
+          NODE_ENV: development
+
       - name: Prisma generate
         run: npx prisma generate
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
 
       - name: Build
         env:

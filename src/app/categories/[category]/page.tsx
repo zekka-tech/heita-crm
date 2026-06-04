@@ -15,6 +15,14 @@ type CategoryPageProps = {
   searchParams?: Promise<{ province?: string; city?: string }>;
 };
 
+// Pre-build one static page per category at deploy time so the first visitor
+// gets a cached response, not a cold ISR miss.
+export function generateStaticParams() {
+  return Object.values(BusinessCategory).map((cat) => ({
+    category: cat.toLowerCase()
+  }));
+}
+
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const { category } = await params;
   const normalized = category.toUpperCase().replace(/-/g, "_");
@@ -52,7 +60,9 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   };
 }
 
-export const dynamic = "force-dynamic";
+// Public category pages contain no user-specific content — ISR with 1h TTL.
+// Individual business joins are handled by /b/[slug]/join which stays dynamic.
+export const revalidate = 3600;
 
 export default async function CategoryPage({
   params,

@@ -52,6 +52,10 @@ export default async function DashboardLayout({
       role: membership.role
     }));
 
+  if (!businesses.some((b) => b.id === businessId)) {
+    redirect("/home");
+  }
+
   return (
     <div className="flex min-h-screen">
       <DashboardSidebarNav businessId={businessId} />
