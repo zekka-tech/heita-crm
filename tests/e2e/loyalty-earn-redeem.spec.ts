@@ -15,10 +15,22 @@ import { createHmac } from "node:crypto";
 
 import { BusinessCategory, Province } from "@prisma/client";
 import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import { prisma } from "../../src/lib/prisma";
 import { createBusinessWithDefaults } from "../../src/server/services/business.service";
+
+async function readDevOtp(
+  payload: { devCode?: string },
+  chip: Locator
+): Promise<string | undefined> {
+  if (payload.devCode) {
+    return payload.devCode;
+  }
+
+  const chipText = await chip.textContent({ timeout: 10_000 }).catch(() => "");
+  return (chipText ?? "").match(/(\d{6})/)?.[1];
+}
 
 async function signInAs(page: Page, phone: string) {
   // Clear any existing session first: this helper is called twice in the same
@@ -29,11 +41,13 @@ async function signInAs(page: Page, phone: string) {
   await page.context().clearCookies();
   await page.goto("/sign-in");
   await page.getByLabel(/phone number/i).fill(phone);
+  const otpResponsePromise = page.waitForResponse((response) =>
+    response.url().includes("/api/auth/request-otp") && response.request().method() === "POST"
+  );
   await page.getByRole("button", { name: /send.*code/i }).click();
+  const otpPayload = (await (await otpResponsePromise).json()) as { devCode?: string };
   const devOtpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
-  await expect(devOtpChip).toBeVisible({ timeout: 10_000 });
-  const devOtpText = (await devOtpChip.textContent()) ?? "";
-  const devOtp = devOtpText.match(/(\d{6})/)?.[1];
+  const devOtp = await readDevOtp(otpPayload, devOtpChip);
   expect(devOtp).toBeTruthy();
   await page.getByLabel(/verification code|code/i).fill(devOtp!);
   await page.getByRole("button", { name: /verify and sign in|verify sign in/i }).click();
@@ -127,11 +141,15 @@ test("customer earns and redeems loyalty points end-to-end", async ({ page, requ
     await page.goto(`/dashboard/${business.id}/loyalty`);
 
     // Mutating loyalty actions require a fresh staff step-up OTP. Request one,
-    // read the dev code surfaced on the page, and verify to unlock the forms.
+    // read the dev code from the JSON response, and verify to unlock the forms.
+    const stepUpResponsePromise = page.waitForResponse((response) =>
+      response.url().includes("/api/auth/request-staff-otp") &&
+      response.request().method() === "POST"
+    );
     await page.getByRole("button", { name: /send staff otp/i }).click();
+    const stepUpPayload = (await (await stepUpResponsePromise).json()) as { devCode?: string };
     const stepUpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
-    await expect(stepUpChip).toBeVisible({ timeout: 10_000 });
-    const stepUpCode = ((await stepUpChip.textContent()) ?? "").match(/(\d{6})/)?.[1];
+    const stepUpCode = await readDevOtp(stepUpPayload, stepUpChip);
     expect(stepUpCode).toBeTruthy();
     await page.getByLabel(/verification code/i).fill(stepUpCode!);
     await page.getByRole("button", { name: /verify staff access/i }).click();
