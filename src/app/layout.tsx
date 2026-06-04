@@ -93,7 +93,16 @@ export default async function RootLayout({
       <head>
         {/* iOS home screen icon — requires PNG, SVGs are not used by Safari */}
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+        {/* Preconnect / dns-prefetch for third-party origins hit on first paint */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
+        {/* Business logos served from Cloudflare R2 */}
+        {process.env.NEXT_PUBLIC_R2_HOST && (
+          <link rel="dns-prefetch" href={`//${process.env.NEXT_PUBLIC_R2_HOST}`} />
+        )}
+        {/* PostHog analytics (only loaded after consent) */}
+        {process.env.NEXT_PUBLIC_POSTHOG_HOST && (
+          <link rel="dns-prefetch" href={process.env.NEXT_PUBLIC_POSTHOG_HOST} />
+        )}
         <link
           rel="preconnect"
           href="https://fonts.gstatic.com"

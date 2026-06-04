@@ -1,26 +1,39 @@
 {
   "ci": {
     "collect": {
-      "numberOfRuns": 1,
+      "numberOfRuns": 2,
       "startServerCommand": "node .next/standalone/server.js",
-      "url": ["http://localhost:3000/", "http://localhost:3000/sign-in"]
+      "url": [
+        "http://localhost:3000/",
+        "http://localhost:3000/sign-in"
+      ]
     },
     "assert": {
       "preset": "lighthouse:no-pwa",
       "assertions": {
-        "categories:performance": ["warn", {"minScore": 0.9}],
-        "categories:accessibility": ["warn", {"minScore": 0.9}],
-        "categories:best-practices": ["warn", {"minScore": 0.9}],
-        "categories:seo": ["warn", {"minScore": 0.9}],
-        "cumulative-layout-shift": ["warn", {"maxNumericValue": 0.15}],
-        "total-blocking-time": ["warn", {"maxNumericValue": 500}],
-        "errors-in-console": ["warn", {"minScore": 0}],
-        "bf-cache": "off",
-        "lcp-lazy-loaded": "off",
-        "non-composited-animations": "off",
-        "prioritize-lcp-image": "off",
-        "target-size": ["warn", {"minScore": 0}],
-        "meta-description": ["warn", {"minScore": 0}]
+        "categories:performance":  ["error", {"minScore": 0.75}],
+        "categories:accessibility":["error", {"minScore": 0.90}],
+        "categories:best-practices":["error", {"minScore": 0.85}],
+        "categories:seo":          ["error", {"minScore": 0.90}],
+
+        "cumulative-layout-shift": ["error", {"maxNumericValue": 0.10}],
+        "total-blocking-time":     ["error", {"maxNumericValue": 400}],
+        "largest-contentful-paint":["warn",  {"maxNumericValue": 3000}],
+        "first-contentful-paint":  ["warn",  {"maxNumericValue": 2000}],
+        "speed-index":             ["warn",  {"maxNumericValue": 4000}],
+        "interactive":             ["warn",  {"maxNumericValue": 5000}],
+
+        "errors-in-console":       ["error", {"minScore": 0}],
+        "uses-optimized-images":   ["warn",  {"minScore": 0}],
+        "uses-responsive-images":  ["warn",  {"minScore": 0}],
+        "render-blocking-resources":["warn", {"minScore": 0}],
+
+        "bf-cache":                "off",
+        "lcp-lazy-loaded":         "off",
+        "non-composited-animations":"off",
+        "prioritize-lcp-image":    "off",
+        "target-size":             ["warn", {"minScore": 0}],
+        "meta-description":        ["warn", {"minScore": 0}]
       }
     },
     "upload": {

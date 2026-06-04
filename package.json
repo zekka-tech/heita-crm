@@ -105,21 +105,27 @@
   },
   "bundlesize": [
     {
-      "path": ".next/static/chunks/pages/_app-*.js",
-      "maxSize": "250 kB"
-    },
-    {
-      "path": ".next/static/chunks/main-*.js",
-      "maxSize": "250 kB"
-    },
-    {
-      "path": ".next/static/chunks/*.js",
-      "maxSize": "250 kB",
+      "comment": "React + Next.js runtime — fixed upstream cost, not actionable",
+      "path": ".next/static/chunks/framework-*.js",
+      "maxSize": "500 kB",
       "compression": "gzip"
     },
     {
-      "path": ".next/static/chunks/framework-*.js",
-      "maxSize": "500 kB",
+      "comment": "Next.js main runtime chunk",
+      "path": ".next/static/chunks/main-*.js",
+      "maxSize": "120 kB",
+      "compression": "gzip"
+    },
+    {
+      "comment": "Per-route JS chunks — Recharts is lazy-loaded so it never\n      lands here; 200 kB gzip is the ceiling for any single route bundle",
+      "path": ".next/static/chunks/*.js",
+      "maxSize": "200 kB",
+      "compression": "gzip"
+    },
+    {
+      "comment": "posthog-js — lazy-loaded, consent-gated; 120 kB gzip is generous",
+      "path": ".next/static/chunks/*posthog*.js",
+      "maxSize": "120 kB",
       "compression": "gzip"
     }
   ]

@@ -123,6 +123,9 @@ const envSchema = z
     NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
     NEXT_PUBLIC_POSTHOG_HOST: z.string().url().optional(),
 
+    // CDN hostname for dns-prefetch (e.g. "pub-abc.r2.dev" or "cdn.heita.co.za")
+    NEXT_PUBLIC_R2_HOST: z.string().optional(),
+
     // Public app config
     NEXT_PUBLIC_APP_URL: z.string().url().optional(),
     NEXT_PUBLIC_APP_VERSION: z.string().optional(),
