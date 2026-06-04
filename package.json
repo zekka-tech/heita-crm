@@ -122,12 +122,6 @@
       "path": ".next/static/chunks/*.js",
       "maxSize": "200 kB",
       "compression": "gzip"
-    },
-    {
-      "comment": "posthog-js — lazy-loaded, consent-gated; 120 kB gzip is generous",
-      "path": ".next/static/chunks/*posthog*.js",
-      "maxSize": "120 kB",
-      "compression": "gzip"
     }
   ]
 }

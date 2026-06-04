@@ -179,7 +179,7 @@ jobs:
       REDIS_URL: "redis://localhost:6379"
       NODE_ENV: "test"
       # Dev OTP mode so Playwright can read OTP from the page
-      AUTH_DEV_OTP: "true"
+      E2E_EXPOSE_DEV_OTP: "1"
     steps:
       - uses: actions/checkout@v6
 
@@ -246,7 +246,7 @@ jobs:
       DATABASE_URL: "postgresql://heita:heita@localhost:5432/heita"
       REDIS_URL: "redis://localhost:6379"
       NODE_ENV: "test"
-      AUTH_DEV_OTP: "true"
+      E2E_EXPOSE_DEV_OTP: "1"
       PLAYWRIGHT_SMOKE: "1"
     steps:
       - uses: actions/checkout@v6

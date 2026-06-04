@@ -213,7 +213,9 @@
     "repliesSent30d": "Replies sent (30d)",
     "promotions": "Promotions",
     "events": "Events",
-    "viewFullAnalytics": "View full analytics"
+    "viewFullAnalytics": "View full analytics",
+    "setupChecklist": "Setup checklist",
+    "setupChecklistBlurb": "Complete these steps to unlock the full power of Heita."
   },
   "promotions": {
     "title": "Promotions",

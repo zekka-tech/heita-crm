@@ -213,7 +213,9 @@
     "repliesSent30d": "Iimpendulo ezithunyelweyo (30d)",
     "promotions": "Izikhuthazi",
     "events": "Iziganeko",
-    "viewFullAnalytics": "Jonga uhlalutyo olugcweleyo"
+    "viewFullAnalytics": "Jonga uhlalutyo olugcweleyo",
+    "setupChecklist": "Uluhlu lokusetha",
+    "setupChecklistBlurb": "Gcwalisa la manyathelo ukuvula amandla apheleleyo e-Heita."
   },
   "promotions": {
     "title": "Izikhuthazi",
