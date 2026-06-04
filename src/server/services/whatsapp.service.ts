@@ -11,6 +11,7 @@ import {
   sendWhatsAppTemplateMessage,
   sendWhatsAppTextMessage
 } from "@/lib/whatsapp";
+import { handleCommerceCommand } from "@/server/services/whatsapp-commerce.service";
 
 const WEBHOOK_TIMESTAMP_SKEW_SECONDS = 5 * 60;
 
@@ -412,6 +413,39 @@ async function routeInboundToBusiness(input: RouteInput): Promise<void> {
       userId: existingUser.id,
       joinChannel: JoinChannel.WHATSAPP_BOT
     });
+    return;
+  }
+
+  const commerceResult = await handleCommerceCommand({
+    phoneNumberId: input.wabaPhoneId,
+    to: input.fromPhone,
+    body: input.body,
+    businessId: input.businessId,
+    businessName: input.businessName,
+    userId: existingUser.id
+  });
+
+  if (commerceResult.handled) {
+    if (commerceResult.reply) {
+      try {
+        const response = await sendWhatsAppTextMessage({
+          phoneNumberId: input.wabaPhoneId,
+          to: input.fromPhone,
+          body: commerceResult.reply
+        });
+        await logOutboundWhatsappMessage({
+          businessId: input.businessId,
+          userId: existingUser.id,
+          contactPhone: input.fromPhone,
+          externalId: response.messageId,
+          body: commerceResult.reply,
+          status: MessageStatus.SENT,
+          metadata: { kind: "commerce_reply" }
+        });
+      } catch (error) {
+        logger.error({ err: error }, "whatsapp.commerce.reply_failed");
+      }
+    }
     return;
   }
 
