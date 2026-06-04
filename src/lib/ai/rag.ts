@@ -1,7 +1,8 @@
 import { anthropicConfigured, streamAnthropicChat } from "@/lib/ai/anthropic";
 import { embedText } from "@/lib/ai/embeddings";
 import { ollamaConfigured, streamOllamaChat } from "@/lib/ai/ollama";
-import { findSimilarDocumentChunks, type SimilarityMatch } from "@/lib/ai/vector-store";
+import { rerankChunks } from "@/lib/ai/reranker";
+import { hybridSearch, type SimilarityMatch } from "@/lib/ai/vector-store";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 
@@ -31,6 +32,8 @@ export type RagStreamInput = {
 };
 
 const MAX_HISTORY = 12;
+// Final top-K chunks passed to the LLM after threshold + reranking.
+const TOP_K_CONTEXT = 5;
 
 function defaultSystemPrompt(businessName: string) {
   return [
@@ -38,32 +41,30 @@ function defaultSystemPrompt(businessName: string) {
     "Answer clearly, concisely, and truthfully.",
     "Use the retrieved business documents as your primary source of truth.",
     "If the answer is not supported by the retrieved context, say that directly and suggest contacting the business team.",
-    "Never invent hours, pricing, policies, availability, or legal claims."
+    "Never invent hours, pricing, policies, availability, or legal claims.",
   ].join(" ");
 }
 
-function uniqueCitations(matches: SimilarityMatch[]) {
+function uniqueCitations(matches: SimilarityMatch[]): RagCitation[] {
   const seen = new Set<string>();
   const citations: RagCitation[] = [];
 
   for (const match of matches) {
     const key = `${match.documentId}:${match.chunkIndex}`;
-    if (seen.has(key)) {
-      continue;
-    }
+    if (seen.has(key)) continue;
     seen.add(key);
     citations.push({
       documentId: match.documentId,
       documentTitle: match.documentTitle,
       chunkIndex: match.chunkIndex,
-      similarity: match.similarity
+      similarity: match.similarity,
     });
   }
 
   return citations;
 }
 
-function buildContext(matches: SimilarityMatch[]) {
+function buildContext(matches: SimilarityMatch[]): string {
   if (!matches.length) {
     return "No supporting business documents were retrieved for this question.";
   }
@@ -76,25 +77,75 @@ function buildContext(matches: SimilarityMatch[]) {
     .join("\n\n");
 }
 
-async function buildSystemPrompt(input: { businessId: string; userMessage: string }) {
+/**
+ * Build the string used for embedding and FTS retrieval.
+ *
+ * For follow-up turns in a conversation, short questions ("What about weekends?",
+ * "And the price?") often rely on an implicit referent from the prior assistant
+ * reply. Prepending a short excerpt of that reply gives the embedding model
+ * enough context to retrieve the right chunks without an extra LLM call.
+ */
+function buildQueryForRetrieval(messages: ChatTurn[]): string {
+  const history = messages.slice(-MAX_HISTORY);
+  const latestUser = [...history].reverse().find((m) => m.role === "user");
+  if (!latestUser) return "";
+
+  const question = latestUser.content.trim();
+
+  // Only contextualize short follow-up questions that are likely to have
+  // unresolved references. Long questions are self-contained.
+  if (question.length >= 120) return question;
+
+  const idx = [...history].lastIndexOf(latestUser);
+  const priorAssistant = [...history]
+    .slice(0, idx)
+    .reverse()
+    .find((m) => m.role === "assistant");
+
+  if (priorAssistant) {
+    return `${priorAssistant.content.slice(0, 300)}\n\n${question}`;
+  }
+
+  return question;
+}
+
+async function buildSystemPrompt(input: { businessId: string; messages: ChatTurn[] }) {
   const business = await prisma.business.findFirstOrThrow({
     where: { id: input.businessId, deletedAt: null },
-    include: { aiWorkspace: true }
+    include: { aiWorkspace: true },
   });
 
-  const queryEmbedding = await embedText(input.userMessage);
-  const matches = await findSimilarDocumentChunks({
+  const queryText = buildQueryForRetrieval(input.messages);
+  const queryEmbedding = await embedText(queryText);
+
+  // 1. Hybrid retrieval: semantic (vector, cached embedding) + keyword (FTS) fused via RRF.
+  const candidates = await hybridSearch({
     businessId: input.businessId,
     queryEmbedding,
-    limit: 5
+    queryText,
   });
 
-  const persona = business.aiWorkspace?.systemPrompt?.trim() || defaultSystemPrompt(business.name);
-  const context = buildContext(matches);
+  // 2. Rerank candidates with bge-reranker (falls back to RRF order gracefully).
+  const topChunks = await rerankChunks({
+    query: queryText,
+    chunks: candidates,
+    topK: TOP_K_CONTEXT,
+  });
+
+  if (candidates.length === 0) {
+    logger.info(
+      { businessId: input.businessId, query: queryText.slice(0, 80) },
+      "rag.no_chunks_above_threshold"
+    );
+  }
+
+  const persona =
+    business.aiWorkspace?.systemPrompt?.trim() || defaultSystemPrompt(business.name);
+  const context = buildContext(topChunks);
 
   return {
     prompt: [persona, "Retrieved context:", context].join("\n\n"),
-    citations: uniqueCitations(matches)
+    citations: uniqueCitations(topChunks),
   };
 }
 
@@ -111,13 +162,13 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
       citations: [],
       stream: (async function* () {
         yield "Please send a question to start the conversation.";
-      })()
+      })(),
     };
   }
 
   const { prompt, citations } = await buildSystemPrompt({
     businessId: input.businessId,
-    userMessage: question
+    messages: history,
   });
 
   if (ollamaConfigured()) {
@@ -133,10 +184,10 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
             { role: "system", content: prompt },
             ...history.map((turn) => ({
               role: turn.role,
-              content: turn.content
-            }))
-          ]
-        })
+              content: turn.content,
+            })),
+          ],
+        }),
       };
     } catch (error) {
       logger.warn({ err: error }, "rag.ollama_fallback");
@@ -156,10 +207,10 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
           .filter((turn) => turn.role !== "system")
           .map((turn) => ({
             role: turn.role === "assistant" ? "assistant" : "user",
-            content: turn.content
+            content: turn.content,
           })),
-        model
-      })
+        model,
+      }),
     };
   }
 
@@ -170,6 +221,6 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
     citations,
     stream: (async function* () {
       yield "AI co-worker is not configured for this environment. Add OLLAMA_BASE_URL or ANTHROPIC_API_KEY to enable replies.";
-    })()
+    })(),
   };
 }

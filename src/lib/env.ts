@@ -38,6 +38,7 @@ const envSchema = z
     OLLAMA_BASE_URL: z.string().optional(),
     OLLAMA_CHAT_MODEL: z.string().optional(),
     OLLAMA_EMBED_MODEL: z.string().optional(),
+    OLLAMA_RERANK_MODEL: z.string().optional(),
 
     // Circuit breaker
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.coerce.number().int().min(1).max(20).default(5),
