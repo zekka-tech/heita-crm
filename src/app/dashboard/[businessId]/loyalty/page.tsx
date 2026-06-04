@@ -4,8 +4,7 @@ import { Gift, Plus, Receipt, Users } from "lucide-react";
 import {
   createRewardAction,
   queueCustomerImportAction,
-  updateTierPerksAction,
-  verifyStaffStepUpAction
+  updateTierPerksAction
 } from "@/app/dashboard/[businessId]/loyalty/actions";
 import { StaffStepUpRequest } from "@/components/loyalty/staff-step-up-request";
 import { EarnPointsForm } from "@/app/dashboard/[businessId]/loyalty/earn-points-form";
@@ -22,12 +21,10 @@ import { describeTierPerks } from "@/lib/loyalty";
 
 type LoyaltyDashboardPageProps = {
   params: Promise<{ businessId: string }>;
-  searchParams?: Promise<{ stepUp?: string; devCode?: string }>;
 };
 
 export default async function LoyaltyDashboardPage({
-  params,
-  searchParams
+  params
 }: LoyaltyDashboardPageProps) {
   const { businessId } = await params;
 
@@ -40,7 +37,6 @@ export default async function LoyaltyDashboardPage({
     import("@/lib/prisma"),
     import("@/lib/staff-step-up")
   ]);
-  const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = await auth();
 
   if (!session?.user?.id) {
@@ -120,29 +116,7 @@ export default async function LoyaltyDashboardPage({
               Enter a fresh OTP before issuing points, redeeming balances, or changing the
               reward catalogue. The verification stays valid for 15 minutes.
             </p>
-            <div className="grid gap-3 md:grid-cols-2">
-              <StaffStepUpRequest businessId={business.id} />
-              <form action={verifyStaffStepUpAction} className="grid gap-3">
-                <CsrfField />
-                <input type="hidden" name="businessId" value={business.id} />
-                <Input
-                  name="code"
-                  label="Verification code"
-                  inputMode="numeric"
-                  pattern="\d{6}"
-                  placeholder="123456"
-                  required
-                />
-                <SubmitButton variant="primary">
-                  Verify staff access
-                </SubmitButton>
-              </form>
-            </div>
-            {resolvedSearchParams.stepUp === "invalid" ? (
-              <p className="text-sm text-ink-muted">
-                Verification failed. Request a new code and try again.
-              </p>
-            ) : null}
+            <StaffStepUpRequest businessId={business.id} />
           </Card>
         ) : (
           <Card variant="surface" className="text-sm text-success">
