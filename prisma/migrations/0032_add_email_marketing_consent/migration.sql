@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ConsentType" ADD VALUE 'EMAIL_MARKETING';

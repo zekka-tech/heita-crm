@@ -687,6 +687,7 @@ enum ConsentType {
   PRIVACY_POLICY
   COOKIE_PREFERENCES
   WHATSAPP_MARKETING
+  EMAIL_MARKETING
 }
 
 enum ConsentChannel {

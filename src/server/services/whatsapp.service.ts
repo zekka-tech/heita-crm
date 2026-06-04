@@ -394,6 +394,9 @@ async function routeInboundToBusiness(input: RouteInput): Promise<void> {
     return;
   }
 
+  const optedOut = await handleOptOut({ ...input, existingUser });
+  if (optedOut) return;
+
   const membership = await prisma.membership.findUnique({
     where: {
       businessId_userId: {
@@ -427,6 +430,59 @@ async function routeInboundToBusiness(input: RouteInput): Promise<void> {
       title: `WhatsApp · ${input.fromPhone.slice(-4)}`
     }
   });
+}
+
+const OPT_OUT_KEYWORDS = ["stop", "unsubscribe", "unstop", "cancel", "end", "quit"];
+
+function isOptOutRequest(body: string): boolean {
+  const trimmed = body.trim().toLowerCase();
+  return OPT_OUT_KEYWORDS.some(
+    (keyword) => trimmed === keyword || trimmed.startsWith(`${keyword} `) || trimmed.startsWith(`${keyword}\n`)
+  );
+}
+
+async function handleOptOut(
+  input: RouteInput & { existingUser: { id: string } }
+): Promise<boolean> {
+  if (!isOptOutRequest(input.body)) return false;
+
+  const userId = input.existingUser.id;
+
+  await prisma.userConsent.updateMany({
+    where: {
+      userId,
+      type: "WHATSAPP_MARKETING",
+      revokedAt: null
+    },
+    data: { revokedAt: new Date() }
+  });
+
+  logger.info(
+    { userId, fromPhone: input.fromPhone, businessId: input.businessId },
+    "whatsapp.opt_out_processed"
+  );
+
+  try {
+    const confirmation = "You've been unsubscribed from marketing messages. Reply HELP for assistance.";
+    const response = await sendWhatsAppTextMessage({
+      phoneNumberId: input.wabaPhoneId,
+      to: input.fromPhone,
+      body: confirmation
+    });
+    await logOutboundWhatsappMessage({
+      businessId: input.businessId,
+      userId,
+      contactPhone: input.fromPhone,
+      externalId: response.messageId,
+      body: confirmation,
+      status: MessageStatus.SENT,
+      metadata: { kind: "opt_out_confirmation" }
+    });
+  } catch (error) {
+    logger.error({ err: error, fromPhone: input.fromPhone }, "whatsapp.opt_out_reply_failed");
+  }
+
+  return true;
 }
 
 async function sendOnboardingPrompt(input: RouteInput): Promise<void> {
