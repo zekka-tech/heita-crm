@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { generateAnonymisedBasketReport } from "@/server/services/analytics-export.service";
 
 const BASKET_REPORT_SECRET = process.env.BASKET_REPORT_SECRET;
@@ -12,6 +13,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (!header || !header.startsWith("Bearer ") || header.slice(7) !== BASKET_REPORT_SECRET) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+  }
+
+  const rateLimit = await enforceRateLimit({
+    identifier: "analytics:export",
+    windowSeconds: 300,
+    max: 5
+  });
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: rateLimitHeaders(rateLimit) }
+    );
   }
 
   try {

@@ -56,9 +56,16 @@ export default async function DashboardLayout({
     redirect("/home");
   }
 
+  const currentBusiness = await prisma.business.findUnique({
+    where: { id: businessId, deletedAt: null },
+    select: { isFranchiseHQ: true },
+  });
+
+  const isFranchiseHQ = currentBusiness?.isFranchiseHQ ?? false;
+
   return (
     <div className="flex min-h-screen">
-      <DashboardSidebarNav businessId={businessId} />
+      <DashboardSidebarNav businessId={businessId} isFranchiseHQ={isFranchiseHQ} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         {businesses.length > 1 ? (
@@ -73,7 +80,7 @@ export default async function DashboardLayout({
         <main className="flex-1 pb-24 lg:pb-0">{children}</main>
       </div>
 
-      <DashboardBottomNav businessId={businessId} />
+      <DashboardBottomNav businessId={businessId} isFranchiseHQ={isFranchiseHQ} />
     </div>
   );
 }

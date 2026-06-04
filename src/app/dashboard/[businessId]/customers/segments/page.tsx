@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { Card, CardHeader } from "@/components/ui/card";
 import { redirect } from "next/navigation";
-import { listSegments } from "@/server/services/segment.service";
+import { listSegments, getSegmentMemberCount, type SegmentRules } from "@/server/services/segment.service";
 
 const PREDEFINED_SEGMENTS = [
   {
@@ -45,6 +45,20 @@ export default async function SegmentsPage({
 
   const segments = await listSegments(businessId).catch(() => []);
 
+  // Fetch member counts for saved and predefined segments in parallel
+  const [savedCounts, predefinedCounts] = await Promise.all([
+    Promise.all(
+      segments.map((seg) =>
+        getSegmentMemberCount(businessId, seg.rules as unknown as SegmentRules).catch(() => null as number | null)
+      )
+    ),
+    Promise.all(
+      PREDEFINED_SEGMENTS.map((seg) =>
+        getSegmentMemberCount(businessId, seg.rules as unknown as SegmentRules).catch(() => null as number | null)
+      )
+    ),
+  ]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -56,7 +70,7 @@ export default async function SegmentsPage({
 
       {segments.length > 0 && (
         <div className="grid gap-4">
-          {segments.map((segment) => (
+          {segments.map((segment, idx) => (
             <Card key={segment.id} variant="surface">
               <CardHeader
                 title={segment.name}
@@ -66,6 +80,11 @@ export default async function SegmentsPage({
                 <pre className="text-xs text-muted-foreground bg-muted rounded p-2 overflow-x-auto">
                   {JSON.stringify(segment.rules, null, 2)}
                 </pre>
+                {savedCounts[idx] !== null && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {savedCounts[idx]!.toLocaleString()} members
+                  </p>
+                )}
               </div>
             </Card>
           ))}
@@ -78,7 +97,7 @@ export default async function SegmentsPage({
           description="Pre-built segments you can use for targeted campaigns."
         />
         <div className="px-6 pb-6 grid gap-4 md:grid-cols-3">
-          {PREDEFINED_SEGMENTS.map((segment) => (
+          {PREDEFINED_SEGMENTS.map((segment, idx) => (
             <Card key={segment.name} variant="surface" className="p-4">
               <h3 className="font-semibold text-sm">{segment.name}</h3>
               <p className="text-xs text-muted-foreground mt-1">
@@ -87,6 +106,11 @@ export default async function SegmentsPage({
               <pre className="text-xs text-muted-foreground bg-muted rounded p-2 mt-2 overflow-x-auto">
                 {JSON.stringify(segment.rules, null, 2)}
               </pre>
+              {predefinedCounts[idx] !== null && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  ~{predefinedCounts[idx]!.toLocaleString()} estimated members
+                </p>
+              )}
             </Card>
           ))}
         </div>

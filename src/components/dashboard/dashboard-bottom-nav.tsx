@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Settings,
   Sparkles,
+  Store,
   Users
 } from "lucide-react";
 
@@ -31,10 +32,14 @@ const ITEMS: NavItem[] = [
   { segment: "settings", label: "Settings", icon: Settings }
 ];
 
-type Props = { businessId: string };
+type Props = { businessId: string; isFranchiseHQ: boolean };
 
-export function DashboardBottomNav({ businessId }: Props) {
+export function DashboardBottomNav({ businessId, isFranchiseHQ }: Props) {
   const pathname = usePathname();
+
+  const items = isFranchiseHQ
+    ? [...ITEMS, { segment: "franchise", label: "Franchise", icon: Store }]
+    : ITEMS;
 
   return (
     <nav
@@ -42,7 +47,7 @@ export function DashboardBottomNav({ businessId }: Props) {
       className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-line bg-surface/95 backdrop-blur lg:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      {ITEMS.map(({ segment, label, icon: Icon }) => {
+      {items.map(({ segment, label, icon: Icon }) => {
         const href: Route =
           segment === ""
             ? (`/dashboard/${businessId}` as Route)
@@ -100,12 +105,16 @@ function SidebarNavItem({ label, icon: Icon, active, href }: SidebarItem) {
   );
 }
 
-export function DashboardSidebarNav({ businessId }: Props) {
+export function DashboardSidebarNav({ businessId, isFranchiseHQ }: Props) {
   const pathname = usePathname();
+
+  const items = isFranchiseHQ
+    ? [...ITEMS, { segment: "franchise", label: "Franchise", icon: Store }]
+    : ITEMS;
 
   return (
     <aside className="hidden lg:flex lg:w-56 lg:shrink-0 lg:flex-col lg:gap-1 lg:border-r lg:border-line lg:bg-surface lg:px-3 lg:py-6">
-      {ITEMS.map(({ segment, label, icon }) => {
+      {items.map(({ segment, label, icon }) => {
         const href: Route =
           segment === ""
             ? (`/dashboard/${businessId}` as Route)

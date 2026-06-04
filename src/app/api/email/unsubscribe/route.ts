@@ -2,8 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rateLimit = await enforceRateLimit({
+    identifier: `unsubscribe:${ip}`,
+    windowSeconds: 60,
+    max: 10
+  });
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: rateLimitHeaders(rateLimit) }
+    );
+  }
+
   const email = request.nextUrl.searchParams.get("email");
   if (!email) {
     return NextResponse.json({ error: "Missing email parameter" }, { status: 400 });
@@ -16,6 +31,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rateLimit = await enforceRateLimit({
+    identifier: `unsubscribe:${ip}`,
+    windowSeconds: 60,
+    max: 10
+  });
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: rateLimitHeaders(rateLimit) }
+    );
+  }
+
   const body = await request.formData().catch(() => null);
   const raw = body?.get("List-Unsubscribe");
   const email = typeof raw === "string" ? raw : null;

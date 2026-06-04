@@ -2,13 +2,13 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
-type SegmentRule = {
+export type SegmentRule = {
   field: string;
   operator: string;
   value: string | number;
 };
 
-type SegmentRules = {
+export type SegmentRules = {
   rules: SegmentRule[];
   matchAll: boolean;
 };
