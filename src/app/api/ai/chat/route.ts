@@ -2,7 +2,9 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
+import { checkAnswerGrounding } from "@/lib/ai/grounding";
 import { streamRagAnswer, type ChatTurn } from "@/lib/ai/rag";
+import { getCachedSummary, generateAndCacheSummary } from "@/lib/ai/summarizer";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -121,14 +123,15 @@ export async function POST(request: NextRequest): Promise<Response> {
     });
 
     if (sessionId) {
-      // Load only the most recent MAX_HISTORY turns — the RAG pipeline discards older context
       const MAX_HISTORY = 12;
+      // Load MAX_HISTORY + 1 to detect whether older turns exist without
+      // fetching the full history (which could be hundreds of messages).
       const existingSession = await prisma.aiChatSession.findFirst({
         where: { id: sessionId, businessId },
         include: {
           messages: {
             orderBy: { createdAt: "desc" },
-            take: MAX_HISTORY,
+            take: MAX_HISTORY + 1,
             select: { role: true, content: true }
           }
         }
@@ -136,11 +139,40 @@ export async function POST(request: NextRequest): Promise<Response> {
 
       if (existingSession) {
         resolvedSessionId = existingSession.id;
-        // Messages were fetched newest-first; reverse to restore chronological order
-        priorMessages = [...existingSession.messages].reverse().map((msg) => ({
-          role: msg.role as "user" | "assistant" | "system",
-          content: msg.content
-        }));
+        const allLoaded = [...existingSession.messages].reverse();
+        const hasOverflow = allLoaded.length > MAX_HISTORY;
+        const recent = hasOverflow ? allLoaded.slice(-MAX_HISTORY) : allLoaded;
+
+        // B6: inject a cached conversation summary when the session has overflowed
+        // MAX_HISTORY so older context is not silently lost.
+        if (hasOverflow) {
+          const olderTurnCount = allLoaded.length - MAX_HISTORY;
+          const cachedSummary = await getCachedSummary(resolvedSessionId, olderTurnCount);
+          if (cachedSummary) {
+            priorMessages = [
+              { role: "system" as const, content: `Earlier conversation summary: ${cachedSummary}` },
+              ...recent.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }))
+            ];
+          } else {
+            priorMessages = recent.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
+            // Fire-and-forget: load all older turns and generate/cache summary
+            // asynchronously so it's available on the next turn.
+            prisma.aiChatMessage.findMany({
+              where: { sessionId: resolvedSessionId },
+              orderBy: { createdAt: "asc" },
+              take: allLoaded.length - MAX_HISTORY,
+              select: { role: true, content: true }
+            }).then((older) => {
+              const olderTurns = older.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
+              generateAndCacheSummary(resolvedSessionId, olderTurns).catch(() => undefined);
+            }).catch(() => undefined);
+          }
+        } else {
+          priorMessages = recent.map((m) => ({
+            role: m.role as "user" | "assistant" | "system",
+            content: m.content
+          }));
+        }
       } else {
         // Session not found or wrong business — create a new one
         const newSession = await prisma.aiChatSession.create({
@@ -276,7 +308,16 @@ export async function POST(request: NextRequest): Promise<Response> {
           })
         ]);
 
-        captureEvent({ userId, event: "ai.message_sent", properties: { businessId, runtime: ragAnswer.runtime, model: ragAnswer.model ?? undefined, citationCount: ragAnswer.citations.length, totalTokens: totalTokens || undefined } });
+        // Grounding check: log when the answer doesn't appear to reference the
+        // retrieved context — a signal that retrieval quality may have degraded.
+        const grounding = checkAnswerGrounding(assistantContent, ragAnswer.retrievedChunks);
+        if (!grounding.grounded && ragAnswer.retrievedChunks.length > 0) {
+          logger.warn(
+            { businessId, reason: grounding.reason, citationCount: ragAnswer.citations.length },
+            "rag.answer_ungrounded"
+          );
+        }
+        captureEvent({ userId, event: "ai.message_sent", properties: { businessId, runtime: ragAnswer.runtime, model: ragAnswer.model ?? undefined, citationCount: ragAnswer.citations.length, totalTokens: totalTokens || undefined, grounded: grounding.grounded } });
         controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"));
       } catch (err) {
         logger.error({ err }, "ai.chat.stream_error");

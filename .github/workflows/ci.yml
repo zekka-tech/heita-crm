@@ -363,6 +363,32 @@ jobs:
       - name: Check bundle size budgets
         run: npm run bundle-check
 
+  rag-eval:
+    name: RAG eval harness (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Non-blocking: a score regression surfaces in the job summary but does
+    # NOT prevent merging. Raise thresholds in retrieval.eval.ts once the
+    # pipeline stabilises.
+    continue-on-error: true
+    if: github.event_name == 'pull_request'
+    needs: quality
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit --progress=false
+
+      - name: Run RAG eval harness
+        run: npm run test:eval
+
   lighthouse:
     name: Lighthouse CI (Web Vitals)
     runs-on: ubuntu-latest

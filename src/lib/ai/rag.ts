@@ -1,5 +1,6 @@
 import { anthropicConfigured, streamAnthropicChat } from "@/lib/ai/anthropic";
 import { embedText } from "@/lib/ai/embeddings";
+import { checkAnswerGrounding } from "@/lib/ai/grounding";
 import { ollamaConfigured, streamOllamaChat } from "@/lib/ai/ollama";
 import { rerankChunks } from "@/lib/ai/reranker";
 import { ZERO_USAGE, type StreamUsage } from "@/lib/ai/stream-types";
@@ -26,6 +27,8 @@ export type RagAnswerStream = {
   model: string | null;
   prompt: string;
   citations: RagCitation[];
+  /** The chunks passed to the LLM — used by the chat route for grounding checks. */
+  retrievedChunks: SimilarityMatch[];
   stream: AsyncGenerator<string>;
   /** Resolves with real token counts after the stream is consumed or abandoned. */
   usage: Promise<StreamUsage>;
@@ -81,6 +84,9 @@ function buildContext(matches: SimilarityMatch[]): string {
     )
     .join("\n\n");
 }
+
+/** Exported for use in the RAG eval harness. */
+export { buildQueryForRetrieval };
 
 /**
  * Build the string used for embedding and FTS retrieval.
@@ -151,6 +157,7 @@ async function buildSystemPrompt(input: { businessId: string; messages: ChatTurn
   return {
     prompt: [persona, "Retrieved context:", context].join("\n\n"),
     citations: uniqueCitations(topChunks),
+    topChunks,
   };
 }
 
@@ -165,6 +172,7 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
       model: null,
       prompt: "",
       citations: [],
+      retrievedChunks: [],
       stream: (async function* () {
         yield "Please send a question to start the conversation.";
       })(),
@@ -172,7 +180,7 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
     };
   }
 
-  const { prompt, citations } = await buildSystemPrompt({
+  const { prompt, citations, topChunks } = await buildSystemPrompt({
     businessId: input.businessId,
     messages: history,
   });
@@ -189,7 +197,7 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
           })),
         ],
       });
-      return { runtime: "ollama", model, prompt, citations, stream, usage };
+      return { runtime: "ollama", model, prompt, citations, retrievedChunks: topChunks, stream, usage };
     } catch (error) {
       logger.warn({ err: error }, "rag.ollama_fallback");
     }
@@ -208,7 +216,7 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
       model,
       enablePromptCache: true,
     });
-    return { runtime: "anthropic", model, prompt, citations, stream, usage };
+    return { runtime: "anthropic", model, prompt, citations, retrievedChunks: topChunks, stream, usage };
   }
 
   return {
@@ -216,6 +224,7 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
     model: null,
     prompt,
     citations,
+    retrievedChunks: [],
     stream: (async function* () {
       yield "AI co-worker is not configured for this environment. Add OLLAMA_BASE_URL or ANTHROPIC_API_KEY to enable replies.";
     })(),

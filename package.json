@@ -33,7 +33,8 @@
     "vapid:generate": "node -e \"const wp=require('web-push');console.log(JSON.stringify(wp.generateVAPIDKeys(),null,2))\"",
     "ci": "npm run typecheck && npm run lint && npm run test && npm run build",
     "bundle-check": "bundlesize",
-    "lighthouse": "lhci autorun"
+    "lighthouse": "lhci autorun",
+    "test:eval": "vitest run --config vitest.eval.config.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
