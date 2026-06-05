@@ -1,10 +1,12 @@
 import { ConsentType, Prisma, PromotionType, StaffRole } from "@prisma/client";
 
 import { logger } from "@/lib/logger";
+import { shouldDeliverNotificationChannel } from "@/lib/notification-preferences";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { sendNotification } from "@/server/services/notification.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
+import { sendPromotionWhatsApp } from "@/server/services/whatsapp.service";
 
 const PROMOTION_TRANSACTION_OPTIONS = {
   maxWait: 5_000,
@@ -304,7 +306,7 @@ export async function broadcastPromotion(
   const promotion = await prisma.promotion.findUniqueOrThrow({
     where: { id: input.promotionId, businessId: input.businessId },
     include: {
-      business: { select: { id: true, slug: true, name: true } }
+      business: { select: { id: true, slug: true, name: true, wabaPhoneId: true } }
     }
   });
 
@@ -330,9 +332,12 @@ export async function broadcastPromotion(
   // Paginate memberships in batches to avoid loading all into memory.
   // Only send to members who have an active marketing consent for this business.
   const MEMBERSHIP_BATCH = 2_000;
+  // WhatsApp template {{3}} must be non-empty, so fall back to the title.
+  const whatsappDetails = promotion.description?.trim() || promotion.title;
   let cursor: string | undefined;
   let totalSent = 0;
   let totalFailed = 0;
+  let totalWhatsappFailed = 0;
 
   do {
     const batch = await prisma.membership.findMany({
@@ -352,41 +357,87 @@ export async function broadcastPromotion(
           }
         }
       },
-      select: { id: true, userId: true },
+      select: {
+        id: true,
+        userId: true,
+        user: {
+          select: { phone: true, phoneVerifiedAt: true, notificationPreferences: true }
+        }
+      },
       take: MEMBERSHIP_BATCH,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
     });
 
     if (batch.length === 0) break;
 
-    const results = await Promise.allSettled(
-      batch.map((membership) =>
-        sendNotification({
-          userId: membership.userId,
+    // Every batch member already has WHATSAPP_MARKETING consent (where-filter
+    // above). A WhatsApp template is additionally sent when the member has the
+    // whatsapp channel opt-in, a verified phone, and the business has a WABA.
+    const whatsappSends = batch.flatMap((membership) => {
+      const user = membership.user;
+      const eligible =
+        Boolean(promotion.business.wabaPhoneId) &&
+        Boolean(user?.phone) &&
+        Boolean(user?.phoneVerifiedAt) &&
+        shouldDeliverNotificationChannel({
+          preferences: user?.notificationPreferences,
           businessId: promotion.businessId,
-          title: promotion.title,
-          body: promotion.description ?? "",
-          type: "PROMOTION",
-          actionUrl: `/b/${promotion.business.slug}`
+          channel: "whatsapp",
+          now: broadcastAt
+        });
+
+      if (!eligible || !user?.phone || !promotion.business.wabaPhoneId) {
+        return [];
+      }
+
+      return [
+        sendPromotionWhatsApp({
+          businessId: promotion.businessId,
+          wabaPhoneId: promotion.business.wabaPhoneId,
+          userId: membership.userId,
+          toPhone: user.phone,
+          businessName: promotion.business.name,
+          promotionTitle: promotion.title,
+          details: whatsappDetails
         })
-      )
-    );
+      ];
+    });
+
+    const [results, whatsappResults] = await Promise.all([
+      Promise.allSettled(
+        batch.map((membership) =>
+          sendNotification({
+            userId: membership.userId,
+            businessId: promotion.businessId,
+            title: promotion.title,
+            body: promotion.description ?? "",
+            type: "PROMOTION",
+            actionUrl: `/b/${promotion.business.slug}`
+          })
+        )
+      ),
+      Promise.allSettled(whatsappSends)
+    ]);
 
     const batchFailed = results.filter((r) => r.status === "rejected").length;
     totalSent += batch.length - batchFailed;
     totalFailed += batchFailed;
+    totalWhatsappFailed += whatsappResults.filter(
+      (r) => r.status === "rejected"
+    ).length;
     cursor = batch[batch.length - 1]?.id;
   } while (true);
 
   const failedCount = totalFailed;
   const memberships = { length: totalSent + totalFailed };
 
-  if (failedCount > 0) {
+  if (failedCount > 0 || totalWhatsappFailed > 0) {
     logger.warn(
       {
         promotionId: promotion.id,
         businessId: promotion.businessId,
         failedCount,
+        whatsappFailedCount: totalWhatsappFailed,
         total: memberships.length
       },
       "promotion.broadcast.partial_failure"
