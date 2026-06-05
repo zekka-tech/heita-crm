@@ -16,12 +16,19 @@ const prisma = {
   membership: {
     findMany: vi.fn()
   },
+  user: {
+    findMany: vi.fn()
+  },
+  userConsent: {
+    findMany: vi.fn()
+  },
   staffAuditLog: {
     create: vi.fn()
   }
 };
 
 const sendNotification = vi.fn();
+const sendEventReminderWhatsApp = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma
@@ -29,6 +36,10 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/server/services/notification.service", () => ({
   sendNotification
+}));
+
+vi.mock("@/server/services/whatsapp.service", () => ({
+  sendEventReminderWhatsApp
 }));
 
 const {
@@ -56,6 +67,11 @@ function buildTransaction() {
 beforeEach(() => {
   vi.clearAllMocks();
   buildTransaction();
+  // WhatsApp eligibility lookups default to "no eligible recipients" so the
+  // in-app/push/email reminder tests are unaffected unless they opt in.
+  prisma.user.findMany.mockResolvedValue([]);
+  prisma.userConsent.findMany.mockResolvedValue([]);
+  sendEventReminderWhatsApp.mockResolvedValue(undefined);
 });
 
 describe("createEvent", () => {
@@ -286,6 +302,116 @@ describe("sendDueEventReminders", () => {
       where: { id: "evt_partial" },
       data: { reminderSentAt: now }
     });
+  });
+
+  it("sends a WhatsApp reminder only to members with consent + channel opt-in", async () => {
+    const now = new Date("2026-06-01T08:00:00Z");
+    const eventStart = new Date("2026-06-01T18:00:00Z");
+
+    prisma.event.findMany.mockResolvedValue([
+      {
+        id: "evt_due",
+        businessId: "biz_1",
+        title: "Launch night",
+        description: null,
+        startsAt: eventStart,
+        endsAt: null,
+        location: "Sandton",
+        isReminderOn: true,
+        reminderSentAt: null,
+        business: {
+          id: "biz_1",
+          slug: "acme",
+          name: "Acme",
+          wabaPhoneId: "waba_1"
+        }
+      }
+    ]);
+    prisma.membership.findMany.mockResolvedValue([
+      { userId: "user_a", businessId: "biz_1" },
+      { userId: "user_b", businessId: "biz_1" }
+    ]);
+    // Both have verified phones + the whatsapp channel enabled for biz_1...
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: "user_a",
+        phone: "+27110000001",
+        notificationPreferences: {
+          version: 1,
+          businesses: { biz_1: { channels: { whatsapp: true } } }
+        }
+      },
+      {
+        id: "user_b",
+        phone: "+27110000002",
+        notificationPreferences: {
+          version: 1,
+          businesses: { biz_1: { channels: { whatsapp: true } } }
+        }
+      }
+    ]);
+    // ...but only user_a has an active WHATSAPP_MARKETING consent.
+    prisma.userConsent.findMany.mockResolvedValue([
+      { userId: "user_a", businessId: "biz_1" }
+    ]);
+    sendNotification.mockResolvedValue({ id: "notif_1" });
+
+    const result = await sendDueEventReminders({ now });
+
+    expect(result.totalRecipients).toBe(2);
+    expect(result.totalFailures).toBe(0);
+    expect(sendNotification).toHaveBeenCalledTimes(2);
+    expect(sendEventReminderWhatsApp).toHaveBeenCalledTimes(1);
+    expect(sendEventReminderWhatsApp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: "biz_1",
+        wabaPhoneId: "waba_1",
+        userId: "user_a",
+        toPhone: "+27110000001",
+        businessName: "Acme",
+        eventTitle: "Launch night"
+      })
+    );
+  });
+
+  it("skips WhatsApp when the business has no wabaPhoneId", async () => {
+    const now = new Date("2026-06-01T08:00:00Z");
+
+    prisma.event.findMany.mockResolvedValue([
+      {
+        id: "evt_due",
+        businessId: "biz_1",
+        title: "Launch night",
+        description: null,
+        startsAt: new Date("2026-06-01T18:00:00Z"),
+        endsAt: null,
+        location: null,
+        isReminderOn: true,
+        reminderSentAt: null,
+        business: { id: "biz_1", slug: "acme", name: "Acme", wabaPhoneId: null }
+      }
+    ]);
+    prisma.membership.findMany.mockResolvedValue([
+      { userId: "user_a", businessId: "biz_1" }
+    ]);
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: "user_a",
+        phone: "+27110000001",
+        notificationPreferences: {
+          version: 1,
+          businesses: { biz_1: { channels: { whatsapp: true } } }
+        }
+      }
+    ]);
+    prisma.userConsent.findMany.mockResolvedValue([
+      { userId: "user_a", businessId: "biz_1" }
+    ]);
+    sendNotification.mockResolvedValue({ id: "notif_1" });
+
+    await sendDueEventReminders({ now });
+
+    expect(sendEventReminderWhatsApp).not.toHaveBeenCalled();
   });
 
   it("returns zero work when no events are due", async () => {

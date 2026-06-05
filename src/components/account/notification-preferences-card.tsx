@@ -134,8 +134,8 @@ export function NotificationPreferencesCard({
                 <p className="text-xs text-ink-subtle">{t("businessHint")}</p>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-3">
-                {(["inApp", "push", "email"] as const).map((channel) => (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(["inApp", "push", "email", "whatsapp"] as const).map((channel) => (
                   <label
                     key={channel}
                     className="flex items-center gap-3 rounded-xl border border-line bg-white px-3 py-3 text-sm text-ink"

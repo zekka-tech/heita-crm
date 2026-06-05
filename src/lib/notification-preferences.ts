@@ -7,6 +7,7 @@ type NotificationChannelPreferenceShape = {
   inApp: boolean;
   push: boolean;
   email: boolean;
+  whatsapp: boolean;
 };
 
 type NotificationQuietHoursShape = {
@@ -19,7 +20,10 @@ type NotificationQuietHoursShape = {
 const DEFAULT_CHANNEL_PREFERENCES = {
   inApp: true,
   push: true,
-  email: true
+  email: true,
+  // WhatsApp is opt-in: proactive sends are billable and require an active
+  // WHATSAPP_MARKETING consent, so customers must explicitly enable it.
+  whatsapp: false
 } satisfies NotificationChannelPreferenceShape;
 
 const DEFAULT_QUIET_HOURS = {
@@ -32,7 +36,8 @@ const DEFAULT_QUIET_HOURS = {
 const ChannelPreferencesSchema = z.object({
   inApp: z.boolean(),
   push: z.boolean(),
-  email: z.boolean()
+  email: z.boolean(),
+  whatsapp: z.boolean()
 });
 
 const QuietHoursSchema = z.object({

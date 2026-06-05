@@ -1,10 +1,12 @@
-import { Prisma, StaffRole } from "@prisma/client";
+import { ConsentType, Prisma, StaffRole } from "@prisma/client";
 
 import { logger } from "@/lib/logger";
+import { shouldDeliverNotificationChannel } from "@/lib/notification-preferences";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { sendNotification } from "@/server/services/notification.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
+import { sendEventReminderWhatsApp } from "@/server/services/whatsapp.service";
 
 const EVENT_TRANSACTION_OPTIONS = {
   maxWait: 5_000,
@@ -267,6 +269,21 @@ export async function deleteEvent(input: DeleteEventInput) {
 
 const DEFAULT_REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 const REMINDER_BATCH_SIZE = 50;
+const REMINDER_TIMEZONE = "Africa/Johannesburg";
+
+// Human-friendly local time for the WhatsApp reminder template's {{3}} param,
+// e.g. "Fri 6 Jun, 19:00" (SAST). Events carry no timezone, so format in SAST.
+function formatReminderWhen(date: Date): string {
+  return new Intl.DateTimeFormat("en-ZA", {
+    timeZone: REMINDER_TIMEZONE,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).format(date);
+}
 
 export type SendDueEventRemindersInput = {
   windowMs?: number;
@@ -293,7 +310,9 @@ export async function sendDueEventReminders(
       startsAt: { gt: now, lte: windowEnd }
     },
     include: {
-      business: { select: { id: true, slug: true, name: true } }
+      business: {
+        select: { id: true, slug: true, name: true, wabaPhoneId: true }
+      }
     },
     orderBy: { startsAt: "asc" },
     take: REMINDER_BATCH_SIZE
@@ -315,26 +334,89 @@ export async function sendDueEventReminders(
     membershipsByBusiness.set(m.businessId, list);
   }
 
+  // For WhatsApp eligibility, batch-fetch the recipients' verified phone +
+  // notification preferences, and their active WHATSAPP_MARKETING consents.
+  const allUserIds = [...new Set(allMemberships.map((m) => m.userId))];
+  const [recipients, whatsappConsents] =
+    allUserIds.length > 0
+      ? await Promise.all([
+          prisma.user.findMany({
+            where: {
+              id: { in: allUserIds },
+              deletedAt: null,
+              phone: { not: null },
+              phoneVerifiedAt: { not: null }
+            },
+            select: { id: true, phone: true, notificationPreferences: true }
+          }),
+          prisma.userConsent.findMany({
+            where: {
+              userId: { in: allUserIds },
+              businessId: { in: allBusinessIds },
+              type: ConsentType.WHATSAPP_MARKETING,
+              revokedAt: null
+            },
+            select: { userId: true, businessId: true }
+          })
+        ])
+      : [[], []];
+
+  const recipientById = new Map(recipients.map((r) => [r.id, r]));
+  const consentKeys = new Set(
+    whatsappConsents.map((c) => `${c.userId}:${c.businessId}`)
+  );
+
   for (const event of dueEvents) {
     const memberships = membershipsByBusiness.get(event.businessId) ?? [];
+    const whenLabel = formatReminderWhen(event.startsAt);
 
     const results = await Promise.allSettled(
-      memberships.map((membership) =>
-        sendNotification({
-          userId: membership.userId,
-          businessId: event.businessId,
-          title: `Reminder: ${event.title}`,
-          body: event.location
-            ? `${event.business.name} — ${event.location}`
-            : event.business.name,
-          type: "EVENT_REMINDER",
-          actionUrl: `/b/${event.business.slug}/events`,
-          metadata: {
-            eventId: event.id,
-            startsAt: event.startsAt.toISOString()
-          }
-        })
-      )
+      memberships.flatMap((membership) => {
+        const sends: Promise<unknown>[] = [
+          sendNotification({
+            userId: membership.userId,
+            businessId: event.businessId,
+            title: `Reminder: ${event.title}`,
+            body: event.location
+              ? `${event.business.name} — ${event.location}`
+              : event.business.name,
+            type: "EVENT_REMINDER",
+            actionUrl: `/b/${event.business.slug}/events`,
+            metadata: {
+              eventId: event.id,
+              startsAt: event.startsAt.toISOString()
+            }
+          })
+        ];
+
+        const recipient = recipientById.get(membership.userId);
+        const whatsappEligible =
+          Boolean(event.business.wabaPhoneId) &&
+          Boolean(recipient?.phone) &&
+          consentKeys.has(`${membership.userId}:${event.businessId}`) &&
+          shouldDeliverNotificationChannel({
+            preferences: recipient?.notificationPreferences,
+            businessId: event.businessId,
+            channel: "whatsapp",
+            now
+          });
+
+        if (whatsappEligible && recipient?.phone && event.business.wabaPhoneId) {
+          sends.push(
+            sendEventReminderWhatsApp({
+              businessId: event.businessId,
+              wabaPhoneId: event.business.wabaPhoneId,
+              userId: membership.userId,
+              toPhone: recipient.phone,
+              businessName: event.business.name,
+              eventTitle: event.title,
+              whenLabel
+            })
+          );
+        }
+
+        return sends;
+      })
     );
 
     const failures = results.filter((result) => result.status === "rejected").length;

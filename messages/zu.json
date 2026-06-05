@@ -138,7 +138,8 @@
     "channels": {
       "inApp": "Okuphakelayo kwangaphakathi kuhlelo",
       "push": "I-push yesiphequluli",
-      "email": "I-imeyili"
+      "email": "I-imeyili",
+      "whatsapp": "I-WhatsApp"
     },
     "quietHours": {
       "enabled": "Misa i-push ne-imeyili phakathi kwamahora athule",

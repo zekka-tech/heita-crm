@@ -17,7 +17,8 @@ describe("notification preferences", () => {
       channels: {
         inApp: true,
         push: true,
-        email: true
+        email: true,
+        whatsapp: false
       },
       quietHours: {
         enabled: false,
