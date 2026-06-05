@@ -1,19 +1,12 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import type { SegmentRules } from "@/lib/segments";
 
-export type SegmentRule = {
-  field: string;
-  operator: string;
-  value: string | number;
-};
-
-export type SegmentRules = {
-  rules: SegmentRule[];
-  matchAll: boolean;
-};
+export type { SegmentRule, SegmentRules } from "@/lib/segments";
 
 // Column identifiers are hardcoded here — never derived from user input.
+// Keys must stay in sync with SEGMENT_FIELDS in `@/lib/segments`.
 const FIELD_MAP: Record<string, string> = {
   pointsBalance: 'm."pointsBalance"',
   tier: 't."name"',
