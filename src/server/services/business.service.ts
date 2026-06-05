@@ -1,7 +1,19 @@
-import { BusinessCategory, Province, StaffRole } from "@prisma/client";
+import { BusinessCategory, Prisma, Province, StaffRole } from "@prisma/client";
 
 import { createJoinToken, createUniqueBusinessSlug } from "@/lib/business";
+import { isE164, maskPhone, normalizeZaPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/staff";
+import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
+
+const BUSINESS_TRANSACTION_OPTIONS = {
+  maxWait: 5_000,
+  timeout: 15_000
+};
+
+const WHATSAPP_MANAGER_ROLES = [StaffRole.OWNER, StaffRole.MANAGER] as const;
+// Meta's WhatsApp phone-number ID is an opaque numeric string (~15-16 digits).
+const WABA_PHONE_ID_PATTERN = /^\d{6,20}$/;
 
 type CreateBusinessInput = {
   userId: string;
@@ -91,4 +103,91 @@ export async function createBusinessWithDefaults(input: CreateBusinessInput) {
       loyaltyTiers: true
     }
   });
+}
+
+type UpdateBusinessWhatsAppInput = {
+  businessId: string;
+  actorUserId: string;
+  /** Meta WhatsApp phone-number ID (digits). Empty/null disconnects WhatsApp. */
+  wabaPhoneId?: string | null;
+  /** Customer-facing WhatsApp number; accepts loose input, stored as E.164. */
+  whatsappPhoneNumber?: string | null;
+};
+
+function normalizeWabaPhoneId(raw?: string | null): string | null {
+  const value = (raw ?? "").trim();
+  if (!value) return null;
+  if (!WABA_PHONE_ID_PATTERN.test(value)) {
+    throw new Error(
+      "WhatsApp phone number ID must be the numeric ID from Meta (digits only)."
+    );
+  }
+  return value;
+}
+
+function normalizeWhatsappDisplayNumber(raw?: string | null): string | null {
+  const value = (raw ?? "").trim();
+  if (!value) return null;
+  const normalized = normalizeZaPhone(value) ?? value;
+  if (!isE164(normalized)) {
+    throw new Error(
+      "Enter the WhatsApp number in international format, e.g. +27821234567."
+    );
+  }
+  return normalized;
+}
+
+/**
+ * Connect (or disconnect) a business's WhatsApp Business number. Manager/owner
+ * only; writes are audited. The `wabaPhoneId` is unique per business — a clash
+ * surfaces a friendly error rather than a raw Prisma constraint failure.
+ */
+export async function updateBusinessWhatsApp(input: UpdateBusinessWhatsAppInput) {
+  await requireRole({
+    businessId: input.businessId,
+    userId: input.actorUserId,
+    allowedRoles: [...WHATSAPP_MANAGER_ROLES]
+  });
+
+  const wabaPhoneId = normalizeWabaPhoneId(input.wabaPhoneId);
+  const whatsappPhoneNumber = normalizeWhatsappDisplayNumber(input.whatsappPhoneNumber);
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const business = await tx.business.update({
+        where: { id: input.businessId },
+        data: { wabaPhoneId, whatsappPhoneNumber },
+        select: { id: true, wabaPhoneId: true, whatsappPhoneNumber: true }
+      });
+
+      await recordStaffAuditLog(
+        {
+          businessId: input.businessId,
+          actorUserId: input.actorUserId,
+          action: "business.whatsapp.update",
+          targetType: "Business",
+          targetId: input.businessId,
+          metadata: {
+            wabaPhoneIdConnected: Boolean(wabaPhoneId),
+            whatsappPhoneNumber: whatsappPhoneNumber
+              ? maskPhone(whatsappPhoneNumber)
+              : null
+          }
+        },
+        tx
+      );
+
+      return business;
+    }, BUSINESS_TRANSACTION_OPTIONS);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      throw new Error(
+        "That WhatsApp phone number ID is already connected to another business."
+      );
+    }
+    throw error;
+  }
 }

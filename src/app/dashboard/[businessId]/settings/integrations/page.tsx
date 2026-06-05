@@ -1,9 +1,14 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { CopyButton } from "@/components/shared/copy-button";
+import { CsrfField } from "@/components/security/csrf-field";
 import { redirect } from "next/navigation";
 import type { Route } from "next";
+
+import { connectWhatsAppAction } from "./actions";
 
 const maskSecret = (secret: string) =>
   secret.length > 10
@@ -11,11 +16,14 @@ const maskSecret = (secret: string) =>
     : "\u2022".repeat(secret.length);
 
 export default async function IntegrationsSettingsPage({
-  params
+  params,
+  searchParams
 }: {
   params: Promise<{ businessId: string }>;
+  searchParams?: Promise<{ whatsapp?: string; reason?: string }>;
 }) {
   const { businessId } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
 
   const session = await auth();
 
@@ -25,7 +33,12 @@ export default async function IntegrationsSettingsPage({
 
   const business = await prisma.business.findUnique({
     where: { id: businessId, deletedAt: null },
-    select: { name: true, slug: true }
+    select: {
+      name: true,
+      slug: true,
+      wabaPhoneId: true,
+      whatsappPhoneNumber: true
+    }
   });
 
   if (!business) {
@@ -34,11 +47,74 @@ export default async function IntegrationsSettingsPage({
 
   const posSecret = process.env.POS_SHARED_SECRET ?? "";
   const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/integrations/transactions`;
+  const whatsappConnected = Boolean(business.wabaPhoneId);
+  const whatsappStatus = resolvedSearchParams.whatsapp;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">POS Integration</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
+        <p className="text-muted-foreground mt-1">
+          Connect WhatsApp and your point-of-sale system to your loyalty programme.
+        </p>
+      </div>
+
+      <Card variant="surface">
+        <CardHeader
+          title="WhatsApp Business number"
+          description="Connect the WhatsApp number customers message and that sends reminders, promotions, and replies."
+        />
+        <div className="px-6 pb-6 space-y-4">
+          {whatsappStatus === "saved" ? (
+            <p className="rounded-lg border border-eco-green/30 bg-eco-green/5 px-3 py-2 text-sm text-eco-green">
+              WhatsApp settings saved.
+            </p>
+          ) : null}
+          {whatsappStatus === "error" ? (
+            <p className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">
+              {resolvedSearchParams.reason ?? "Could not save WhatsApp settings."}
+            </p>
+          ) : null}
+
+          <p className="text-sm text-muted-foreground">
+            Status:{" "}
+            <span
+              className={
+                whatsappConnected ? "font-medium text-eco-green" : "text-ink-subtle"
+              }
+            >
+              {whatsappConnected ? "Connected" : "Not connected"}
+            </span>
+          </p>
+
+          <form action={connectWhatsAppAction} className="space-y-4">
+            <CsrfField />
+            <input type="hidden" name="businessId" value={businessId} />
+            <Input
+              name="whatsappPhoneNumber"
+              label="WhatsApp number (display)"
+              hint="The number customers see, in international format, e.g. +27821234567."
+              defaultValue={business.whatsappPhoneNumber ?? ""}
+              placeholder="+27821234567"
+              inputMode="tel"
+            />
+            <Input
+              name="wabaPhoneId"
+              label="WhatsApp phone number ID"
+              hint="The numeric Phone Number ID from Meta WhatsApp Manager. Leave blank to disconnect."
+              defaultValue={business.wabaPhoneId ?? ""}
+              placeholder="123456789012345"
+              inputMode="numeric"
+            />
+            <Button type="submit" variant="primary">
+              Save WhatsApp settings
+            </Button>
+          </form>
+        </div>
+      </Card>
+
+      <div>
+        <h2 className="text-xl font-bold tracking-tight">POS Integration</h2>
         <p className="text-muted-foreground mt-1">
           Connect your point-of-sale system to automatically award loyalty points at checkout.
         </p>

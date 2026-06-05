@@ -199,7 +199,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
             ) : null}
             {!business.whatsappPhoneNumber ? (
               <li>
-                <Link href={`/dashboard/${businessId}/settings` as Route} className="flex items-center gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-ink hover:bg-warning/10">
+                <Link href={`/dashboard/${businessId}/settings/integrations` as Route} className="flex items-center gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-ink hover:bg-warning/10">
                   <MessageSquare className="h-4 w-4 shrink-0 text-warning" />
                   <span className="font-medium">Connect your WhatsApp Business number</span>
                 </Link>
