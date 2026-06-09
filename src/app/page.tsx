@@ -161,7 +161,7 @@ export default async function LandingPage() {
                   IS
                 </div>
                 <div>
-                  <p className="font-display text-base font-semibold">
+                  <p className="font-display text-base font-semibold text-primary">
                     Inky Shop Fourways
                   </p>
                   <p className="text-xs text-ink-subtle">Specialty retail · Gauteng</p>
