@@ -14,7 +14,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { getFranchiseAggregateStats, getFranchiseChildBusinesses, linkChildBusiness } from "@/server/services/franchise.service";
+import { getFranchiseAggregateStats, getFranchiseChildBusinesses } from "@/server/services/franchise.service";
 import { prisma } from "@/lib/prisma";
 
 describe("getFranchiseAggregateStats", () => {
@@ -80,23 +80,5 @@ describe("getFranchiseChildBusinesses", () => {
 
     const children = await getFranchiseChildBusinesses("parent1");
     expect(children).toEqual([]);
-  });
-});
-
-describe("linkChildBusiness", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("sets parentBusinessId on child", async () => {
-    (prisma.business.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      id: "c1",
-      name: "Shop A",
-    });
-
-    const result = await linkChildBusiness("parent1", "child1");
-    expect(result).toBeDefined();
-    expect(prisma.business.update).toHaveBeenCalledWith({
-      where: { id: "child1" },
-      data: { parentBusinessId: "parent1" },
-    });
   });
 });

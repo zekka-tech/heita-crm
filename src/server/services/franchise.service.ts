@@ -42,13 +42,3 @@ export async function getFranchiseAggregateStats(parentBusinessId: string) {
     totalPointsLiability: totalPoints._sum.pointsBalance ?? 0
   };
 }
-
-export async function linkChildBusiness(
-  parentBusinessId: string,
-  childBusinessId: string
-) {
-  return prisma.business.update({
-    where: { id: childBusinessId },
-    data: { parentBusinessId }
-  });
-}
