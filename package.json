@@ -32,7 +32,7 @@
     "worker:dev": "tsx watch src/workers/index.ts",
     "vapid:generate": "node -e \"const wp=require('web-push');console.log(JSON.stringify(wp.generateVAPIDKeys(),null,2))\"",
     "ci": "npm run typecheck && npm run lint && npm run test && npm run build",
-    "bundle-check": "bundlesize",
+    "bundle-check": "node scripts/check-bundle-size.mjs",
     "lighthouse": "lhci autorun",
     "test:eval": "vitest run --config vitest.eval.config.ts"
   },
@@ -89,7 +89,6 @@
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^4.1.8",
-    "bundlesize": "^0.18.2",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.5.19",
     "jsdom": "^26.1.0",
@@ -103,25 +102,5 @@
   "overrides": {
     "postcss": ">=8.5.10",
     "@hono/node-server": ">=1.19.13"
-  },
-  "bundlesize": [
-    {
-      "comment": "React + Next.js runtime — fixed upstream cost, not actionable",
-      "path": ".next/static/chunks/framework-*.js",
-      "maxSize": "500 kB",
-      "compression": "gzip"
-    },
-    {
-      "comment": "Next.js main runtime chunk",
-      "path": ".next/static/chunks/main-*.js",
-      "maxSize": "130 kB",
-      "compression": "gzip"
-    },
-    {
-      "comment": "Per-route JS chunks — Recharts is lazy-loaded so it never\n      lands here; 200 kB gzip is the ceiling for any single route bundle",
-      "path": ".next/static/chunks/*.js",
-      "maxSize": "200 kB",
-      "compression": "gzip"
-    }
-  ]
+  }
 }
