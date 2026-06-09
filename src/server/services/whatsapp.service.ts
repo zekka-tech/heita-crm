@@ -11,8 +11,24 @@ import {
   sendWhatsAppTemplateMessage,
   sendWhatsAppTextMessage
 } from "@/lib/whatsapp";
+import { handleCommerceCommand } from "@/server/services/whatsapp-commerce.service";
 
 const WEBHOOK_TIMESTAMP_SKEW_SECONDS = 5 * 60;
+
+// Proactive WhatsApp sends require a pre-approved Meta template. The event
+// reminder template (default "heita_event_reminder") has three body params:
+//   {{1}} business name   {{2}} event title   {{3}} when label
+const EVENT_REMINDER_TEMPLATE =
+  process.env.WHATSAPP_EVENT_REMINDER_TEMPLATE ?? "heita_event_reminder";
+const EVENT_REMINDER_TEMPLATE_LANG =
+  process.env.WHATSAPP_EVENT_REMINDER_TEMPLATE_LANG ?? "en_ZA";
+
+// Marketing template for promotion broadcasts (default "heita_promotion").
+// Three body params: {{1}} business name, {{2}} promotion title, {{3}} details.
+const PROMOTION_TEMPLATE =
+  process.env.WHATSAPP_PROMOTION_TEMPLATE ?? "heita_promotion";
+const PROMOTION_TEMPLATE_LANG =
+  process.env.WHATSAPP_PROMOTION_TEMPLATE_LANG ?? "en_ZA";
 
 const InboundTextMessageSchema = z.object({
   object: z.string().optional(),
@@ -198,6 +214,90 @@ async function logOutboundWhatsappMessage(input: {
       metadata: input.metadata as Prisma.InputJsonValue | undefined,
       sentAt: new Date()
     }
+  });
+}
+
+/**
+ * Sends an event-reminder WhatsApp template to a single member and records the
+ * outbound message. Throws on send failure so callers can count it as a
+ * delivery failure; eligibility (consent, channel opt-in, phone, wabaPhoneId)
+ * must be checked by the caller before invoking this.
+ */
+export async function sendEventReminderWhatsApp(input: {
+  businessId: string;
+  wabaPhoneId: string;
+  userId: string;
+  toPhone: string;
+  businessName: string;
+  eventTitle: string;
+  whenLabel: string;
+}): Promise<void> {
+  const response = await sendWhatsAppTemplateMessage({
+    phoneNumberId: input.wabaPhoneId,
+    to: input.toPhone,
+    name: EVENT_REMINDER_TEMPLATE,
+    languageCode: EVENT_REMINDER_TEMPLATE_LANG,
+    components: [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: input.businessName },
+          { type: "text", text: input.eventTitle },
+          { type: "text", text: input.whenLabel }
+        ]
+      }
+    ]
+  });
+
+  await logOutboundWhatsappMessage({
+    businessId: input.businessId,
+    userId: input.userId,
+    contactPhone: input.toPhone,
+    externalId: response.messageId,
+    body: `Event reminder: ${input.eventTitle}`,
+    metadata: { template: EVENT_REMINDER_TEMPLATE, kind: "event_reminder" }
+  });
+}
+
+/**
+ * Sends a promotion-broadcast WhatsApp template to a single member and records
+ * the outbound message. Throws on send failure so callers can count it as a
+ * delivery failure; eligibility (consent, channel opt-in, phone, wabaPhoneId)
+ * must be checked by the caller before invoking this.
+ */
+export async function sendPromotionWhatsApp(input: {
+  businessId: string;
+  wabaPhoneId: string;
+  userId: string;
+  toPhone: string;
+  businessName: string;
+  promotionTitle: string;
+  details: string;
+}): Promise<void> {
+  const response = await sendWhatsAppTemplateMessage({
+    phoneNumberId: input.wabaPhoneId,
+    to: input.toPhone,
+    name: PROMOTION_TEMPLATE,
+    languageCode: PROMOTION_TEMPLATE_LANG,
+    components: [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: input.businessName },
+          { type: "text", text: input.promotionTitle },
+          { type: "text", text: input.details }
+        ]
+      }
+    ]
+  });
+
+  await logOutboundWhatsappMessage({
+    businessId: input.businessId,
+    userId: input.userId,
+    contactPhone: input.toPhone,
+    externalId: response.messageId,
+    body: `Promotion: ${input.promotionTitle}`,
+    metadata: { template: PROMOTION_TEMPLATE, kind: "promotion" }
   });
 }
 
@@ -394,6 +494,9 @@ async function routeInboundToBusiness(input: RouteInput): Promise<void> {
     return;
   }
 
+  const optedOut = await handleOptOut({ ...input, existingUser });
+  if (optedOut) return;
+
   const membership = await prisma.membership.findUnique({
     where: {
       businessId_userId: {
@@ -412,6 +515,39 @@ async function routeInboundToBusiness(input: RouteInput): Promise<void> {
     return;
   }
 
+  const commerceResult = await handleCommerceCommand({
+    phoneNumberId: input.wabaPhoneId,
+    to: input.fromPhone,
+    body: input.body,
+    businessId: input.businessId,
+    businessName: input.businessName,
+    userId: existingUser.id
+  });
+
+  if (commerceResult.handled) {
+    if (commerceResult.reply) {
+      try {
+        const response = await sendWhatsAppTextMessage({
+          phoneNumberId: input.wabaPhoneId,
+          to: input.fromPhone,
+          body: commerceResult.reply
+        });
+        await logOutboundWhatsappMessage({
+          businessId: input.businessId,
+          userId: existingUser.id,
+          contactPhone: input.fromPhone,
+          externalId: response.messageId,
+          body: commerceResult.reply,
+          status: MessageStatus.SENT,
+          metadata: { kind: "commerce_reply" }
+        });
+      } catch (error) {
+        logger.error({ err: error }, "whatsapp.commerce.reply_failed");
+      }
+    }
+    return;
+  }
+
   await prisma.aiChatSession.upsert({
     where: { id: `wa_${membership.id}` },
     update: {},
@@ -427,6 +563,59 @@ async function routeInboundToBusiness(input: RouteInput): Promise<void> {
       title: `WhatsApp · ${input.fromPhone.slice(-4)}`
     }
   });
+}
+
+const OPT_OUT_KEYWORDS = ["stop", "unsubscribe", "unstop", "cancel", "end", "quit"];
+
+function isOptOutRequest(body: string): boolean {
+  const trimmed = body.trim().toLowerCase();
+  return OPT_OUT_KEYWORDS.some(
+    (keyword) => trimmed === keyword || trimmed.startsWith(`${keyword} `) || trimmed.startsWith(`${keyword}\n`)
+  );
+}
+
+async function handleOptOut(
+  input: RouteInput & { existingUser: { id: string } }
+): Promise<boolean> {
+  if (!isOptOutRequest(input.body)) return false;
+
+  const userId = input.existingUser.id;
+
+  await prisma.userConsent.updateMany({
+    where: {
+      userId,
+      type: "WHATSAPP_MARKETING",
+      revokedAt: null
+    },
+    data: { revokedAt: new Date() }
+  });
+
+  logger.info(
+    { userId, fromPhone: input.fromPhone, businessId: input.businessId },
+    "whatsapp.opt_out_processed"
+  );
+
+  try {
+    const confirmation = "You've been unsubscribed from marketing messages. Reply HELP for assistance.";
+    const response = await sendWhatsAppTextMessage({
+      phoneNumberId: input.wabaPhoneId,
+      to: input.fromPhone,
+      body: confirmation
+    });
+    await logOutboundWhatsappMessage({
+      businessId: input.businessId,
+      userId,
+      contactPhone: input.fromPhone,
+      externalId: response.messageId,
+      body: confirmation,
+      status: MessageStatus.SENT,
+      metadata: { kind: "opt_out_confirmation" }
+    });
+  } catch (error) {
+    logger.error({ err: error, fromPhone: input.fromPhone }, "whatsapp.opt_out_reply_failed");
+  }
+
+  return true;
 }
 
 async function sendOnboardingPrompt(input: RouteInput): Promise<void> {

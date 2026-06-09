@@ -23,6 +23,7 @@ const prisma = {
 };
 
 const sendNotification = vi.fn();
+const sendPromotionWhatsApp = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma
@@ -30,6 +31,10 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/server/services/notification.service", () => ({
   sendNotification
+}));
+
+vi.mock("@/server/services/whatsapp.service", () => ({
+  sendPromotionWhatsApp
 }));
 
 const {
@@ -50,6 +55,8 @@ describe("promotions service", () => {
     prisma.$transaction.mockImplementation(
       async (callback: (tx: typeof prisma) => unknown) => callback(prisma)
     );
+    prisma.promotion.updateMany.mockResolvedValue({ count: 1 });
+    sendPromotionWhatsApp.mockResolvedValue(undefined);
   });
 
   describe("createPromotion", () => {
@@ -151,7 +158,17 @@ describe("promotions service", () => {
             isActive: true,
             tierId: { in: ["tier_gold"] }
           }),
-          select: { id: true, userId: true }
+          select: {
+            id: true,
+            userId: true,
+            user: {
+              select: {
+                phone: true,
+                phoneVerifiedAt: true,
+                notificationPreferences: true
+              }
+            }
+          }
         })
       );
       expect(sendNotification).toHaveBeenCalledTimes(2);
@@ -203,7 +220,17 @@ describe("promotions service", () => {
             businessId: "biz_1",
             isActive: true
           }),
-          select: { id: true, userId: true }
+          select: {
+            id: true,
+            userId: true,
+            user: {
+              select: {
+                phone: true,
+                phoneVerifiedAt: true,
+                notificationPreferences: true
+              }
+            }
+          }
         })
       );
       expect(sendNotification).toHaveBeenCalledTimes(3);
@@ -266,6 +293,125 @@ describe("promotions service", () => {
         recipientCount: 2,
         failedCount: 1
       });
+    });
+
+    it("sends a WhatsApp promotion only to members with the channel opt-in + verified phone", async () => {
+      mockManagerRole();
+      prisma.promotion.findUniqueOrThrow.mockResolvedValue({
+        id: "promo_wa",
+        businessId: "biz_1",
+        title: "Half-price Friday",
+        description: "Everything 50% off",
+        isActive: true,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60_000),
+        broadcastAt: null,
+        targetTierIds: [],
+        business: { id: "biz_1", slug: "acme", name: "Acme", wabaPhoneId: "waba_1" }
+      });
+      const optedIn = {
+        version: 1,
+        businesses: { biz_1: { channels: { whatsapp: true } } }
+      };
+      prisma.membership.findMany
+        .mockResolvedValueOnce([
+          // eligible: opt-in + verified phone
+          {
+            id: "m1",
+            userId: "u1",
+            user: {
+              phone: "+27110000001",
+              phoneVerifiedAt: new Date(),
+              notificationPreferences: optedIn
+            }
+          },
+          // opted in but phone not verified -> skipped
+          {
+            id: "m2",
+            userId: "u2",
+            user: {
+              phone: "+27110000002",
+              phoneVerifiedAt: null,
+              notificationPreferences: optedIn
+            }
+          },
+          // verified phone but channel off -> skipped
+          {
+            id: "m3",
+            userId: "u3",
+            user: {
+              phone: "+27110000003",
+              phoneVerifiedAt: new Date(),
+              notificationPreferences: { version: 1, businesses: {} }
+            }
+          }
+        ])
+        .mockResolvedValue([]);
+      sendNotification.mockResolvedValue(null);
+      prisma.promotion.update.mockResolvedValue({});
+
+      const result = await broadcastPromotion({
+        promotionId: "promo_wa",
+        businessId: "biz_1",
+        actorUserId: "user_1"
+      });
+
+      expect(sendNotification).toHaveBeenCalledTimes(3);
+      expect(sendPromotionWhatsApp).toHaveBeenCalledTimes(1);
+      expect(sendPromotionWhatsApp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          businessId: "biz_1",
+          wabaPhoneId: "waba_1",
+          userId: "u1",
+          toPhone: "+27110000001",
+          businessName: "Acme",
+          promotionTitle: "Half-price Friday",
+          details: "Everything 50% off"
+        })
+      );
+      expect(result.recipientCount).toBe(3);
+    });
+
+    it("skips WhatsApp when the business has no wabaPhoneId", async () => {
+      mockManagerRole();
+      prisma.promotion.findUniqueOrThrow.mockResolvedValue({
+        id: "promo_nowa",
+        businessId: "biz_1",
+        title: "Sale",
+        description: "Deal",
+        isActive: true,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60_000),
+        broadcastAt: null,
+        targetTierIds: [],
+        business: { id: "biz_1", slug: "acme", name: "Acme", wabaPhoneId: null }
+      });
+      prisma.membership.findMany
+        .mockResolvedValueOnce([
+          {
+            id: "m1",
+            userId: "u1",
+            user: {
+              phone: "+27110000001",
+              phoneVerifiedAt: new Date(),
+              notificationPreferences: {
+                version: 1,
+                businesses: { biz_1: { channels: { whatsapp: true } } }
+              }
+            }
+          }
+        ])
+        .mockResolvedValue([]);
+      sendNotification.mockResolvedValue(null);
+      prisma.promotion.update.mockResolvedValue({});
+
+      await broadcastPromotion({
+        promotionId: "promo_nowa",
+        businessId: "biz_1",
+        actorUserId: "user_1"
+      });
+
+      expect(sendPromotionWhatsApp).not.toHaveBeenCalled();
     });
 
     it("rejects archived, future, ended, or already-broadcast promotions", async () => {

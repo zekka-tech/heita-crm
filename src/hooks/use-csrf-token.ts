@@ -24,13 +24,17 @@ function readCookie(name: string): string | null {
  * Pass `serverToken` when a Server Component has already read the value from
  * the cookie store (e.g. via `readCsrfCookie()`). That bypasses document.cookie
  * polling entirely and makes the token available on the first render.
+ *
+ * The initial state must NOT read `document.cookie`: that runs during client
+ * hydration and would return the real token while the server rendered `null`,
+ * producing a hydration mismatch on any element gated by the token (e.g. a
+ * disabled `<select>`/button). We seed from `serverToken` only so the first
+ * client render matches the server, then fill the token in via the effect below.
  */
 export function useCsrfToken(serverToken?: string | null): string | null {
-  const [token, setToken] = useState<string | null>(() => {
-    if (isValidCsrfToken(serverToken)) return serverToken;
-    const value = readCookie(CSRF_COOKIE);
-    return isValidCsrfToken(value) ? value : null;
-  });
+  const [token, setToken] = useState<string | null>(() =>
+    isValidCsrfToken(serverToken) ? serverToken : null
+  );
 
   useEffect(() => {
     if (token) return;

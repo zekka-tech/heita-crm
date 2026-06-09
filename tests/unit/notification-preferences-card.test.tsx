@@ -21,7 +21,8 @@ const messages = {
     channels: {
       inApp: "In-app feed",
       push: "Browser push",
-      email: "Email"
+      email: "Email",
+      whatsapp: "WhatsApp"
     },
     quietHours: {
       enabled: "Pause push and email during quiet hours",
@@ -104,7 +105,8 @@ describe("NotificationPreferencesCard", () => {
             channels: {
               inApp: true,
               push: false,
-              email: true
+              email: true,
+              whatsapp: false
             },
             quietHours: {
               enabled: true,

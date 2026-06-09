@@ -2,10 +2,13 @@ import Link from "next/link";
 import { Shield, Sparkles, Users } from "lucide-react";
 
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
+import { readCsrfCookie } from "@/lib/csrf";
 
-export default function AuthLayout({
+export default async function AuthLayout({
   children
 }: Readonly<{ children: React.ReactNode }>) {
+  const csrfToken = await readCsrfCookie();
+
   return (
     <main className="min-h-screen px-4 py-6 sm:px-8">
       <div className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-6xl items-center gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -50,7 +53,7 @@ export default function AuthLayout({
 
         <section className="flex flex-col items-center justify-center gap-4">
           <div className="self-end">
-            <LanguageSwitcher />
+            <LanguageSwitcher serverToken={csrfToken} />
           </div>
           {children}
         </section>

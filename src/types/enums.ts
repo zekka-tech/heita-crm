@@ -7,5 +7,6 @@ export const StaffRole = {
   MANAGER: "MANAGER",
   STAFF: "STAFF",
   AI_TRAINER: "AI_TRAINER",
+  FRANCHISE_ADMIN: "FRANCHISE_ADMIN",
 } as const;
 export type StaffRole = (typeof StaffRole)[keyof typeof StaffRole];

@@ -117,6 +117,10 @@ model Business {
   city                 String?
   postalCode           String?
   isActive             Boolean                @default(true)
+  isFranchiseHQ        Boolean                @default(false)
+  parentBusinessId     String?
+  parentBusiness       Business?              @relation("BusinessHierarchy", fields: [parentBusinessId], references: [id], onDelete: SetNull)
+  childBusinesses      Business[]             @relation("BusinessHierarchy")
   deletedAt            DateTime?
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
@@ -145,6 +149,9 @@ model Business {
   subscriptions        BusinessSubscription[]
   invoices             BusinessInvoice[]
   ocrReceipts          OcrReceipt[]
+  customerSegments     CustomerSegment[]
+
+  @@index([parentBusinessId])
 }
 
 model QrCode {
@@ -645,6 +652,7 @@ enum StaffRole {
   MANAGER
   STAFF
   AI_TRAINER
+  FRANCHISE_ADMIN
 }
 
 enum JoinChannel {
@@ -682,11 +690,26 @@ enum OtpPurpose {
   STAFF_STEP_UP
 }
 
+model CustomerSegment {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  description String?
+  rules       Json
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, isActive])
+}
+
 enum ConsentType {
   TERMS_OF_SERVICE
   PRIVACY_POLICY
   COOKIE_PREFERENCES
   WHATSAPP_MARKETING
+  EMAIL_MARKETING
 }
 
 enum ConsentChannel {

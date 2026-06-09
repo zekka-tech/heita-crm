@@ -12,6 +12,8 @@ type SettingsLayoutProps = {
 
 const TABS = [
   { href: "staff", label: "Staff" },
+  { href: "integrations", label: "Integrations" },
+  { href: "templates", label: "Templates" },
   { href: "billing", label: "Billing" }
 ] as const;
 

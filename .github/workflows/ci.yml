@@ -429,6 +429,10 @@ jobs:
       CRON_SECRET: "ci-lighthouse-cron-secret-not-for-prod"
       TURNSTILE_SECRET_KEY: "ci-lighthouse-turnstile-key"
       OLLAMA_BASE_URL: "http://localhost:11434"
+      # Standalone server runs as NODE_ENV=production; satisfy the prod-only
+      # malware-scan validation (no clamav daemon is reached during Lighthouse).
+      MALWARE_SCAN_MODE: "clamav"
+      MALWARE_SCAN_REQUIRED: "1"
     steps:
       - uses: actions/checkout@v6
 

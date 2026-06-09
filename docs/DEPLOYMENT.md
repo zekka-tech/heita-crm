@@ -110,6 +110,7 @@ locked).
 | `/api/cron/send-reminders` | Send due loyalty / points reminders | hourly |
 | `/api/cron/cleanup-otp` | Purge expired OTP codes | hourly |
 | `/api/cron/expire-points` | Expire points past their TTL | daily |
+| `/api/cron/send-expiry-warnings` | Send WhatsApp + push warnings 7 days before points expire | daily |
 | `/api/cron/recalculate-tiers` | Recompute membership tiers | daily |
 | `/api/cron/purge-whatsapp-messages` | Delete WhatsApp messages past retention | daily |
 | `/api/cron/hard-delete-users` | Hard-delete users past the soft-delete window | daily |
@@ -125,6 +126,7 @@ CRON_SECRET_FILE=/etc/heita/cron.env
 0    *  * * *  root  . /etc/heita/cron.env; curl -fsS -m 60 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/send-reminders
 15   *  * * *  root  . /etc/heita/cron.env; curl -fsS -m 60 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/cleanup-otp
 0    2  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/expire-points
+10   2  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/send-expiry-warnings
 30   2  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/recalculate-tiers
 0    3  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/purge-whatsapp-messages
 30   3  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/hard-delete-users

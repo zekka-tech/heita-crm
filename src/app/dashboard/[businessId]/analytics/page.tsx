@@ -23,6 +23,7 @@ import {
   MessagesChart,
   TopRewardsTable,
 } from "@/components/analytics/charts-loader";
+import { ExportAnalyticsButton } from "./export-button";
 
 export const dynamic = "force-dynamic";
 
@@ -102,9 +103,12 @@ export default async function AnalyticsPage({
           <Chip variant="primary" className="bg-white/15 text-white border-white/20">
             {business.name} · Analytics
           </Chip>
-          <h1 className="mt-4 font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Analytics
-          </h1>
+          <div className="mt-4 flex items-start justify-between gap-4">
+            <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+              Analytics
+            </h1>
+            <ExportAnalyticsButton businessId={businessId} />
+          </div>
           <p className="mt-2 max-w-2xl text-white/85">
             Member growth, loyalty activity, and conversation volume — all in one place.
           </p>

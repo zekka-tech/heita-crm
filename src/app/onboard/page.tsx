@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Input, Select, Textarea } from "@/components/ui/input";
+import { OnboardTracker } from "@/components/onboarding/onboard-tracker";
 import { CsrfField } from "@/components/security/csrf-field";
 import { auth } from "@/lib/auth";
 import {
@@ -39,6 +40,8 @@ export default async function OnboardPage() {
             workspace. You can create custom loyalty tiers once your programme is set up.
           </p>
         </header>
+
+        <OnboardTracker />
 
         <form action={createBusinessAction} className="grid gap-5">
           <CsrfField />

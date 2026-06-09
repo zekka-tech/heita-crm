@@ -2,11 +2,19 @@ import { StaffRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
-const ROLE_LEVEL: Record<Exclude<StaffRole, "AI_TRAINER">, number> = {
+const ROLE_LEVEL: Record<Exclude<StaffRole, "AI_TRAINER" | "FRANCHISE_ADMIN">, number> = {
   STAFF: 1,
   MANAGER: 2,
   OWNER: 3
 };
+
+const FRANCHISE_ADMIN_LEVEL = 4;
+
+function getRoleLevel(role: StaffRole): number {
+  if (role === "FRANCHISE_ADMIN") return FRANCHISE_ADMIN_LEVEL;
+  if (role === "AI_TRAINER") return 0;
+  return ROLE_LEVEL[role];
+}
 
 export function hasStaffRoleAccess(
   role: StaffRole,
@@ -29,7 +37,7 @@ export function hasStaffRoleAccess(
       return highest;
     }
 
-    const level = ROLE_LEVEL[allowedRole];
+    const level = getRoleLevel(allowedRole);
     if (highest === null || level > highest) {
       return level;
     }
@@ -41,7 +49,7 @@ export function hasStaffRoleAccess(
     return false;
   }
 
-  return ROLE_LEVEL[role] >= requiredLevel;
+  return getRoleLevel(role) >= requiredLevel;
 }
 
 export async function requireRole(input: {

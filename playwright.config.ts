@@ -96,6 +96,12 @@ export default defineConfig({
       CRON_SECRET: process.env.CRON_SECRET ?? "e2e-cron-secret-not-for-prod-ci-only",
       TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY ?? "e2e-turnstile-key",
       OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
+      // Production env validation (NODE_ENV=production under standalone server)
+      // requires malware scanning to be enabled. No clamav daemon runs in CI,
+      // but the e2e/smoke suites only assert auth rejection on upload endpoints
+      // and never reach the scan path, so these satisfy validation harmlessly.
+      MALWARE_SCAN_MODE: process.env.MALWARE_SCAN_MODE ?? "clamav",
+      MALWARE_SCAN_REQUIRED: process.env.MALWARE_SCAN_REQUIRED ?? "1",
       E2E_EXPOSE_DEV_OTP: "1"
     }
   }

@@ -138,7 +138,8 @@
     "channels": {
       "inApp": "In-app voer",
       "push": "Blaaier-drukkennisgewings",
-      "email": "E-pos"
+      "email": "E-pos",
+      "whatsapp": "WhatsApp"
     },
     "quietHours": {
       "enabled": "Pouseer drukkennisgewings en e-pos tydens stil ure",

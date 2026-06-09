@@ -8,6 +8,7 @@ import {
   createPromotionAction,
   updatePromotionAction
 } from "@/app/dashboard/[businessId]/promotions/actions";
+import { AiSuggestButton } from "@/app/dashboard/[businessId]/promotions/ai-suggest-button";
 import { DeletePromotionButton } from "@/app/dashboard/[businessId]/promotions/delete-promotion-button";
 import { CsrfField } from "@/components/security/csrf-field";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -184,6 +185,10 @@ export default async function PromotionsDashboardPage({
               {t("saveCta")}
             </SubmitButton>
           </form>
+        </Card>
+
+        <Card variant="outline" className="space-y-3 p-5">
+          <AiSuggestButton businessId={business.id} />
         </Card>
 
         <Card variant="outline" className="space-y-2 border-warning/40 bg-warning/5">

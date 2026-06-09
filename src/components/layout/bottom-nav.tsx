@@ -25,7 +25,8 @@ export function BottomNav() {
   const { data: unreadData } = useQuery(
     trpc.notifications.unreadCount.queryOptions(undefined, {
       refetchInterval: 60_000,
-      staleTime: 30_000
+      staleTime: 30_000,
+      retry: false
     })
   );
   const unreadCount = unreadData?.count ?? 0;

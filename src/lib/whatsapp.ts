@@ -139,6 +139,65 @@ export async function sendWhatsAppTextMessage(input: {
   };
 }
 
+export type WhatsAppTemplateStatus =
+  | "APPROVED"
+  | "PENDING"
+  | "REJECTED"
+  | "PAUSED"
+  | "DISABLED"
+  | "IN_APPEAL"
+  | "PENDING_DELETION"
+  | (string & {});
+
+export type WhatsAppMessageTemplate = {
+  name: string;
+  status: WhatsAppTemplateStatus;
+  category: string | null;
+  language: string | null;
+};
+
+type GraphTemplateListResponse = {
+  data?: Array<{
+    name?: string;
+    status?: string;
+    category?: string;
+    language?: string;
+  }>;
+};
+
+/**
+ * Lists message templates for a WhatsApp Business Account (WABA) from the Meta
+ * Graph API. Heita's automated templates are platform-owned, so the WABA id
+ * comes from WHATSAPP_BUSINESS_ACCOUNT_ID. Returns null when WhatsApp is not
+ * configured so callers can render an unconfigured state instead of erroring.
+ */
+export async function listWhatsAppMessageTemplates(options?: {
+  wabaId?: string;
+  limit?: number;
+}): Promise<WhatsAppMessageTemplate[] | null> {
+  const wabaId = options?.wabaId ?? process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+  if (!wabaId || !process.env.WHATSAPP_ACCESS_TOKEN) {
+    return null;
+  }
+
+  const limit = options?.limit ?? 200;
+  const payload = await requestWhatsApp<GraphTemplateListResponse>(
+    `${wabaId}/message_templates?fields=name,status,category,language&limit=${limit}`,
+    { method: "GET", retryable: true }
+  );
+
+  return (payload.data ?? [])
+    .filter((template): template is { name: string } & typeof template =>
+      Boolean(template.name)
+    )
+    .map((template) => ({
+      name: template.name,
+      status: (template.status ?? "UNKNOWN") as WhatsAppTemplateStatus,
+      category: template.category ?? null,
+      language: template.language ?? null
+    }));
+}
+
 export async function sendWhatsAppTemplateMessage(input: {
   phoneNumberId: string;
   to: string;

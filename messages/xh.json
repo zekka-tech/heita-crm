@@ -138,7 +138,8 @@
     "channels": {
       "inApp": "Umjelo wangaphakathi kwi-app",
       "push": "I-browser push",
-      "email": "I-imeyili"
+      "email": "I-imeyili",
+      "whatsapp": "I-WhatsApp"
     },
     "quietHours": {
       "enabled": "Misa i-push ne-imeyili ngexesha leeyure zoxolo",

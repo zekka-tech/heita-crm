@@ -72,7 +72,7 @@ const envSchema = z
     VAPID_SUBJECT: z.string().optional(),
 
     // Malware scanning
-    MALWARE_SCAN_MODE: z.enum(["none", "clamav"]).optional(),
+    MALWARE_SCAN_MODE: z.enum(["disabled", "clamav"]).optional(),
     MALWARE_SCAN_REQUIRED: z.enum(["0", "1"]).optional(),
     CLAMAV_HOST: z.string().optional(),
     CLAMAV_PORT: z.coerce.number().int().optional(),
@@ -85,6 +85,7 @@ const envSchema = z
     // Email (Resend)
     EMAIL_FROM: z.string().optional(),
     EMAIL_SERVER_PASSWORD: z.string().optional(),
+    EMAIL_WEBHOOK_SECRET: z.string().optional(),
 
     // Africa's Talking (SMS + webhooks)
     AT_API_KEY: z.string().optional(),
@@ -255,6 +256,24 @@ const envSchema = z
         code: z.ZodIssueCode.custom,
         message: "VAPID_SUBJECT (mailto: or https: contact) is required when VAPID_PRIVATE_KEY is set.",
         path: ["VAPID_SUBJECT"]
+      });
+    }
+
+    if (isProduction && data.MALWARE_SCAN_MODE !== "clamav") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "MALWARE_SCAN_MODE should be 'clamav' in production to protect against malicious file uploads.",
+        path: ["MALWARE_SCAN_MODE"]
+      });
+    }
+
+    if (isProduction && data.MALWARE_SCAN_REQUIRED !== "1") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "MALWARE_SCAN_REQUIRED should be '1' in production to block uploads when malware scanning is unavailable.",
+        path: ["MALWARE_SCAN_REQUIRED"]
       });
     }
 

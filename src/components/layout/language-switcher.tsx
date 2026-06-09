@@ -8,11 +8,17 @@ import { useCsrfToken } from "@/hooks/use-csrf-token";
 import { localeLabels, locales, type Locale } from "@/i18n/config";
 import { appendCsrfHeader } from "@/lib/csrf";
 
-export function LanguageSwitcher({ className }: { className?: string }) {
+export function LanguageSwitcher({
+  className,
+  serverToken
+}: {
+  className?: string;
+  serverToken?: string | null;
+}) {
   const locale = useLocale() as Locale;
   const router = useRouter();
   const t = useTranslations("languageSwitcher");
-  const csrfToken = useCsrfToken();
+  const csrfToken = useCsrfToken(serverToken);
   const [isSwitching, startTransition] = useTransition();
 
   const onChange = (next: Locale) => {
