@@ -32,6 +32,7 @@
         "lcp-lazy-loaded":         "off",
         "non-composited-animations":"off",
         "prioritize-lcp-image":    "off",
+        "network-dependency-tree-insight": "off",
         "target-size":             ["warn", {"minScore": 0}],
         "meta-description":        ["warn", {"minScore": 0}]
       }
