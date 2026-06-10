@@ -198,6 +198,24 @@ export async function deleteStoredObject(key: string) {
   );
 }
 
+export async function createPresignedDownload(input: { key: string; expiresInSeconds?: number }) {
+  const config = getStorageConfig();
+  const client = getStorageClient();
+
+  if (!config || !client) {
+    throw new Error("Object storage is not configured.");
+  }
+
+  const command = new GetObjectCommand({
+    Bucket: config.bucket,
+    Key: input.key
+  });
+
+  return getSignedUrl(client, command, {
+    expiresIn: input.expiresInSeconds ?? 15 * 60
+  });
+}
+
 export async function getStoredObjectBuffer(key: string) {
   const config = getStorageConfig();
   const client = getStorageClient();

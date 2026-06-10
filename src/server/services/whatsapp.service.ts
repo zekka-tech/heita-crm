@@ -12,6 +12,7 @@ import {
   sendWhatsAppTextMessage
 } from "@/lib/whatsapp";
 import { handleCommerceCommand } from "@/server/services/whatsapp-commerce.service";
+import { markCustomerResponded } from "@/server/services/sales-thread.service";
 
 const WEBHOOK_TIMESTAMP_SKEW_SECONDS = 5 * 60;
 
@@ -488,6 +489,13 @@ async function routeInboundToBusiness(input: RouteInput): Promise<void> {
       mediaMessage: input.mediaMessage
     });
   }
+
+  await markCustomerResponded({
+    businessId: input.businessId,
+    contactPhone: input.fromPhone,
+    messageId: inboundMessage.id,
+    at: inboundMessage.createdAt
+  });
 
   if (!existingUser) {
     await sendOnboardingPrompt(input);

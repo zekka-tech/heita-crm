@@ -1,13 +1,13 @@
 import { runWithCircuitBreaker } from "@/lib/circuit-breaker";
 import { appendTraceHeaders } from "@/lib/tracing";
 
-export async function sendOtpSms(input: { to: string; code: string }) {
+async function sendAfricasTalkingSms(input: { to: string; body: string }) {
   const apiKey = process.env.AT_API_KEY;
   if (!apiKey) {
     return {
       provider: "development",
       to: input.to,
-      body: `Your Heita verification code is ${input.code}.`
+      body: input.body
     };
   }
 
@@ -16,11 +16,10 @@ export async function sendOtpSms(input: { to: string; code: string }) {
     throw new Error("AT_USERNAME is required when Africa's Talking is enabled.");
   }
 
-  const body = `Your Heita verification code is ${input.code}.`;
   const form = new URLSearchParams({
     username,
     to: input.to,
-    message: body
+    message: input.body
   });
 
   if (process.env.AT_SENDER_ID) {
@@ -65,7 +64,18 @@ export async function sendOtpSms(input: { to: string; code: string }) {
   return {
     provider: "africas-talking",
     to: input.to,
-    body,
+    body: input.body,
     messageId: recipient.messageId ?? null
   };
+}
+
+export async function sendSms(input: { to: string; body: string }) {
+  return sendAfricasTalkingSms(input);
+}
+
+export async function sendOtpSms(input: { to: string; code: string }) {
+  return sendAfricasTalkingSms({
+    to: input.to,
+    body: `Your Heita verification code is ${input.code}.`
+  });
 }

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   listWhatsAppMessageTemplates,
   sendWhatsAppInteractiveButtonsMessage,
+  sendWhatsAppDocumentMessage,
   sendWhatsAppInteractiveListMessage,
   sendWhatsAppTemplateMessage,
   sendWhatsAppTextMessage
@@ -34,6 +35,34 @@ afterEach(() => {
 });
 
 describe("whatsapp client", () => {
+  it("sends document payloads with link and caption", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.to).toBe("27821234567");
+      expect(body.type).toBe("document");
+      expect(body.document.link).toBe("https://files.test/quote.pdf");
+      expect(body.document.filename).toBe("quote.pdf");
+      expect(body.document.caption).toBe("Please review");
+
+      return new Response(JSON.stringify({ messages: [{ id: "wamid.document" }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await sendWhatsAppDocumentMessage({
+      phoneNumberId: "1234",
+      to: "+27 82 123 4567",
+      link: "https://files.test/quote.pdf",
+      fileName: "quote.pdf",
+      caption: "Please review"
+    });
+
+    expect(result.messageId).toBe("wamid.document");
+  });
+
   it("sends text payloads with normalized recipients", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));

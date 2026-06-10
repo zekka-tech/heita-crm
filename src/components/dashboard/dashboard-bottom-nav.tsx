@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart2,
+  BriefcaseBusiness,
   Gift,
   LayoutDashboard,
   MessageSquare,
@@ -27,6 +28,7 @@ const ITEMS: NavItem[] = [
   { segment: "loyalty", label: "Loyalty", icon: Gift },
   { segment: "customers", label: "Members", icon: Users },
   { segment: "messages", label: "Messages", icon: MessageSquare },
+  { segment: "sales", label: "Sales", icon: BriefcaseBusiness },
   { segment: "analytics", label: "Analytics", icon: BarChart2 },
   { segment: "ai-workspace", label: "AI", icon: Sparkles },
   { segment: "settings", label: "Settings", icon: Settings }

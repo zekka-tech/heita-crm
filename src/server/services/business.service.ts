@@ -13,6 +13,7 @@ import {
   putStoredObject,
   storageConfigured
 } from "@/lib/storage";
+import { DEFAULT_PIPELINE_STAGES } from "@/server/services/pipeline-stage-defaults";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 // Allowed logo image types mapped to their file extension.
@@ -106,6 +107,16 @@ export async function createBusinessWithDefaults(input: CreateBusinessInput) {
       },
       aiWorkspace: {
         create: {}
+      },
+      pipelineStages: {
+        create: DEFAULT_PIPELINE_STAGES.map((stage) => ({
+          key: stage.key,
+          label: stage.label,
+          order: stage.order,
+          isTerminal: stage.isTerminal ?? false,
+          defaultFollowUpHours: stage.defaultFollowUpHours ?? null,
+          autoAdvanceOnReply: stage.autoAdvanceOnReply ?? true
+        }))
       },
       loyaltyTiers: {
         create: [

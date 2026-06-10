@@ -4,6 +4,12 @@ import { appendTraceHeaders } from "@/lib/tracing";
 
 type EmailTag = "auth" | "notification" | "marketing" | "account" | "system";
 
+type EmailAttachment = {
+  filename: string;
+  content: string;
+  contentType?: string;
+};
+
 type EmailInput = {
   to: string;
   subject: string;
@@ -11,6 +17,7 @@ type EmailInput = {
   text: string;
   tag?: EmailTag;
   userId?: string;
+  attachments?: EmailAttachment[];
 };
 
 export function emailConfigured() {
@@ -71,6 +78,14 @@ export async function sendEmail(input: EmailInput) {
     text: input.text,
     headers
   };
+
+  if (input.attachments?.length) {
+    body.attachments = input.attachments.map((attachment) => ({
+      filename: attachment.filename,
+      content: attachment.content,
+      content_type: attachment.contentType
+    }));
+  }
 
   if (input.tag) {
     body.tags = [{ name: "category", value: input.tag }];

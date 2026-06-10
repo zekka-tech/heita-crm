@@ -139,6 +139,36 @@ export async function sendWhatsAppTextMessage(input: {
   };
 }
 
+export async function sendWhatsAppDocumentMessage(input: {
+  phoneNumberId: string;
+  to: string;
+  link: string;
+  fileName: string;
+  caption?: string;
+}) {
+  const payload = await requestWhatsApp<GraphMessageResponse>(
+    `${input.phoneNumberId}/messages`,
+    {
+      body: {
+        messaging_product: "whatsapp",
+        to: normalizeRecipient(input.to),
+        type: "document",
+        document: {
+          link: input.link,
+          filename: input.fileName,
+          ...(input.caption ? { caption: input.caption } : {})
+        }
+      },
+      retryable: true
+    }
+  );
+
+  return {
+    payload,
+    messageId: getMessageId(payload)
+  };
+}
+
 export type WhatsAppTemplateStatus =
   | "APPROVED"
   | "PENDING"

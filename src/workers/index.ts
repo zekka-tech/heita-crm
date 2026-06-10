@@ -5,11 +5,13 @@ import { registerShutdownHandler } from "@/lib/shutdown";
 import { startCustomerImportWorker } from "@/workers/customer-import.worker";
 import { startDocumentIngestionWorker } from "@/workers/ingest-document.worker";
 import { startWebCrawlWorker } from "@/workers/crawl-web-source.worker";
+import { startFollowUpWorker } from "@/workers/follow-up.worker";
 
 export async function startWorkers() {
   const documentWorker = startDocumentIngestionWorker();
   const customerImportWorker = startCustomerImportWorker();
   const webCrawlWorker = startWebCrawlWorker();
+  const followUpWorker = startFollowUpWorker();
 
   // Phase: workers — drain in-flight jobs before disconnecting DB/Redis
   registerShutdownHandler(async () => {
@@ -21,6 +23,9 @@ export async function startWorkers() {
     }
     if (webCrawlWorker) {
       await webCrawlWorker.close().catch(() => undefined);
+    }
+    if (followUpWorker) {
+      await followUpWorker.close().catch(() => undefined);
     }
   }, "workers");
 
@@ -44,7 +49,7 @@ export async function startWorkers() {
   }, "infra");
 
   return {
-    status: documentWorker || customerImportWorker || webCrawlWorker ? "running" : "idle"
+    status: documentWorker || customerImportWorker || webCrawlWorker || followUpWorker ? "running" : "idle"
   };
 }
 

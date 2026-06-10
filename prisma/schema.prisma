@@ -40,6 +40,10 @@ model User {
   importRuns              CustomerImportRun[]   @relation("CustomerImportActor")
   ocrReceipts             OcrReceipt[]
   reviewedReceipts        OcrReceipt[]          @relation("OcrReceiptReviewer")
+  salesThreads            SalesThread[]
+  salesThreadsCreated     SalesThread[]         @relation("SalesThreadCreator")
+  outboundDocuments       OutboundDocument[]    @relation("OutboundDocumentUploader")
+  followUpsApproved       FollowUpTask[]        @relation("FollowUpApprover")
 }
 
 model Account {
@@ -150,6 +154,10 @@ model Business {
   invoices             BusinessInvoice[]
   ocrReceipts          OcrReceipt[]
   customerSegments     CustomerSegment[]
+  pipelineStages       PipelineStage[]
+  salesThreads         SalesThread[]
+  outboundDocuments    OutboundDocument[]
+  followUpTasks        FollowUpTask[]
 
   @@index([parentBusinessId])
 }
@@ -201,6 +209,7 @@ model Membership {
   tier               LoyaltyTier?         @relation(fields: [tierId], references: [id], onDelete: SetNull)
   transactions       LoyaltyTransaction[]
   referredByCode     ReferralCode?        @relation("ReferralAttribution", fields: [referredByCodeId], references: [id], onDelete: SetNull)
+  salesThreads       SalesThread[]
 
   @@unique([businessId, userId])
   @@index([userId])
@@ -466,16 +475,20 @@ model Message {
   metadata      Json?
   sentAt        DateTime?
   readByStaffAt DateTime?
+  salesThreadId String?
   createdAt     DateTime            @default(now())
   business      Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
   user          User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
   attachments   MessageAttachment[]
+  salesThread   SalesThread?        @relation(fields: [salesThreadId], references: [id], onDelete: SetNull)
+  followUpTask  FollowUpTask?
 
   @@unique([channel, externalId])
   @@index([businessId, channel, createdAt])
   @@index([businessId, direction, createdAt])
   @@index([businessId, contactPhone, createdAt])
   @@index([businessId, readByStaffAt])
+  @@index([salesThreadId, createdAt])
   @@index([userId])
 }
 
@@ -521,6 +534,110 @@ model MessageAttachment {
 
   @@index([messageId, createdAt])
   @@index([externalMediaId])
+}
+
+
+model PipelineStage {
+  id                   String        @id @default(cuid())
+  businessId           String
+  key                  String
+  label                String
+  order                Int
+  isTerminal           Boolean       @default(false)
+  defaultFollowUpHours Int?
+  autoAdvanceOnReply   Boolean       @default(true)
+  createdAt            DateTime      @default(now())
+  business             Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  salesThreads         SalesThread[]
+  followUpTasks        FollowUpTask[]
+
+  @@unique([businessId, key])
+  @@index([businessId, order])
+}
+
+model SalesThread {
+  id                  String              @id @default(cuid())
+  businessId          String
+  membershipId        String?
+  userId              String?
+  contactPhone        String
+  title               String
+  stageId             String
+  status              SalesThreadStatus   @default(OPEN)
+  preferredChannel    MessageChannel?
+  valueZar            Decimal?            @db.Decimal(12, 2)
+  lastCustomerReplyAt DateTime?
+  lastOutboundAt      DateTime?
+  nextFollowUpAt      DateTime?
+  createdByUserId     String?
+  closedAt            DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  business            Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  membership          Membership?         @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  user                User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  stage               PipelineStage       @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  createdByUser       User?               @relation("SalesThreadCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  messages            Message[]
+  documents           OutboundDocument[]
+  followUpTasks       FollowUpTask[]
+
+  @@index([businessId, status, updatedAt])
+  @@index([businessId, stageId])
+  @@index([businessId, contactPhone])
+  @@index([nextFollowUpAt])
+  @@index([membershipId])
+  @@index([userId])
+  @@index([createdByUserId])
+}
+
+model OutboundDocument {
+  id               String               @id @default(cuid())
+  businessId       String
+  salesThreadId    String
+  kind             OutboundDocumentKind
+  title            String
+  fileName         String
+  mimeType         String
+  byteSize         Int
+  storageKey       String               @unique
+  uploadedByUserId String?
+  createdAt        DateTime             @default(now())
+  business         Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  salesThread      SalesThread          @relation(fields: [salesThreadId], references: [id], onDelete: Cascade)
+  uploadedByUser   User?                @relation("OutboundDocumentUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, salesThreadId])
+  @@index([uploadedByUserId])
+}
+
+model FollowUpTask {
+  id               String         @id @default(cuid())
+  businessId       String
+  salesThreadId    String
+  stageId          String
+  channel          MessageChannel
+  dueAt            DateTime
+  status           FollowUpStatus @default(SCHEDULED)
+  reason           String
+  aiDraftBody      String?
+  approvedBody     String?
+  approvedByUserId String?
+  sentMessageId    String?        @unique
+  bullJobId        String?
+  attempts         Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  business         Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  salesThread      SalesThread    @relation(fields: [salesThreadId], references: [id], onDelete: Cascade)
+  stage            PipelineStage  @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  approvedByUser   User?          @relation("FollowUpApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  sentMessage      Message?       @relation(fields: [sentMessageId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, status, dueAt])
+  @@index([salesThreadId])
+  @@index([stageId])
+  @@index([approvedByUserId])
 }
 
 model Notification {
@@ -688,6 +805,32 @@ enum OtpPurpose {
   PASSWORD_RESET
   VERIFY_PHONE
   STAFF_STEP_UP
+}
+
+enum SalesThreadStatus {
+  OPEN
+  WON
+  LOST
+  ARCHIVED
+}
+
+enum FollowUpStatus {
+  SCHEDULED
+  DRAFTING
+  AWAITING_APPROVAL
+  APPROVED
+  SENT
+  CANCELLED
+  SKIPPED
+  FAILED
+}
+
+enum OutboundDocumentKind {
+  QUOTE
+  SALES_ORDER
+  INVOICE
+  PURCHASE_ORDER
+  OTHER
 }
 
 model CustomerSegment {

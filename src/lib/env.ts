@@ -30,6 +30,7 @@ const envSchema = z
     WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
     WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().optional(),
     WHATSAPP_API_VERSION: z.string().optional(),
+    FOLLOWUP_WHATSAPP_TEMPLATE: z.string().optional(),
 
     // AI providers
     ANTHROPIC_API_KEY: z.string().optional(),
@@ -110,6 +111,7 @@ const envSchema = z
     // Customer import (inline vs queued)
     CUSTOMER_IMPORT_INLINE: z.enum(["0", "1"]).optional(),
     AI_INGEST_INLINE: z.enum(["0", "1"]).optional(),
+    FOLLOWUP_INLINE: z.enum(["0", "1"]).default("0"),
 
     // Process / runtime ops
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60_000).optional(),
