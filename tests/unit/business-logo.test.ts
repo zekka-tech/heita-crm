@@ -55,8 +55,12 @@ describe("uploadBusinessLogo", () => {
     expect(url).toBe("https://cdn.example/business-logos/x.png");
     expect(storage.putStoredObject).toHaveBeenCalledTimes(1);
     expect(scan.scanStoredObjectForMalware).toHaveBeenCalledTimes(1);
-    const putArg = storage.putStoredObject.mock.calls[0]![0] as { key: string };
-    expect(putArg.key).toMatch(/^business-logos\/.+\.png$/);
+    expect(storage.putStoredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: expect.stringMatching(/^business-logos\/.+\.png$/),
+        contentType: "image/png"
+      })
+    );
   });
 
   it("deletes the object and throws when the scan reports infected", async () => {
