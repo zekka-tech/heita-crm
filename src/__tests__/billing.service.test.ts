@@ -63,9 +63,18 @@ describe("getEffectivePlan", () => {
     await expect(getEffectivePlan("biz1")).resolves.toBe("SCALE");
   });
 
-  it("downgrades to FREE when the latest subscription is PAST_DUE", async () => {
+  it("keeps a paid plan during the past-due grace window", async () => {
     prisma.business.findUnique.mockResolvedValue({ planId: "GROWTH" });
-    prisma.businessSubscription.findFirst.mockResolvedValue({ status: "PAST_DUE" });
+    prisma.businessSubscription.findFirst.mockResolvedValue({ status: "PAST_DUE", updatedAt: new Date() });
+    await expect(getEffectivePlan("biz1")).resolves.toBe("GROWTH");
+  });
+
+  it("downgrades to FREE when the latest PAST_DUE subscription is outside grace", async () => {
+    prisma.business.findUnique.mockResolvedValue({ planId: "GROWTH" });
+    prisma.businessSubscription.findFirst.mockResolvedValue({
+      status: "PAST_DUE",
+      updatedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)
+    });
     await expect(getEffectivePlan("biz1")).resolves.toBe("FREE");
   });
 
@@ -93,9 +102,12 @@ describe("paid-plan feature gating", () => {
     await expect(requirePaidBusinessPlan("biz1", "Sales pipeline")).resolves.toBe("GROWTH");
   });
 
-  it("rejects paid-only features when a paid plan is PAST_DUE", async () => {
+  it("rejects paid-only features when a paid plan is past-due beyond grace", async () => {
     prisma.business.findUnique.mockResolvedValue({ planId: "GROWTH" });
-    prisma.businessSubscription.findFirst.mockResolvedValue({ status: "PAST_DUE" });
+    prisma.businessSubscription.findFirst.mockResolvedValue({
+      status: "PAST_DUE",
+      updatedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)
+    });
     await expect(requirePaidBusinessPlan("biz1", "Sales pipeline")).rejects.toThrow(/paid plans only/);
   });
 });

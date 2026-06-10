@@ -114,6 +114,7 @@ locked).
 | `/api/cron/recalculate-tiers` | Recompute membership tiers | daily |
 | `/api/cron/purge-whatsapp-messages` | Delete WhatsApp messages past retention | daily |
 | `/api/cron/hard-delete-users` | Hard-delete users past the soft-delete window | daily |
+| `/api/cron/sweep-follow-ups` | Re-enqueue due sales follow-ups whose delayed jobs were dropped or missed | every 15 min |
 | `/api/cron/refresh-web-sources` | Re-crawl AI web sources whose refresh interval elapsed (unchanged pages skipped via `contentHash`) | daily |
 
 Example host `crontab` (replace `$DOMAIN`; keep `CRON_SECRET` out of the crontab
@@ -123,6 +124,7 @@ file itself — source it from a root-only env file):
 # /etc/cron.d/heita  — runs in UTC; %-signs must be escaped in cron.d
 CRON_SECRET_FILE=/etc/heita/cron.env
 */15 *  * * *  root  . /etc/heita/cron.env; curl -fsS -m 60 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/broadcast-promotions
+*/15 *  * * *  root  . /etc/heita/cron.env; curl -fsS -m 60 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/sweep-follow-ups
 0    *  * * *  root  . /etc/heita/cron.env; curl -fsS -m 60 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/send-reminders
 15   *  * * *  root  . /etc/heita/cron.env; curl -fsS -m 60 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/cleanup-otp
 0    2  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/expire-points
