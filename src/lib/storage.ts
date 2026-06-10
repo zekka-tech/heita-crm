@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
 
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
@@ -179,6 +180,22 @@ function streamToBuffer(stream: Readable | ReadableStream<Uint8Array>) {
 
     return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
   })();
+}
+
+export async function deleteStoredObject(key: string) {
+  const config = getStorageConfig();
+  const client = getStorageClient();
+
+  if (!config || !client) {
+    return;
+  }
+
+  await client.send(
+    new DeleteObjectCommand({
+      Bucket: config.bucket,
+      Key: key
+    })
+  );
 }
 
 export async function getStoredObjectBuffer(key: string) {

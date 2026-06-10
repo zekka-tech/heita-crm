@@ -43,7 +43,11 @@ export default async function OnboardPage() {
 
         <OnboardTracker />
 
-        <form action={createBusinessAction} className="grid gap-5">
+        <form
+          action={createBusinessAction}
+          className="grid gap-5"
+          encType="multipart/form-data"
+        >
           <CsrfField />
           <Input
             label="Business name"
@@ -58,6 +62,19 @@ export default async function OnboardPage() {
             rows={4}
             placeholder="Tell customers what makes this business worth joining."
           />
+
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium text-ink">Logo (optional)</span>
+            <input
+              type="file"
+              name="logo"
+              accept="image/png,image/jpeg,image/webp"
+              className="block w-full rounded-xl border border-line bg-surface-elevated px-3 py-2 text-sm text-ink file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-primary-dark"
+            />
+            <span className="text-xs text-ink-subtle">
+              PNG, JPEG, or WebP · up to 2&nbsp;MB. Shown on your public profile and join page.
+            </span>
+          </label>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Select label="Category" name="category" defaultValue="" required>
