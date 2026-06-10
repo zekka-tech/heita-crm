@@ -34,14 +34,15 @@ const ITEMS: NavItem[] = [
   { segment: "settings", label: "Settings", icon: Settings }
 ];
 
-type Props = { businessId: string; isFranchiseHQ: boolean };
+type Props = { businessId: string; isFranchiseHQ: boolean; hasSalesAccess?: boolean };
 
-export function DashboardBottomNav({ businessId, isFranchiseHQ }: Props) {
+export function DashboardBottomNav({ businessId, isFranchiseHQ, hasSalesAccess = false }: Props) {
   const pathname = usePathname();
 
+  const baseItems = hasSalesAccess ? ITEMS : ITEMS.filter((item) => item.segment !== "sales");
   const items = isFranchiseHQ
-    ? [...ITEMS, { segment: "franchise", label: "Franchise", icon: Store }]
-    : ITEMS;
+    ? [...baseItems, { segment: "franchise", label: "Franchise", icon: Store }]
+    : baseItems;
 
   return (
     <nav
@@ -107,12 +108,13 @@ function SidebarNavItem({ label, icon: Icon, active, href }: SidebarItem) {
   );
 }
 
-export function DashboardSidebarNav({ businessId, isFranchiseHQ }: Props) {
+export function DashboardSidebarNav({ businessId, isFranchiseHQ, hasSalesAccess = false }: Props) {
   const pathname = usePathname();
 
+  const baseItems = hasSalesAccess ? ITEMS : ITEMS.filter((item) => item.segment !== "sales");
   const items = isFranchiseHQ
-    ? [...ITEMS, { segment: "franchise", label: "Franchise", icon: Store }]
-    : ITEMS;
+    ? [...baseItems, { segment: "franchise", label: "Franchise", icon: Store }]
+    : baseItems;
 
   return (
     <aside className="hidden lg:flex lg:w-56 lg:shrink-0 lg:flex-col lg:gap-1 lg:border-r lg:border-line lg:bg-surface lg:px-3 lg:py-6">

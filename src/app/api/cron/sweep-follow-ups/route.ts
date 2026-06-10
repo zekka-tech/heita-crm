@@ -1,4 +1,4 @@
-import { FollowUpStatus, MessageChannel, SalesThreadStatus } from "@prisma/client";
+import { BusinessPlanId, FollowUpStatus, MessageChannel, SalesThreadStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { enqueueFollowUpJob } from "@/lib/follow-up-queue";
@@ -10,6 +10,7 @@ import { constantTimeEqual } from "@/lib/security";
 export const dynamic = "force-dynamic";
 
 const MAX_PER_RUN = 50;
+const PAID_PLAN_IDS: BusinessPlanId[] = [BusinessPlanId.GROWTH, BusinessPlanId.SCALE];
 const ACTIVE_STATUSES = [
   FollowUpStatus.SCHEDULED,
   FollowUpStatus.DRAFTING,
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
   const threads = await prisma.salesThread.findMany({
     where: {
       status: SalesThreadStatus.OPEN,
+      business: { planId: { in: PAID_PLAN_IDS } },
       nextFollowUpAt: { lte: now },
       followUpTasks: { none: { status: { in: ACTIVE_STATUSES } } }
     },

@@ -19,6 +19,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { auth } from "@/lib/auth";
 import { requireRole } from "@/lib/staff";
+import { requirePaidBusinessPlan } from "@/server/services/billing.service";
 import { getThreadDetail, listPipelineStages } from "@/server/services/sales-thread.service";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,11 @@ export default async function SalesThreadPage({ params, searchParams }: PageProp
   const session = await auth();
   if (!session?.user?.id) redirect(("/sign-in?callbackUrl=/dashboard/" + businessId + "/sales/" + threadId) as never);
   await requireRole({ businessId, userId: session.user.id, allowedRoles: [StaffRole.STAFF] });
+  try {
+    await requirePaidBusinessPlan(businessId, "Sales pipeline");
+  } catch {
+    redirect(("/dashboard/" + businessId + "/settings/billing?sales=upgrade") as never);
+  }
 
   let thread;
   try {

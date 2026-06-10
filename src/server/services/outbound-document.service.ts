@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { deleteStoredObject, putStoredObject, storageConfigured } from "@/lib/storage";
 import { sendOnChannel, type ChannelDispatchResult } from "@/server/services/channel-dispatch.service";
+import { requirePaidBusinessPlan } from "@/server/services/billing.service";
 import { scheduleFollowUp } from "@/server/services/follow-up.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
@@ -37,6 +38,7 @@ export async function attachDocument(input: {
   title?: string | null;
 }) {
   await requireRole({ businessId: input.businessId, userId: input.actorUserId, allowedRoles: [StaffRole.STAFF] });
+  await requirePaidBusinessPlan(input.businessId, "Sales document sending");
   if (!storageConfigured()) throw new Error("Document storage is not configured.");
   if (input.file.size <= 0) throw new Error("Document file is empty.");
   if (input.file.size > MAX_DOCUMENT_BYTES) throw new Error("Document must be 15 MB or smaller.");
@@ -101,6 +103,7 @@ export async function sendDocument(input: {
   actorUserId: string;
 }) {
   await requireRole({ businessId: input.businessId, userId: input.actorUserId, allowedRoles: [StaffRole.STAFF] });
+  await requirePaidBusinessPlan(input.businessId, "Sales document sending");
   const channels = [...new Set(input.channels)].filter((channel) => channel !== MessageChannel.PUSH);
   if (!channels.length) throw new Error("Select at least one send channel.");
   const body = input.body.trim();

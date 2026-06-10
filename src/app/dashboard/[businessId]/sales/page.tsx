@@ -12,6 +12,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
+import { requirePaidBusinessPlan } from "@/server/services/billing.service";
 import { listPipelineStages, listThreads } from "@/server/services/sales-thread.service";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,11 @@ export default async function SalesPage({ params, searchParams }: SalesPageProps
   if (!session?.user?.id) redirect(("/sign-in?callbackUrl=/dashboard/" + businessId + "/sales") as never);
 
   await requireRole({ businessId, userId: session.user.id, allowedRoles: [StaffRole.STAFF] });
+  try {
+    await requirePaidBusinessPlan(businessId, "Sales pipeline");
+  } catch {
+    redirect(("/dashboard/" + businessId + "/settings/billing?sales=upgrade") as never);
+  }
   const business = await prisma.business.findFirst({
     where: { id: businessId, staffMembers: { some: { userId: session.user.id } } },
     select: { id: true, name: true }

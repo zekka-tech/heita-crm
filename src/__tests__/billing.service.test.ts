@@ -21,9 +21,13 @@ vi.mock("@/server/services/staff-audit.service", () => ({
   recordStaffAuditLog: vi.fn().mockResolvedValue(undefined)
 }));
 
-const { checkPlanLimit, getEffectivePlan, handleYocoWebhook } = await import(
-  "@/server/services/billing.service"
-);
+const {
+  checkPlanLimit,
+  getEffectivePlan,
+  handleYocoWebhook,
+  isPaidBusinessPlan,
+  requirePaidBusinessPlan
+} = await import("@/server/services/billing.service");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -42,6 +46,24 @@ describe("getEffectivePlan", () => {
   it("falls back to FREE when business not found", async () => {
     prisma.business.findUnique.mockResolvedValue(null);
     await expect(getEffectivePlan("unknown")).resolves.toBe("FREE");
+  });
+});
+
+describe("paid-plan feature gating", () => {
+  it("identifies Growth and Scale as paid plans", () => {
+    expect(isPaidBusinessPlan("FREE")).toBe(false);
+    expect(isPaidBusinessPlan("GROWTH")).toBe(true);
+    expect(isPaidBusinessPlan("SCALE")).toBe(true);
+  });
+
+  it("rejects paid-only features on Free", async () => {
+    prisma.business.findUnique.mockResolvedValue({ planId: "FREE" });
+    await expect(requirePaidBusinessPlan("biz1", "Sales pipeline")).rejects.toThrow(/paid plans only/);
+  });
+
+  it("allows paid-only features on Growth", async () => {
+    prisma.business.findUnique.mockResolvedValue({ planId: "GROWTH" });
+    await expect(requirePaidBusinessPlan("biz1", "Sales pipeline")).resolves.toBe("GROWTH");
   });
 });
 

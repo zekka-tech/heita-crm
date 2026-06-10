@@ -5,6 +5,7 @@ import { enqueueFollowUpJob, removeFollowUpJob } from "@/lib/follow-up-queue";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
+import { requirePaidBusinessPlan, isPaidBusinessPlan, getEffectivePlan } from "@/server/services/billing.service";
 import { sendOnChannel } from "@/server/services/channel-dispatch.service";
 import { sendNotification } from "@/server/services/notification.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
@@ -29,6 +30,7 @@ export async function scheduleFollowUp(input: {
   dueAt: Date;
   reason: string;
 }) {
+  await requirePaidBusinessPlan(input.businessId, "Sales follow-ups");
   const task = await prisma.$transaction(async (tx) => {
     const existing = await tx.followUpTask.findFirst({
       where: {
@@ -129,6 +131,14 @@ export async function draftFollowUp(taskId: string) {
     return { skipped: true, reason: "not_scheduled" };
   }
 
+  if (!isPaidBusinessPlan(await getEffectivePlan(task.businessId))) {
+    await prisma.followUpTask.update({
+      where: { id: task.id },
+      data: { status: FollowUpStatus.SKIPPED, reason: "paid_plan_required" }
+    });
+    return { skipped: true, reason: "paid_plan_required" };
+  }
+
   if (task.salesThread.status !== SalesThreadStatus.OPEN) {
     await prisma.followUpTask.update({
       where: { id: task.id },
@@ -201,6 +211,7 @@ export async function approveAndSendFollowUp(input: {
     userId: input.actorUserId,
     allowedRoles: [StaffRole.STAFF]
   });
+  await requirePaidBusinessPlan(input.businessId, "Sales follow-ups");
 
   const task = await prisma.followUpTask.findFirstOrThrow({
     where: {
@@ -253,6 +264,7 @@ export async function approveAndSendFollowUp(input: {
 
 export async function snoozeFollowUp(input: { businessId: string; taskId: string; actorUserId: string; dueAt: Date }) {
   await requireRole({ businessId: input.businessId, userId: input.actorUserId, allowedRoles: [StaffRole.STAFF] });
+  await requirePaidBusinessPlan(input.businessId, "Sales follow-ups");
   const task = await prisma.followUpTask.findFirstOrThrow({ where: { id: input.taskId, businessId: input.businessId } });
   await removeFollowUpJob(task.bullJobId);
   const updated = await prisma.followUpTask.update({
@@ -268,6 +280,7 @@ export async function snoozeFollowUp(input: { businessId: string; taskId: string
 
 export async function skipFollowUp(input: { businessId: string; taskId: string; actorUserId: string }) {
   await requireRole({ businessId: input.businessId, userId: input.actorUserId, allowedRoles: [StaffRole.STAFF] });
+  await requirePaidBusinessPlan(input.businessId, "Sales follow-ups");
   const task = await prisma.followUpTask.findFirstOrThrow({ where: { id: input.taskId, businessId: input.businessId } });
   await removeFollowUpJob(task.bullJobId);
   return prisma.followUpTask.update({ where: { id: task.id }, data: { status: FollowUpStatus.SKIPPED, reason: "staff_skipped" } });

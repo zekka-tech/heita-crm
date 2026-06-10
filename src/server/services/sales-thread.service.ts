@@ -2,6 +2,7 @@ import { MessageChannel, Prisma, SalesThreadStatus, StaffRole } from "@prisma/cl
 
 import { isE164, normalizeZaPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { isPaidBusinessPlan, getEffectivePlan, requirePaidBusinessPlan } from "@/server/services/billing.service";
 import { requireRole } from "@/lib/staff";
 import { ACTIVE_FOLLOW_UP_STATUSES, cancelActiveFollowUps, scheduleFollowUp } from "@/server/services/follow-up.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
@@ -50,6 +51,7 @@ export async function createSalesThread(input: {
   valueZar?: string | number | null;
 }) {
   await requireRole({ businessId: input.businessId, userId: input.actorUserId, allowedRoles: [StaffRole.STAFF] });
+  await requirePaidBusinessPlan(input.businessId, "Sales pipeline");
 
   const title = input.title.trim();
   if (!title) throw new Error("Sales thread title is required.");
@@ -106,6 +108,7 @@ export async function advanceStage(input: {
   toStageKey: string;
 }) {
   await requireRole({ businessId: input.businessId, userId: input.actorUserId, allowedRoles: [StaffRole.STAFF] });
+  await requirePaidBusinessPlan(input.businessId, "Sales pipeline");
   const stage = await getStageByKey(input.businessId, input.toStageKey);
   const dueAt = followUpDueAt(stage.defaultFollowUpHours);
 
@@ -155,6 +158,7 @@ export async function setThreadStatus(input: {
   status: SalesThreadStatus;
 }) {
   await requireRole({ businessId: input.businessId, userId: input.actorUserId, allowedRoles: [StaffRole.STAFF] });
+  await requirePaidBusinessPlan(input.businessId, "Sales pipeline");
   const closed = input.status === SalesThreadStatus.WON || input.status === SalesThreadStatus.LOST || input.status === SalesThreadStatus.ARCHIVED;
   const thread = await prisma.$transaction(async (tx) => {
     const updated = await tx.salesThread.update({
@@ -185,6 +189,9 @@ export async function markCustomerResponded(input: {
   at?: Date;
 }) {
   const at = input.at ?? new Date();
+  if (!isPaidBusinessPlan(await getEffectivePlan(input.businessId))) {
+    return null;
+  }
   const thread = await prisma.salesThread.findFirst({
     where: {
       businessId: input.businessId,
@@ -224,6 +231,7 @@ export async function markCustomerResponded(input: {
 }
 
 export async function listThreads(input: { businessId: string; stageId?: string | null; status?: SalesThreadStatus | null }) {
+  await requirePaidBusinessPlan(input.businessId, "Sales pipeline");
   return prisma.salesThread.findMany({
     where: {
       businessId: input.businessId,
@@ -244,6 +252,7 @@ export async function listThreads(input: { businessId: string; stageId?: string 
 }
 
 export async function getThreadDetail(input: { businessId: string; threadId: string }) {
+  await requirePaidBusinessPlan(input.businessId, "Sales pipeline");
   return prisma.salesThread.findFirstOrThrow({
     where: { id: input.threadId, businessId: input.businessId },
     include: {
@@ -257,5 +266,6 @@ export async function getThreadDetail(input: { businessId: string; threadId: str
 }
 
 export async function listPipelineStages(businessId: string) {
+  await requirePaidBusinessPlan(businessId, "Sales pipeline");
   return prisma.pipelineStage.findMany({ where: { businessId }, orderBy: { order: "asc" } });
 }

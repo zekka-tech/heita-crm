@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 
 type BillingPageProps = {
   params: Promise<{ businessId: string }>;
-  searchParams: Promise<{ checkout?: string; plan?: string }>;
+  searchParams: Promise<{ checkout?: string; plan?: string; sales?: string }>;
 };
 
 export default async function BillingPage({
@@ -30,7 +30,7 @@ export default async function BillingPage({
   searchParams
 }: BillingPageProps) {
   const { businessId } = await params;
-  const { checkout } = await searchParams;
+  const { checkout, sales } = await searchParams;
   const session = await auth();
   if (!session?.user?.id) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/settings/billing`);
@@ -63,6 +63,12 @@ export default async function BillingPage({
       {checkout === "success" && (
         <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
           Subscription activated — your plan has been upgraded.
+        </div>
+      )}
+
+      {sales === "upgrade" && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-ink">
+          Sales pipeline is available on paid plans only. Upgrade to Growth or Scale to create sales threads, send documents, and approve AI follow-ups.
         </div>
       )}
 

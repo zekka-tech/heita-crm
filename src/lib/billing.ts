@@ -48,6 +48,7 @@ export const businessPlans: BusinessPlan[] = [
       "Up to 10,000 members",
       "5 staff seats",
       "WhatsApp templates and automations",
+      "Sales document follow-ups",
       "5,000 AI replies per month"
     ],
     limits: {
@@ -68,6 +69,7 @@ export const businessPlans: BusinessPlan[] = [
       "Unlimited members",
       "Unlimited staff seats",
       "Priority onboarding",
+      "Advanced sales document follow-ups",
       "Unlimited AI replies and document ingestion"
     ],
     limits: {

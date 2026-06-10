@@ -13,6 +13,7 @@ import {
   DashboardSidebarNav
 } from "@/components/dashboard/dashboard-bottom-nav";
 import { auth } from "@/lib/auth";
+import { isPaidBusinessPlan } from "@/server/services/billing.service";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -58,14 +59,15 @@ export default async function DashboardLayout({
 
   const currentBusiness = await prisma.business.findUnique({
     where: { id: businessId, deletedAt: null },
-    select: { isFranchiseHQ: true },
+    select: { isFranchiseHQ: true, planId: true },
   });
 
   const isFranchiseHQ = currentBusiness?.isFranchiseHQ ?? false;
+  const hasSalesAccess = isPaidBusinessPlan(currentBusiness?.planId);
 
   return (
     <div className="flex min-h-screen">
-      <DashboardSidebarNav businessId={businessId} isFranchiseHQ={isFranchiseHQ} />
+      <DashboardSidebarNav businessId={businessId} isFranchiseHQ={isFranchiseHQ} hasSalesAccess={hasSalesAccess} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         {businesses.length > 1 ? (
@@ -80,7 +82,7 @@ export default async function DashboardLayout({
         <main className="flex-1 pb-24 lg:pb-0">{children}</main>
       </div>
 
-      <DashboardBottomNav businessId={businessId} isFranchiseHQ={isFranchiseHQ} />
+      <DashboardBottomNav businessId={businessId} isFranchiseHQ={isFranchiseHQ} hasSalesAccess={hasSalesAccess} />
     </div>
   );
 }

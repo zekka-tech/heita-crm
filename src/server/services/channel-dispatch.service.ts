@@ -10,6 +10,7 @@ import {
   sendWhatsAppTemplateMessage,
   sendWhatsAppTextMessage
 } from "@/lib/whatsapp";
+import { requirePaidBusinessPlan } from "@/server/services/billing.service";
 import { getWhatsappCustomerServiceWindowStatus } from "@/server/services/conversation.service";
 import { sendNotification } from "@/server/services/notification.service";
 
@@ -122,6 +123,7 @@ export async function sendOnChannel(input: {
   body: string;
   document?: DispatchDocument;
 }) : Promise<ChannelDispatchResult> {
+  await requirePaidBusinessPlan(input.businessId, "Sales messaging");
   const user = await getCustomerUser(input.thread.userId, input.businessId);
   const text = input.body.trim();
   if (!text) {

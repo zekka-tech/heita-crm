@@ -5,6 +5,20 @@ import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
+export const PAID_BUSINESS_PLAN_IDS: BusinessPlanId[] = ["GROWTH", "SCALE"];
+
+export function isPaidBusinessPlan(planId: BusinessPlanId | string | null | undefined): planId is BusinessPlanId {
+  return planId === "GROWTH" || planId === "SCALE";
+}
+
+export async function requirePaidBusinessPlan(businessId: string, featureName = "This feature") {
+  const planId = await getEffectivePlan(businessId);
+  if (!isPaidBusinessPlan(planId)) {
+    throw new Error(featureName + " is available on paid plans only. Upgrade to Growth or Scale to use it.");
+  }
+  return planId;
+}
+
 export type PlanLimitKey =
   | "members"
   | "staffSeats"
