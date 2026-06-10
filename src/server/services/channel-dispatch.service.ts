@@ -131,18 +131,6 @@ export async function sendOnChannel(input: {
   }
 
   if (input.channel === MessageChannel.WHATSAPP) {
-    const optedIn = await hasConsent({
-      userId: input.thread.userId,
-      businessId: input.businessId,
-      type: "WHATSAPP_MARKETING"
-    });
-    if (!optedIn) {
-      throw new Error("Customer has not opted in to WhatsApp marketing messages.");
-    }
-    if (user && !shouldDeliverNotificationChannel({ preferences: user.notificationPreferences, businessId: input.businessId, channel: "whatsapp" })) {
-      throw new Error("Customer notification preferences block WhatsApp at this time.");
-    }
-
     const business = await prisma.business.findFirstOrThrow({
       where: { id: input.businessId },
       select: { wabaPhoneId: true }
@@ -156,9 +144,22 @@ export async function sendOnChannel(input: {
       contactPhone: input.thread.contactPhone
     });
 
+    if (user && !shouldDeliverNotificationChannel({ preferences: user.notificationPreferences, businessId: input.businessId, channel: "whatsapp" })) {
+      throw new Error("Customer notification preferences block WhatsApp at this time.");
+    }
+
     let externalId: string | null = null;
     let provider = "whatsapp";
     if (!serviceWindow.open) {
+      const optedIn = await hasConsent({
+        userId: input.thread.userId,
+        businessId: input.businessId,
+        type: "WHATSAPP_MARKETING"
+      });
+      if (!optedIn) {
+        throw new Error("Customer has not opted in to WhatsApp marketing messages.");
+      }
+
       const template = process.env.FOLLOWUP_WHATSAPP_TEMPLATE;
       if (!template) {
         throw new Error("WhatsApp follow-ups outside the 24-hour customer-service window require FOLLOWUP_WHATSAPP_TEMPLATE.");
