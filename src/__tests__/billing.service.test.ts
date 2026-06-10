@@ -31,6 +31,9 @@ const {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: no blocking subscription, so a paid planId stays paid unless a
+  // test explicitly sets a PAST_DUE/CANCELLED subscription.
+  prisma.businessSubscription.findFirst.mockResolvedValue(null);
   mockTx.businessInvoice.findFirst.mockResolvedValue(null);
   mockTx.businessInvoice.create.mockResolvedValue({});
   mockTx.businessSubscription.create.mockResolvedValue({});
@@ -46,6 +49,30 @@ describe("getEffectivePlan", () => {
   it("falls back to FREE when business not found", async () => {
     prisma.business.findUnique.mockResolvedValue(null);
     await expect(getEffectivePlan("unknown")).resolves.toBe("FREE");
+  });
+
+  it("keeps a paid plan when there is no subscription row (admin/seed grant)", async () => {
+    prisma.business.findUnique.mockResolvedValue({ planId: "GROWTH" });
+    prisma.businessSubscription.findFirst.mockResolvedValue(null);
+    await expect(getEffectivePlan("biz1")).resolves.toBe("GROWTH");
+  });
+
+  it("keeps a paid plan when the latest subscription is ACTIVE", async () => {
+    prisma.business.findUnique.mockResolvedValue({ planId: "SCALE" });
+    prisma.businessSubscription.findFirst.mockResolvedValue({ status: "ACTIVE" });
+    await expect(getEffectivePlan("biz1")).resolves.toBe("SCALE");
+  });
+
+  it("downgrades to FREE when the latest subscription is PAST_DUE", async () => {
+    prisma.business.findUnique.mockResolvedValue({ planId: "GROWTH" });
+    prisma.businessSubscription.findFirst.mockResolvedValue({ status: "PAST_DUE" });
+    await expect(getEffectivePlan("biz1")).resolves.toBe("FREE");
+  });
+
+  it("downgrades to FREE when the latest subscription is CANCELLED", async () => {
+    prisma.business.findUnique.mockResolvedValue({ planId: "SCALE" });
+    prisma.businessSubscription.findFirst.mockResolvedValue({ status: "CANCELLED" });
+    await expect(getEffectivePlan("biz1")).resolves.toBe("FREE");
   });
 });
 
@@ -64,6 +91,12 @@ describe("paid-plan feature gating", () => {
   it("allows paid-only features on Growth", async () => {
     prisma.business.findUnique.mockResolvedValue({ planId: "GROWTH" });
     await expect(requirePaidBusinessPlan("biz1", "Sales pipeline")).resolves.toBe("GROWTH");
+  });
+
+  it("rejects paid-only features when a paid plan is PAST_DUE", async () => {
+    prisma.business.findUnique.mockResolvedValue({ planId: "GROWTH" });
+    prisma.businessSubscription.findFirst.mockResolvedValue({ status: "PAST_DUE" });
+    await expect(requirePaidBusinessPlan("biz1", "Sales pipeline")).rejects.toThrow(/paid plans only/);
   });
 });
 

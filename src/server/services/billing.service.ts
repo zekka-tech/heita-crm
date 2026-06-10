@@ -40,7 +40,22 @@ export async function getEffectivePlan(businessId: string) {
     where: { id: businessId },
     select: { planId: true }
   });
-  return business?.planId ?? "FREE";
+  const planId = business?.planId ?? "FREE";
+  // Non-paid plans are unaffected by subscription state.
+  if (!isPaidBusinessPlan(planId)) return planId;
+  // A paid planId only grants access while billing is in good standing. If the
+  // latest subscription is past-due or cancelled, cut the business back to FREE
+  // immediately (without waiting for a planId downgrade). A paid planId with no
+  // subscription row at all (e.g. an admin/seed grant) is trusted as-is.
+  const latestSub = await prisma.businessSubscription.findFirst({
+    where: { businessId },
+    orderBy: { createdAt: "desc" },
+    select: { status: true }
+  });
+  if (latestSub && (latestSub.status === "PAST_DUE" || latestSub.status === "CANCELLED")) {
+    return "FREE";
+  }
+  return planId;
 }
 
 export async function checkPlanLimit(

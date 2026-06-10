@@ -13,7 +13,7 @@ import {
   DashboardSidebarNav
 } from "@/components/dashboard/dashboard-bottom-nav";
 import { auth } from "@/lib/auth";
-import { isPaidBusinessPlan } from "@/server/services/billing.service";
+import { getEffectivePlan, isPaidBusinessPlan } from "@/server/services/billing.service";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +63,9 @@ export default async function DashboardLayout({
   });
 
   const isFranchiseHQ = currentBusiness?.isFranchiseHQ ?? false;
-  const hasSalesAccess = isPaidBusinessPlan(currentBusiness?.planId);
+  // Use the effective plan so past-due/cancelled subscriptions hide the Sales
+  // nav even while business.planId still reads paid.
+  const hasSalesAccess = isPaidBusinessPlan(await getEffectivePlan(businessId));
 
   return (
     <div className="flex min-h-screen">
