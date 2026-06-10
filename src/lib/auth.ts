@@ -44,6 +44,7 @@ export async function authorizePhoneOtp(input: {
   code: string;
   mode: AuthOtpMode;
   acceptTerms?: boolean;
+  name?: string;
 }) {
   const phone = normalizeZaPhone(input.phone.trim());
   const code = input.code.trim();
@@ -100,11 +101,15 @@ export async function authorizePhoneOtp(input: {
     return null;
   }
 
+  const providedName = input.name?.trim();
   const verifiedUser =
     user ??
     (await prisma.user.create({
       data: {
-        name: `Heita User ${phone.slice(-4)}`,
+        name:
+          providedName && providedName.length > 0
+            ? providedName.slice(0, 80)
+            : `Heita User ${phone.slice(-4)}`,
         phone
       }
     }));
@@ -152,7 +157,8 @@ const providers: NonNullable<NextAuthConfig["providers"]> = [
       phone: { label: "Phone", type: "tel" },
       code: { label: "Code", type: "text" },
       mode: { label: "Mode", type: "text" },
-      acceptTerms: { label: "Accept terms", type: "text" }
+      acceptTerms: { label: "Accept terms", type: "text" },
+      name: { label: "Name", type: "text" }
     },
     async authorize(credentials) {
       const mode = String(credentials?.mode ?? "sign-in");
@@ -164,7 +170,8 @@ const providers: NonNullable<NextAuthConfig["providers"]> = [
         phone: String(credentials?.phone ?? ""),
         code: String(credentials?.code ?? ""),
         mode,
-        acceptTerms: String(credentials?.acceptTerms ?? "") === "true"
+        acceptTerms: String(credentials?.acceptTerms ?? "") === "true",
+        name: String(credentials?.name ?? "")
       });
     }
   })

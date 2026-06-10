@@ -1,10 +1,65 @@
+import { randomUUID } from "node:crypto";
+
 import { BusinessCategory, Prisma, Province, StaffRole } from "@prisma/client";
 
 import { createJoinToken, createUniqueBusinessSlug } from "@/lib/business";
+import { scanStoredObjectForMalware } from "@/lib/malware-scan";
 import { isE164, maskPhone, normalizeZaPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
+import {
+  deleteStoredObject,
+  getStoredObjectUrl,
+  putStoredObject,
+  storageConfigured
+} from "@/lib/storage";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
+
+// Allowed logo image types mapped to their file extension.
+const LOGO_CONTENT_TYPES: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp"
+};
+const MAX_LOGO_BYTES = 2 * 1024 * 1024; // 2 MB
+
+/**
+ * Validates, stores, and malware-scans a business logo image, returning its
+ * public URL. Throws a user-facing Error on any validation/scan failure.
+ */
+export async function uploadBusinessLogo(file: File): Promise<string> {
+  const extension = LOGO_CONTENT_TYPES[file.type];
+  if (!extension) {
+    throw new Error("Logo must be a PNG, JPEG, or WebP image.");
+  }
+  if (file.size === 0) {
+    throw new Error("Logo image is empty.");
+  }
+  if (file.size > MAX_LOGO_BYTES) {
+    throw new Error("Logo must be 2 MB or smaller.");
+  }
+  if (!storageConfigured()) {
+    throw new Error("Image storage is not configured.");
+  }
+
+  const key = `business-logos/${randomUUID()}.${extension}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await putStoredObject({ key, body: buffer, contentType: file.type });
+
+  const scan = await scanStoredObjectForMalware({ storageKey: key, fileName: file.name });
+  if (scan.verdict === "infected") {
+    await deleteStoredObject(key).catch(() => undefined);
+    throw new Error("Logo failed a malware scan and was rejected.");
+  }
+
+  const url = getStoredObjectUrl(key);
+  if (!url) {
+    await deleteStoredObject(key).catch(() => undefined);
+    throw new Error("Image storage has no public URL configured.");
+  }
+
+  return url;
+}
 
 const BUSINESS_TRANSACTION_OPTIONS = {
   maxWait: 5_000,
@@ -23,6 +78,7 @@ type CreateBusinessInput = {
   province: Province;
   phone?: string | null;
   email?: string | null;
+  logoUrl?: string | null;
   loyaltySignupBonus?: number;
 };
 
@@ -40,6 +96,7 @@ export async function createBusinessWithDefaults(input: CreateBusinessInput) {
       province: input.province,
       phone: input.phone || null,
       email: input.email || null,
+      logoUrl: input.logoUrl || null,
       loyaltySignupBonus: input.loyaltySignupBonus ?? 100,
       staffMembers: {
         create: {

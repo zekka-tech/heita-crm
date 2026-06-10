@@ -7,7 +7,10 @@ import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { captureEvent } from "@/lib/telemetry";
-import { createBusinessWithDefaults } from "@/server/services/business.service";
+import {
+  createBusinessWithDefaults,
+  uploadBusinessLogo
+} from "@/server/services/business.service";
 
 export async function createBusinessAction(formData: FormData) {
   await requireCsrfFormData(formData);
@@ -48,6 +51,10 @@ export async function createBusinessAction(formData: FormData) {
     throw new Error("Choose a valid province.");
   }
 
+  const logo = formData.get("logo");
+  const logoUrl =
+    logo instanceof File && logo.size > 0 ? await uploadBusinessLogo(logo) : null;
+
   let business;
   try {
     business = await createBusinessWithDefaults({
@@ -58,6 +65,7 @@ export async function createBusinessAction(formData: FormData) {
       province,
       phone,
       email,
+      logoUrl,
       loyaltySignupBonus: Number.isFinite(loyaltySignupBonus) ? loyaltySignupBonus : 100
     });
   } catch (error) {

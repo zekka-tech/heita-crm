@@ -37,6 +37,8 @@
     "continueGoogle": "Continue with Google",
     "continueApple": "Continue with Apple",
     "dividerOrPhone": "or via phone",
+    "nameLabel": "Full name",
+    "namePlaceholder": "Thandi Mokoena",
     "phoneLabel": "Phone number",
     "phonePlaceholder": "+27 82 000 0000",
     "codeLabel": "6-digit verification code",

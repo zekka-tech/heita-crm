@@ -65,6 +65,7 @@ export function PhoneOtpAuthForm({
     }
   };
 
+  const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<{ kind: "info" | "error"; text: string } | null>(
@@ -129,6 +130,7 @@ export function PhoneOtpAuthForm({
         phone,
         code,
         mode,
+        name: mode === "sign-up" ? name.trim() : "",
         acceptTerms: acceptTerms ? "true" : "false",
         redirect: false,
         redirectTo: callbackUrl
@@ -206,6 +208,20 @@ export function PhoneOtpAuthForm({
           submitCode();
         }}
       >
+        {mode === "sign-up" ? (
+          <Input
+            label={t("nameLabel")}
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={t("namePlaceholder")}
+            autoComplete="name"
+            maxLength={80}
+            required
+            disabled={step === "code"}
+          />
+        ) : null}
+
         <Input
           label={t("phoneLabel")}
           type="tel"
@@ -270,7 +286,7 @@ export function PhoneOtpAuthForm({
           disabled={
             step === "phone"
               ? !phone || isRequesting || !turnstileReady
-              || !csrfToken
+              || !csrfToken || (mode === "sign-up" && !name.trim())
               : code.length !== 6 || isSubmitting || (mode === "sign-up" && !acceptTerms)
           }
         >
