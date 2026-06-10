@@ -79,8 +79,8 @@ export async function scheduleFollowUp(input: {
   );
 
   if (job.enqueued) {
-    await prisma.followUpTask.update({
-      where: { id: task.id },
+    await prisma.followUpTask.updateMany({
+      where: { id: task.id, businessId: input.businessId },
       data: { bullJobId: job.jobId ?? null }
     });
   }
@@ -106,7 +106,7 @@ export async function cancelActiveFollowUps(input: {
 
   if (tasks.length) {
     await prisma.followUpTask.updateMany({
-      where: { id: { in: tasks.map((task) => task.id) } },
+      where: { id: { in: tasks.map((task) => task.id) }, businessId: input.businessId },
       data: { status: FollowUpStatus.CANCELLED, reason: input.reason }
     });
   }
@@ -127,7 +127,7 @@ export async function draftFollowUp(taskId: string) {
     }
   });
 
-  if (!task || task.status !== FollowUpStatus.SCHEDULED) {
+  if (!task || (task.status !== FollowUpStatus.SCHEDULED && task.status !== FollowUpStatus.DRAFTING)) {
     return { skipped: true, reason: "not_scheduled" };
   }
 
@@ -227,22 +227,63 @@ export async function approveAndSendFollowUp(input: {
   const body = (input.editedBody?.trim() || task.aiDraftBody || "").trim();
   if (!body) throw new Error("Follow-up body is required.");
 
-  const result = await sendOnChannel({
-    businessId: input.businessId,
-    thread: task.salesThread,
-    channel: task.channel,
-    body
+  const claim = await prisma.followUpTask.updateMany({
+    where: {
+      id: input.taskId,
+      businessId: input.businessId,
+      status: FollowUpStatus.AWAITING_APPROVAL
+    },
+    data: {
+      status: FollowUpStatus.APPROVED,
+      approvedByUserId: input.actorUserId,
+      approvedBody: body
+    }
   });
 
+  if (claim.count === 0) {
+    throw new Error("This follow-up has already been claimed or sent.");
+  }
+
+  let result;
+  try {
+    result = await sendOnChannel({
+      businessId: input.businessId,
+      thread: task.salesThread,
+      channel: task.channel,
+      body
+    });
+  } catch (error) {
+    await prisma.followUpTask.updateMany({
+      where: {
+        id: task.id,
+        businessId: input.businessId,
+        status: FollowUpStatus.APPROVED
+      },
+      data: {
+        status: FollowUpStatus.AWAITING_APPROVAL,
+        approvedByUserId: null,
+        approvedBody: null
+      }
+    });
+    throw error;
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
-    const row = await tx.followUpTask.update({
-      where: { id: task.id },
+    await tx.followUpTask.updateMany({
+      where: {
+        id: task.id,
+        businessId: input.businessId,
+        status: FollowUpStatus.APPROVED
+      },
       data: {
         status: FollowUpStatus.SENT,
         approvedBody: body,
         approvedByUserId: input.actorUserId,
         sentMessageId: result.messageId
       }
+    });
+    const row = await tx.followUpTask.findUniqueOrThrow({
+      where: { id: task.id }
     });
     await tx.salesThread.update({
       where: { id: task.salesThreadId },

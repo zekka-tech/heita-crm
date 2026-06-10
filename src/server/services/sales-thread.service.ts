@@ -189,9 +189,6 @@ export async function markCustomerResponded(input: {
   at?: Date;
 }) {
   const at = input.at ?? new Date();
-  if (!isPaidBusinessPlan(await getEffectivePlan(input.businessId))) {
-    return null;
-  }
   const thread = await prisma.salesThread.findFirst({
     where: {
       businessId: input.businessId,
@@ -203,6 +200,10 @@ export async function markCustomerResponded(input: {
   });
 
   if (!thread) return null;
+
+  if (!isPaidBusinessPlan(await getEffectivePlan(input.businessId))) {
+    return null;
+  }
 
   await cancelActiveFollowUps({ businessId: input.businessId, threadId: thread.id, reason: "customer_responded" });
 

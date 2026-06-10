@@ -55,6 +55,16 @@ ALLOWLIST=(
   "sendEventReminders"
   "sendDueEventReminders"
   "handleExpirePointsCron"
+  # Sales follow-up drafting: internal worker keyed by a taskId we enqueued ourselves;
+  # plan/thread validated via task.businessId before any PK status update
+  "draftFollowUp"
+  # Sales follow-up snooze/skip: task fetched with {id, businessId} (findFirstOrThrow)
+  # before the PK update, so the tenant scope is enforced upstream
+  "snoozeFollowUp"
+  "skipFollowUp"
+  # Sales thread reply detection: thread fetched with businessId filter first;
+  # PK update records the customer reply / stage auto-advance
+  "markCustomerResponded"
 )
 
 build_allowlist_pattern() {
