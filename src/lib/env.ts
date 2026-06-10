@@ -193,6 +193,20 @@ const envSchema = z
       });
     }
 
+    // Embeddings are produced only via Ollama (OLLAMA_EMBED_MODEL on OLLAMA_BASE_URL).
+    // Without it, embedText() degrades to a deterministic SHA-256 pseudo-vector, which
+    // silently wrecks RAG retrieval quality (vector search returns noise). The generation
+    // check above does NOT cover this — an Anthropic-only deploy boots with working chat
+    // but broken retrieval — so require a real embedding provider explicitly in production.
+    if (isProduction && !data.OLLAMA_BASE_URL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "OLLAMA_BASE_URL is required in production: it is the only embedding provider. Without it, AI retrieval (RAG, follow-up personalisation, knowledge search) falls back to a non-semantic hash and returns noise.",
+        path: ["OLLAMA_BASE_URL"]
+      });
+    }
+
     if (isProduction && !data.METRICS_BEARER_TOKEN) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
