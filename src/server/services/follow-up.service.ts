@@ -79,8 +79,8 @@ export async function scheduleFollowUp(input: {
   );
 
   if (job.enqueued) {
-    await prisma.followUpTask.update({
-      where: { id: task.id },
+    await prisma.followUpTask.updateMany({
+      where: { id: task.id, businessId: input.businessId },
       data: { bullJobId: job.jobId ?? null }
     });
   }
@@ -106,7 +106,7 @@ export async function cancelActiveFollowUps(input: {
 
   if (tasks.length) {
     await prisma.followUpTask.updateMany({
-      where: { id: { in: tasks.map((task) => task.id) } },
+      where: { id: { in: tasks.map((task) => task.id) }, businessId: input.businessId },
       data: { status: FollowUpStatus.CANCELLED, reason: input.reason }
     });
   }
