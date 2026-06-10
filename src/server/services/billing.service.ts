@@ -6,6 +6,15 @@ import { prisma } from "@/lib/prisma";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 export const PAID_BUSINESS_PLAN_IDS: BusinessPlanId[] = ["GROWTH", "SCALE"];
+export const PAST_DUE_GRACE_DAYS = 3;
+
+function addDays(date: Date, days: number) {
+  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+function isPastDueGraceActive(subscription: { status: string; updatedAt: Date }, now = new Date()) {
+  return subscription.status === "PAST_DUE" && now < addDays(subscription.updatedAt, PAST_DUE_GRACE_DAYS);
+}
 
 export function isPaidBusinessPlan(planId: BusinessPlanId | string | null | undefined): planId is BusinessPlanId {
   return planId === "GROWTH" || planId === "SCALE";
@@ -43,16 +52,21 @@ export async function getEffectivePlan(businessId: string) {
   const planId = business?.planId ?? "FREE";
   // Non-paid plans are unaffected by subscription state.
   if (!isPaidBusinessPlan(planId)) return planId;
-  // A paid planId only grants access while billing is in good standing. If the
-  // latest subscription is past-due or cancelled, cut the business back to FREE
-  // immediately (without waiting for a planId downgrade). A paid planId with no
-  // subscription row at all (e.g. an admin/seed grant) is trusted as-is.
+  // A paid planId only grants access while billing is in good standing. Past-due
+  // subscriptions get a short recovery window to avoid cutting off paying
+  // customers for transient payment failures. Cancelled and expired past-due
+  // subscriptions fail closed to FREE without waiting for a planId downgrade.
+  // A paid planId with no subscription row at all (e.g. an admin/seed grant) is
+  // trusted as-is.
   const latestSub = await prisma.businessSubscription.findFirst({
     where: { businessId },
     orderBy: { createdAt: "desc" },
-    select: { status: true }
+    select: { status: true, updatedAt: true }
   });
-  if (latestSub && (latestSub.status === "PAST_DUE" || latestSub.status === "CANCELLED")) {
+  if (latestSub?.status === "CANCELLED") {
+    return "FREE";
+  }
+  if (latestSub && latestSub.status === "PAST_DUE" && !isPastDueGraceActive(latestSub)) {
     return "FREE";
   }
   return planId;
