@@ -1,3 +1,5 @@
+import { MessageChannel } from "@prisma/client";
+
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
@@ -8,7 +10,7 @@ import { CsrfField } from "@/components/security/csrf-field";
 import { redirect } from "next/navigation";
 import type { Route } from "next";
 
-import { connectWhatsAppAction } from "./actions";
+import { connectWhatsAppAction, deleteInboundAddressAction, saveInboundAddressAction } from "./actions";
 
 const maskSecret = (secret: string) =>
   secret.length > 10
@@ -20,7 +22,7 @@ export default async function IntegrationsSettingsPage({
   searchParams
 }: {
   params: Promise<{ businessId: string }>;
-  searchParams?: Promise<{ whatsapp?: string; reason?: string }>;
+  searchParams?: Promise<{ whatsapp?: string; inbound?: string; reason?: string }>;
 }) {
   const { businessId } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
@@ -37,7 +39,12 @@ export default async function IntegrationsSettingsPage({
       name: true,
       slug: true,
       wabaPhoneId: true,
-      whatsappPhoneNumber: true
+      whatsappPhoneNumber: true,
+      inboundAddresses: {
+        where: { isActive: true },
+        orderBy: [{ channel: "asc" }, { address: "asc" }],
+        select: { id: true, channel: true, provider: true, address: true, label: true }
+      }
     }
   });
 
@@ -110,6 +117,81 @@ export default async function IntegrationsSettingsPage({
               Save WhatsApp settings
             </Button>
           </form>
+        </div>
+      </Card>
+
+      <Card variant="surface">
+        <CardHeader
+          title="Inbound reply routing"
+          description="Map Resend reply addresses and Africa&apos;s Talking SMS numbers or shortcodes to this business so customer replies can update sales follow-ups."
+        />
+        <div className="px-6 pb-6 space-y-4">
+          {resolvedSearchParams.inbound === "saved" ? (
+            <p className="rounded-lg border border-eco-green/30 bg-eco-green/5 px-3 py-2 text-sm text-eco-green">
+              Inbound address saved.
+            </p>
+          ) : null}
+          {resolvedSearchParams.inbound === "removed" ? (
+            <p className="rounded-lg border border-eco-green/30 bg-eco-green/5 px-3 py-2 text-sm text-eco-green">
+              Inbound address removed.
+            </p>
+          ) : null}
+          {resolvedSearchParams.inbound === "error" ? (
+            <p className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">
+              {resolvedSearchParams.reason ?? "Could not save inbound address."}
+            </p>
+          ) : null}
+
+          <form action={saveInboundAddressAction} className="grid gap-4 md:grid-cols-2">
+            <CsrfField />
+            <input type="hidden" name="businessId" value={businessId} />
+            <label className="grid gap-1 text-sm font-medium text-ink">
+              Channel
+              <select name="channel" defaultValue={MessageChannel.SMS} className="rounded-xl border border-line bg-surface-elevated px-3 py-2 text-sm text-ink">
+                <option value={MessageChannel.SMS}>SMS</option>
+                <option value={MessageChannel.EMAIL}>Email</option>
+              </select>
+            </label>
+            <Input
+              name="provider"
+              label="Provider"
+              hint="Use africas-talking for SMS or resend for email."
+              placeholder="africas-talking"
+            />
+            <Input
+              name="address"
+              label="Inbound address"
+              hint="Examples: 20880, +27821234567, sales+store.example.com."
+              placeholder="20880"
+              required
+            />
+            <Input name="label" label="Label" placeholder="Main sales shortcode" />
+            <Button type="submit" variant="primary" className="md:col-span-2">
+              Save inbound address
+            </Button>
+          </form>
+
+          <div className="grid gap-2">
+            {business.inboundAddresses.map((address) => (
+              <div key={address.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-muted px-3 py-2 text-sm">
+                <div>
+                  <p className="font-medium text-foreground">{address.channel} · {address.address}</p>
+                  <p className="text-muted-foreground">{address.provider}{address.label ? ` · ` : ""}</p>
+                </div>
+                <form action={deleteInboundAddressAction}>
+                  <CsrfField />
+                  <input type="hidden" name="businessId" value={businessId} />
+                  <input type="hidden" name="addressId" value={address.id} />
+                  <Button type="submit" variant="secondary">Remove</Button>
+                </form>
+              </div>
+            ))}
+            {!business.inboundAddresses.length ? (
+              <p className="rounded-lg border border-dashed border-line px-3 py-3 text-sm text-muted-foreground">
+                No inbound reply addresses are configured yet.
+              </p>
+            ) : null}
+          </div>
         </div>
       </Card>
 

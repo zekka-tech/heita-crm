@@ -4,7 +4,7 @@ import { MessageChannel, MessageStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { logger } from "@/lib/logger";
-import { isE164, normalizeZaPhone } from "@/lib/phone";
+import { normalizeZaPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { incrementWebhookAuthFailure, observeHttpRoute } from "@/lib/metrics";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
@@ -39,6 +39,44 @@ function isAllowedAtSource(request: Request): boolean {
   }
 
   return false;
+}
+
+function normalizeInboundAddress(value: string) {
+  return value.trim().toLowerCase();
+}
+
+async function findBusinessForInboundSms(rawTo: string) {
+  const trimmed = rawTo.trim();
+  const normalizedPhone = normalizeZaPhone(trimmed);
+  const addressCandidates = [...new Set([
+    normalizeInboundAddress(trimmed),
+    normalizedPhone ? normalizeInboundAddress(normalizedPhone) : null
+  ].filter((value): value is string => Boolean(value)))];
+
+  if (addressCandidates.length) {
+    const mapped = await prisma.businessInboundAddress.findFirst({
+      where: {
+        channel: MessageChannel.SMS,
+        provider: "africas-talking",
+        address: { in: addressCandidates },
+        isActive: true
+      },
+      select: { businessId: true }
+    });
+    if (mapped) return { id: mapped.businessId };
+  }
+
+  if (!normalizedPhone) return null;
+
+  return prisma.business.findFirst({
+    where: {
+      OR: [
+        { phone: normalizedPhone },
+        { whatsappPhoneNumber: normalizedPhone }
+      ]
+    },
+    select: { id: true }
+  });
 }
 
 export async function handleWhatsappVerification(request: Request) {
@@ -227,21 +265,9 @@ export async function handleAfricasTalkingWebhook(request: Request) {
 
   if (rawFrom && body && (!direction || direction.includes("incoming") || direction.includes("inbound"))) {
     const fromPhone = normalizeZaPhone(rawFrom) ?? rawFrom;
-    const toPhone = normalizeZaPhone(rawTo) ?? rawTo;
-    if (!isE164(toPhone)) {
-      logger.info({ toPhone }, "africas_talking.webhook.sms_unmapped_shortcode");
-      logger.info({ size: rawBody.length }, "africas_talking.webhook.received");
-      return NextResponse.json({ received: true });
-    }
-    const business = await prisma.business.findFirst({
-      where: {
-        OR: [
-          { phone: toPhone || undefined },
-          { whatsappPhoneNumber: toPhone || undefined }
-        ]
-      },
-      select: { id: true }
-    });
+    const rawToAddress = rawTo.trim();
+    const toPhone = normalizeZaPhone(rawToAddress);
+    const business = await findBusinessForInboundSms(rawToAddress);
 
     if (business) {
       const existingUser = await prisma.user.findFirst({ where: { phone: fromPhone }, select: { id: true } });
@@ -259,7 +285,7 @@ export async function handleAfricasTalkingWebhook(request: Request) {
             externalId,
             status: MessageStatus.RECEIVED,
             body,
-            metadata: { fromPhone, toPhone }
+            metadata: { fromPhone, toPhone, toAddress: rawToAddress }
           }
         });
         await markCustomerResponded({
@@ -270,7 +296,7 @@ export async function handleAfricasTalkingWebhook(request: Request) {
         });
       }
     } else {
-      logger.warn({ toPhone }, "africas_talking.webhook.unknown_business");
+      logger.warn({ toAddress: rawToAddress, toPhone }, "africas_talking.webhook.unknown_business");
     }
   }
 

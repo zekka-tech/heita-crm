@@ -18,6 +18,7 @@ type EmailInput = {
   tag?: EmailTag;
   userId?: string;
   attachments?: EmailAttachment[];
+  headers?: Record<string, string>;
 };
 
 export function emailConfigured() {
@@ -69,6 +70,7 @@ export async function sendEmail(input: EmailInput) {
     "List-Unsubscribe": `<${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/email/unsubscribe?email=${encodeURIComponent(input.to)}>`,
     "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
   };
+  Object.assign(headers, input.headers ?? {});
 
   const body: Record<string, unknown> = {
     from: process.env.EMAIL_FROM,

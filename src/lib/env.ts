@@ -170,6 +170,16 @@ const envSchema = z
       });
     }
 
+    const emailConfigured = Boolean(data.EMAIL_SERVER_PASSWORD || data.EMAIL_FROM);
+    if (isProduction && emailConfigured && !data.EMAIL_WEBHOOK_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "EMAIL_WEBHOOK_SECRET is required in production when email is configured — it verifies Resend webhook signatures. Without it the webhook would process unauthenticated bounce/complaint and inbound sales-reply events, letting forged requests manipulate consent and sales threads.",
+        path: ["EMAIL_WEBHOOK_SECRET"]
+      });
+    }
+
     const whatsappConfigured = Boolean(
       data.WHATSAPP_ACCESS_TOKEN || data.WHATSAPP_VERIFY_TOKEN
     );
