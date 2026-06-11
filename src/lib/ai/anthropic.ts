@@ -19,6 +19,8 @@ type AnthropicChatOptions = {
   signal?: AbortSignal;
   /** Mark the system prompt block for Anthropic prompt caching. */
   enablePromptCache?: boolean;
+  /** Business-supplied (BYOK) key; defaults to the platform ANTHROPIC_API_KEY. */
+  apiKey?: string;
 };
 
 // Loose event shape: using optionals avoids discriminated-union narrowing issues
@@ -58,7 +60,7 @@ export function anthropicConfigured(): boolean {
 export async function streamAnthropicChat(
   options: AnthropicChatOptions
 ): Promise<StreamWithUsage> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY missing");
 
   const model =
@@ -169,4 +171,37 @@ export async function streamAnthropicChat(
   }
 
   return { stream: generate(), usage };
+}
+
+/**
+ * Cheapest possible liveness probe for an Anthropic key/model pair: a
+ * non-streaming single-token request. Returns null on success, or a
+ * human-readable error message on failure.
+ */
+export async function probeAnthropicChat(options: {
+  apiKey: string;
+  model: string;
+  signal?: AbortSignal;
+}): Promise<string | null> {
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": options.apiKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: options.model,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "ping" }],
+      }),
+      signal: options.signal ?? AbortSignal.timeout(15_000),
+    });
+    if (response.ok) return null;
+    const text = await response.text().catch(() => "");
+    return `Provider returned ${response.status}: ${text.slice(0, 200)}`;
+  } catch (error) {
+    return error instanceof Error ? error.message : "Provider request failed.";
+  }
 }

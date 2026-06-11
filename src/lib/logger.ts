@@ -41,7 +41,9 @@ const _logger = pino({
       "req.headers.stripe-signature",
       "*.signature",
       "req.headers.x-heita-signature",
-      "req.headers.x-cron-secret"
+      "req.headers.x-cron-secret",
+      "*.apiKey",
+      "*.encryptedApiKey"
     ],
     censor: "[redacted]"
   },

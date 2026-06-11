@@ -30,7 +30,7 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
       staffMembers: { some: { userId: session.user.id } }
     },
     include: {
-      aiWorkspace: true,
+      aiWorkspace: { include: { activeConnection: true } },
       aiChatSessions: {
         where: {
           userId: session.user.id
@@ -93,7 +93,9 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
               {ready}/{docs.length} documents ready
             </Chip>
             <Chip variant="primary" className="bg-white/15 text-white border-white/20">
-              Runtime: {business.aiWorkspace?.preferredRuntime ?? "auto"}
+              {business.aiWorkspace?.activeConnection
+                ? `Brain: ${business.aiWorkspace.activeConnection.label || business.aiWorkspace.activeConnection.provider} · ${business.aiWorkspace.activeConnection.chatModel}`
+                : `Runtime: ${business.aiWorkspace?.preferredRuntime ?? "auto"}`}
             </Chip>
           </div>
         </Card>

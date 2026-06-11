@@ -8,7 +8,7 @@ This repository is the **Heita CRM** — a mobile-first PWA loyalty + messaging 
 - **Styling**: Tailwind CSS v4 + Stitch-inspired design tokens (Electric Blue / Eco Green / Deep Navy, Poppins + Inter)
 - **Database**: PostgreSQL 16 + Prisma 7 + pgvector
 - **Auth**: Auth.js v5 (next-auth@beta) — phone OTP (Africa's Talking), Google, Apple
-- **AI**: Ollama (local) with Anthropic Claude fallback, streamed over SSE
+- **AI**: model-agnostic — per-business BYOM provider connections (Anthropic, OpenAI, Gemini, DeepSeek, MiniMax, Kimi, Qwen, custom OpenAI-compatible) with Ollama (local) → platform Anthropic fallback, streamed over SSE (see `docs/BYOM.md`)
 - **Receipt OCR**: client-side Tesseract.js (primary, runs in-browser via self-hosted WASM) with server-side DeepSeek vision API fallback
 - **WhatsApp**: Meta Cloud API (HMAC-verified webhook)
 - **SMS**: Africa's Talking
@@ -57,6 +57,7 @@ This repository is the **Heita CRM** — a mobile-first PWA loyalty + messaging 
   - `otp` — HMAC-SHA256 codes, single-use, 10-min TTL
   - `logger` — pino with sensitive-field redaction
   - `ai/{ollama,anthropic,rag}` — streamed RAG with graceful fallback
+  - `ai/providers` — BYOM provider registry + adapters (Anthropic Messages API, OpenAI-compatible SSE); keys AES-256-GCM encrypted via `lib/secret-crypto`, managed in `server/services/ai-provider.service`, configured at `dashboard/[businessId]/settings/ai-models`
   - `ai/{web-crawler,web-source-crawl,html-extract}` — SSRF-guarded site crawl → text → existing document ingestion pipeline (BullMQ `web-crawl` queue)
 - `src/server/services` — domain services (loyalty, membership, business, whatsapp, notification)
 - `src/components/{ui,layout,business,loyalty,ai,auth,shared}` — shared Stitch component library

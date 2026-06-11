@@ -1,6 +1,7 @@
 import { anthropicConfigured, streamAnthropicChat } from "@/lib/ai/anthropic";
 import { embedText } from "@/lib/ai/embeddings";
 import { ollamaConfigured, streamOllamaChat } from "@/lib/ai/ollama";
+import { streamByokChat } from "@/lib/ai/providers";
 import {
   buildQueryForRetrieval,
   rewriteQueryForRetrieval,
@@ -10,6 +11,10 @@ import { ZERO_USAGE, type StreamUsage } from "@/lib/ai/stream-types";
 import { hybridSearch, type SimilarityMatch } from "@/lib/ai/vector-store";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import {
+  recordByokRuntimeError,
+  resolveActiveByokRuntime,
+} from "@/server/services/ai-provider.service";
 
 export type ChatTurn = {
   role: "user" | "assistant" | "system";
@@ -26,7 +31,8 @@ export type RagCitation = {
 export type { StreamUsage };
 
 export type RagAnswerStream = {
-  runtime: "ollama" | "anthropic" | "fallback";
+  /** "byok:<provider>" | "ollama" | "anthropic" | "fallback" */
+  runtime: string;
   model: string | null;
   prompt: string;
   citations: RagCitation[];
@@ -161,6 +167,42 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
     businessId: input.businessId,
     messages: history,
   });
+
+  // Bring-your-own-model: when the business has connected its own provider
+  // key, that connection is the brain. Failures degrade to the platform
+  // runtimes below and are recorded against the connection for the dashboard.
+  const byok = await resolveActiveByokRuntime(input.businessId);
+  if (byok) {
+    try {
+      const { stream, usage } = await streamByokChat(byok, {
+        system: prompt,
+        messages: history
+          .filter((turn) => turn.role !== "system")
+          .map((turn) => ({
+            role: turn.role === "assistant" ? ("assistant" as const) : ("user" as const),
+            content: turn.content,
+          })),
+      });
+      return {
+        runtime: `byok:${byok.provider.toLowerCase()}`,
+        model: byok.model,
+        prompt,
+        citations,
+        retrievedChunks: topChunks,
+        stream,
+        usage,
+      };
+    } catch (error) {
+      logger.warn(
+        { err: error, businessId: input.businessId, provider: byok.provider },
+        "rag.byok_fallback"
+      );
+      recordByokRuntimeError(
+        byok.connectionId,
+        error instanceof Error ? error.message : "Provider request failed."
+      ).catch(() => undefined);
+    }
+  }
 
   if (ollamaConfigured()) {
     try {
