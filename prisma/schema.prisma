@@ -99,9 +99,9 @@ model OtpCode {
 }
 
 model Business {
-  id                   String                 @id @default(cuid())
-  planId               BusinessPlanId         @default(FREE)
-  slug                 String                 @unique
+  id                   String                   @id @default(cuid())
+  planId               BusinessPlanId           @default(FREE)
+  slug                 String                   @unique
   name                 String
   legalName            String?
   description          String?
@@ -111,23 +111,23 @@ model Business {
   email                String?
   logoUrl              String?
   coverImageUrl        String?
-  loyaltySignupBonus   Int                    @default(0)
-  pointsExpiryDays     Int                    @default(365)
-  wabaPhoneId          String?                @unique
+  loyaltySignupBonus   Int                      @default(0)
+  pointsExpiryDays     Int                      @default(365)
+  wabaPhoneId          String?                  @unique
   whatsappPhoneNumber  String?
   addressLine1         String?
   addressLine2         String?
   suburb               String?
   city                 String?
   postalCode           String?
-  isActive             Boolean                @default(true)
-  isFranchiseHQ        Boolean                @default(false)
+  isActive             Boolean                  @default(true)
+  isFranchiseHQ        Boolean                  @default(false)
   parentBusinessId     String?
-  parentBusiness       Business?              @relation("BusinessHierarchy", fields: [parentBusinessId], references: [id], onDelete: SetNull)
-  childBusinesses      Business[]             @relation("BusinessHierarchy")
+  parentBusiness       Business?                @relation("BusinessHierarchy", fields: [parentBusinessId], references: [id], onDelete: SetNull)
+  childBusinesses      Business[]               @relation("BusinessHierarchy")
   deletedAt            DateTime?
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
   qrCodes              QrCode[]
   joinLinks            JoinLink[]
   memberships          Membership[]
@@ -553,18 +553,17 @@ model MessageAttachment {
   @@index([externalMediaId])
 }
 
-
 model PipelineStage {
-  id                   String        @id @default(cuid())
+  id                   String         @id @default(cuid())
   businessId           String
   key                  String
   label                String
   order                Int
-  isTerminal           Boolean       @default(false)
+  isTerminal           Boolean        @default(false)
   defaultFollowUpHours Int?
-  autoAdvanceOnReply   Boolean       @default(true)
-  createdAt            DateTime      @default(now())
-  business             Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  autoAdvanceOnReply   Boolean        @default(true)
+  createdAt            DateTime       @default(now())
+  business             Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   salesThreads         SalesThread[]
   followUpTasks        FollowUpTask[]
 
@@ -573,28 +572,28 @@ model PipelineStage {
 }
 
 model SalesThread {
-  id                  String              @id @default(cuid())
+  id                  String             @id @default(cuid())
   businessId          String
   membershipId        String?
   userId              String?
   contactPhone        String
   title               String
   stageId             String
-  status              SalesThreadStatus   @default(OPEN)
+  status              SalesThreadStatus  @default(OPEN)
   preferredChannel    MessageChannel?
-  valueZar            Decimal?            @db.Decimal(12, 2)
+  valueZar            Decimal?           @db.Decimal(12, 2)
   lastCustomerReplyAt DateTime?
   lastOutboundAt      DateTime?
   nextFollowUpAt      DateTime?
   createdByUserId     String?
   closedAt            DateTime?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  business            Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  membership          Membership?         @relation(fields: [membershipId], references: [id], onDelete: SetNull)
-  user                User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
-  stage               PipelineStage       @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  createdByUser       User?               @relation("SalesThreadCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  business            Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  membership          Membership?        @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  user                User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  stage               PipelineStage      @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  createdByUser       User?              @relation("SalesThreadCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   messages            Message[]
   documents           OutboundDocument[]
   followUpTasks       FollowUpTask[]
@@ -743,22 +742,22 @@ model UserConsent {
 }
 
 model AiTokenUsage {
-  id               String         @id @default(cuid())
-  businessId       String
-  sessionId        String?
-  userId           String?
-  runtime          String
-  model            String?
-  messageUnits         Int            @default(1)
-  promptTokens         Int?
-  completionTokens     Int?
-  totalTokens          Int?
-  cacheReadTokens      Int?
-  cacheCreationTokens  Int?
-  createdAt        DateTime       @default(now())
-  business         Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  session          AiChatSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
-  user             User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id                  String         @id @default(cuid())
+  businessId          String
+  sessionId           String?
+  userId              String?
+  runtime             String
+  model               String?
+  messageUnits        Int            @default(1)
+  promptTokens        Int?
+  completionTokens    Int?
+  totalTokens         Int?
+  cacheReadTokens     Int?
+  cacheCreationTokens Int?
+  createdAt           DateTime       @default(now())
+  business            Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  session             AiChatSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  user                User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([businessId, createdAt])
   @@index([sessionId, createdAt])
@@ -978,38 +977,53 @@ enum OcrReceiptStatus {
 }
 
 model BusinessSubscription {
-  id                 String             @id @default(cuid())
-  businessId         String
-  planId             BusinessPlanId
-  status             SubscriptionStatus @default(ACTIVE)
-  yocoCustomerId     String?
-  yocoSubscriptionId String?            @unique
-  currentPeriodStart DateTime
-  currentPeriodEnd   DateTime
-  cancelAtPeriodEnd  Boolean            @default(false)
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  business           Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id                     String             @id @default(cuid())
+  businessId             String
+  planId                 BusinessPlanId
+  status                 SubscriptionStatus @default(ACTIVE)
+  provider               PaymentProvider    @default(YOCO)
+  providerCustomerId     String?
+  providerSubscriptionId String?
+  yocoCustomerId         String?
+  yocoSubscriptionId     String?            @unique
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  cancelAtPeriodEnd      Boolean            @default(false)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  business               Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  @@unique([provider, providerSubscriptionId])
   @@index([businessId])
+  @@index([provider])
   @@index([status])
 }
 
 model BusinessInvoice {
-  id            String         @id @default(cuid())
-  businessId    String
-  planId        BusinessPlanId
-  amountZar     Int
-  status        InvoiceStatus  @default(PENDING)
-  yocoPaymentId String?        @unique
-  issuedAt      DateTime       @default(now())
-  paidAt        DateTime?
-  periodStart   DateTime
-  periodEnd     DateTime
-  business      Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id                String          @id @default(cuid())
+  businessId        String
+  planId            BusinessPlanId
+  amountZar         Int
+  status            InvoiceStatus   @default(PENDING)
+  provider          PaymentProvider @default(YOCO)
+  providerPaymentId String?
+  yocoPaymentId     String?         @unique
+  issuedAt          DateTime        @default(now())
+  paidAt            DateTime?
+  periodStart       DateTime
+  periodEnd         DateTime
+  business          Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  @@unique([provider, providerPaymentId])
   @@index([businessId])
+  @@index([provider])
   @@index([status])
+}
+
+enum PaymentProvider {
+  YOCO
+  STRIPE
+  PAYFAST
 }
 
 enum SubscriptionStatus {

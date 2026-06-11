@@ -105,6 +105,16 @@ const envSchema = z
     YOCO_SECRET_KEY: z.string().optional(),
     YOCO_WEBHOOK_SECRET: z.string().optional(),
 
+    // Stripe (payments)
+    STRIPE_SECRET_KEY: z.string().optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().optional(),
+
+    // PayFast (payments)
+    PAYFAST_MERCHANT_ID: z.string().optional(),
+    PAYFAST_MERCHANT_KEY: z.string().optional(),
+    PAYFAST_PASSPHRASE: z.string().optional(),
+    PAYFAST_MODE: z.enum(["sandbox", "live"]).default("sandbox"),
+
     // Staff step-up MFA
     STAFF_STEP_UP_WINDOW_SECONDS: z.coerce.number().int().optional(),
 
@@ -274,6 +284,38 @@ const envSchema = z
         code: z.ZodIssueCode.custom,
         message: "YOCO_WEBHOOK_SECRET is required when Yoco billing is enabled in production — it verifies payment webhook signatures.",
         path: ["YOCO_WEBHOOK_SECRET"]
+      });
+    }
+
+    const stripeConfigured = Boolean(data.STRIPE_SECRET_KEY || data.STRIPE_WEBHOOK_SECRET);
+    if (isProduction && stripeConfigured && !data.STRIPE_SECRET_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "STRIPE_SECRET_KEY is required when Stripe billing is enabled in production — it authenticates checkout-session creation.",
+        path: ["STRIPE_SECRET_KEY"]
+      });
+    }
+    if (isProduction && stripeConfigured && !data.STRIPE_WEBHOOK_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "STRIPE_WEBHOOK_SECRET is required when Stripe billing is enabled in production — it verifies Stripe webhook signatures.",
+        path: ["STRIPE_WEBHOOK_SECRET"]
+      });
+    }
+
+    const payfastConfigured = Boolean(data.PAYFAST_MERCHANT_ID || data.PAYFAST_MERCHANT_KEY);
+    if (isProduction && payfastConfigured && !data.PAYFAST_MERCHANT_ID) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "PAYFAST_MERCHANT_ID is required when PayFast billing is enabled in production.",
+        path: ["PAYFAST_MERCHANT_ID"]
+      });
+    }
+    if (isProduction && payfastConfigured && !data.PAYFAST_MERCHANT_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "PAYFAST_MERCHANT_KEY is required when PayFast billing is enabled in production.",
+        path: ["PAYFAST_MERCHANT_KEY"]
       });
     }
 
