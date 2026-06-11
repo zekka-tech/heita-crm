@@ -197,10 +197,11 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
         { err: error, businessId: input.businessId, provider: byok.provider },
         "rag.byok_fallback"
       );
-      recordByokRuntimeError(
-        byok.connectionId,
-        error instanceof Error ? error.message : "Provider request failed."
-      ).catch(() => undefined);
+      recordByokRuntimeError({
+        connectionId: byok.connectionId,
+        businessId: input.businessId,
+        message: error instanceof Error ? error.message : "Provider request failed.",
+      }).catch(() => undefined);
     }
   }
 

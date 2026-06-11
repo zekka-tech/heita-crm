@@ -11,8 +11,8 @@ const { prisma, requireRole, recordStaffAuditLog, assertPublicHttpUrl, probeByok
         create: vi.fn(),
         findFirst: vi.fn(),
         findMany: vi.fn(),
-        update: vi.fn(),
-        delete: vi.fn()
+        updateMany: vi.fn(),
+        deleteMany: vi.fn()
       },
       $transaction: vi.fn()
     },
@@ -172,10 +172,7 @@ describe("validateProviderConnection", () => {
 
   it("marks the connection ACTIVE when the probe succeeds", async () => {
     prisma.aiProviderConnection.findFirst.mockResolvedValue(storedConnection);
-    prisma.aiProviderConnection.update.mockImplementation(
-      ({ data }: { data: Record<string, unknown> }) =>
-        Promise.resolve({ ...storedConnection, ...data })
-    );
+    prisma.aiProviderConnection.updateMany.mockResolvedValue({ count: 1 });
 
     const view = await validateProviderConnection({
       businessId: "biz_1",
@@ -186,6 +183,10 @@ describe("validateProviderConnection", () => {
     expect(probeByokConnection).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: "sk-live-key", model: "gpt-4o-mini" })
     );
+    // Mutation is tenant-scoped, never id-only.
+    expect(prisma.aiProviderConnection.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "conn_1", businessId: "biz_1" } })
+    );
     expect(view.status).toBe("ACTIVE");
     expect(view.lastError).toBeNull();
   });
@@ -193,10 +194,7 @@ describe("validateProviderConnection", () => {
   it("marks the connection INVALID and stores the error when the probe fails", async () => {
     probeByokConnection.mockResolvedValue("Provider returned 401: bad key");
     prisma.aiProviderConnection.findFirst.mockResolvedValue(storedConnection);
-    prisma.aiProviderConnection.update.mockImplementation(
-      ({ data }: { data: Record<string, unknown> }) =>
-        Promise.resolve({ ...storedConnection, ...data })
-    );
+    prisma.aiProviderConnection.updateMany.mockResolvedValue({ count: 1 });
 
     const view = await validateProviderConnection({
       businessId: "biz_1",
@@ -261,8 +259,8 @@ describe("deleteProviderConnection", () => {
       where: { businessId: "biz_1", activeConnectionId: "conn_1" },
       data: { activeConnectionId: null }
     });
-    expect(prisma.aiProviderConnection.delete).toHaveBeenCalledWith({
-      where: { id: "conn_1" }
+    expect(prisma.aiProviderConnection.deleteMany).toHaveBeenCalledWith({
+      where: { id: "conn_1", businessId: "biz_1" }
     });
   });
 });

@@ -250,17 +250,22 @@ export async function validateProviderConnection(input: {
     model: connection.chatModel
   });
 
-  const [workspace, updated] = await Promise.all([
+  const update = error
+    ? {
+        status: AiProviderConnectionStatus.INVALID,
+        lastError: error.slice(0, 500)
+      }
+    : {
+        status: AiProviderConnectionStatus.ACTIVE,
+        lastError: null,
+        lastValidatedAt: new Date()
+      };
+
+  const [workspace] = await Promise.all([
     getWorkspace(input.businessId),
-    prisma.aiProviderConnection.update({
-      where: { id: connection.id },
-      data: error
-        ? { status: AiProviderConnectionStatus.INVALID, lastError: error.slice(0, 500) }
-        : {
-            status: AiProviderConnectionStatus.ACTIVE,
-            lastError: null,
-            lastValidatedAt: new Date()
-          }
+    prisma.aiProviderConnection.updateMany({
+      where: { id: connection.id, businessId: input.businessId },
+      data: update
     })
   ]);
 
@@ -273,7 +278,7 @@ export async function validateProviderConnection(input: {
     metadata: { ok: !error }
   });
 
-  return toView(updated, workspace.activeConnectionId);
+  return toView({ ...connection, ...update }, workspace.activeConnectionId);
 }
 
 /** Make a connection the workspace brain (or clear it with connectionId null). */
@@ -334,7 +339,9 @@ export async function deleteProviderConnection(input: {
       where: { businessId: input.businessId, activeConnectionId: connection.id },
       data: { activeConnectionId: null }
     });
-    await tx.aiProviderConnection.delete({ where: { id: connection.id } });
+    await tx.aiProviderConnection.deleteMany({
+      where: { id: connection.id, businessId: input.businessId }
+    });
     await recordStaffAuditLog(
       {
         businessId: input.businessId,
@@ -383,16 +390,20 @@ export async function resolveActiveByokRuntime(
  * Record a runtime failure against a connection so the dashboard can surface
  * it. Fire-and-forget from the chat path.
  */
-export async function recordByokRuntimeError(
-  connectionId: string,
-  message: string
-): Promise<void> {
+export async function recordByokRuntimeError(input: {
+  connectionId: string;
+  businessId: string;
+  message: string;
+}): Promise<void> {
   try {
-    await prisma.aiProviderConnection.update({
-      where: { id: connectionId },
-      data: { lastError: message.slice(0, 500) }
+    await prisma.aiProviderConnection.updateMany({
+      where: { id: input.connectionId, businessId: input.businessId },
+      data: { lastError: input.message.slice(0, 500) }
     });
   } catch (error) {
-    logger.warn({ err: error, connectionId }, "ai.byok.record_error_failed");
+    logger.warn(
+      { err: error, connectionId: input.connectionId },
+      "ai.byok.record_error_failed"
+    );
   }
 }
