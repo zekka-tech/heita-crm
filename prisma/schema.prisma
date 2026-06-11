@@ -7,25 +7,25 @@ datasource db {
 }
 
 model User {
-  id                      String                @id @default(cuid())
+  id                      String                 @id @default(cuid())
   name                    String?
-  email                   String?               @unique
+  email                   String?                @unique
   emailVerified           DateTime?
   image                   String?
-  phone                   String?               @unique
+  phone                   String?                @unique
   phoneVerifiedAt         DateTime?
-  preferredAiMode         String?               @default("auto")
+  preferredAiMode         String?                @default("auto")
   pendingEmail            String?
   notificationPreferences Json?
-  sessionVersion          Int                   @default(0)
+  sessionVersion          Int                    @default(0)
   deletedAt               DateTime?
-  createdAt               DateTime              @default(now())
-  updatedAt               DateTime              @updatedAt
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
   accounts                Account[]
   sessions                Session[]
   memberships             Membership[]
   staffMemberships        StaffMember[]
-  staffInvitesSent        StaffInvite[]         @relation("StaffInviteIssuer")
+  staffInvitesSent        StaffInvite[]          @relation("StaffInviteIssuer")
   notifications           Notification[]
   pushSubscriptions       PushSubscription[]
   otpCodes                OtpCode[]
@@ -35,15 +35,16 @@ model User {
   consents                UserConsent[]
   promotionRedemptions    PromotionRedemption[]
   aiTokenUsages           AiTokenUsage[]
-  staffAuditLogs          StaffAuditLog[]       @relation("StaffAuditActor")
+  staffAuditLogs          StaffAuditLog[]        @relation("StaffAuditActor")
   referralCodesOwned      ReferralCode[]
-  importRuns              CustomerImportRun[]   @relation("CustomerImportActor")
+  importRuns              CustomerImportRun[]    @relation("CustomerImportActor")
   ocrReceipts             OcrReceipt[]
-  reviewedReceipts        OcrReceipt[]          @relation("OcrReceiptReviewer")
+  reviewedReceipts        OcrReceipt[]           @relation("OcrReceiptReviewer")
   salesThreads            SalesThread[]
-  salesThreadsCreated     SalesThread[]         @relation("SalesThreadCreator")
-  outboundDocuments       OutboundDocument[]    @relation("OutboundDocumentUploader")
-  followUpsApproved       FollowUpTask[]        @relation("FollowUpApprover")
+  salesThreadsCreated     SalesThread[]          @relation("SalesThreadCreator")
+  outboundDocuments       OutboundDocument[]     @relation("OutboundDocumentUploader")
+  followUpsApproved       FollowUpTask[]         @relation("FollowUpApprover")
+  aiProviderConnections   AiProviderConnection[] @relation("AiProviderConnectionCreator")
 }
 
 model Account {
@@ -99,66 +100,67 @@ model OtpCode {
 }
 
 model Business {
-  id                   String                   @id @default(cuid())
-  planId               BusinessPlanId           @default(FREE)
-  slug                 String                   @unique
-  name                 String
-  legalName            String?
-  description          String?
-  category             BusinessCategory
-  province             Province
-  phone                String?
-  email                String?
-  logoUrl              String?
-  coverImageUrl        String?
-  loyaltySignupBonus   Int                      @default(0)
-  pointsExpiryDays     Int                      @default(365)
-  wabaPhoneId          String?                  @unique
-  whatsappPhoneNumber  String?
-  addressLine1         String?
-  addressLine2         String?
-  suburb               String?
-  city                 String?
-  postalCode           String?
-  isActive             Boolean                  @default(true)
-  isFranchiseHQ        Boolean                  @default(false)
-  parentBusinessId     String?
-  parentBusiness       Business?                @relation("BusinessHierarchy", fields: [parentBusinessId], references: [id], onDelete: SetNull)
-  childBusinesses      Business[]               @relation("BusinessHierarchy")
-  deletedAt            DateTime?
-  createdAt            DateTime                 @default(now())
-  updatedAt            DateTime                 @updatedAt
-  qrCodes              QrCode[]
-  joinLinks            JoinLink[]
-  memberships          Membership[]
-  staffMembers         StaffMember[]
-  aiWorkspace          AiWorkspace?
-  documents            BusinessDocument[]
-  webSources           WebSource[]
-  documentChunks       DocumentChunk[]
-  aiChatSessions       AiChatSession[]
-  loyaltyTiers         LoyaltyTier[]
-  rewards              Reward[]
-  promotions           Promotion[]
-  events               Event[]
-  messages             Message[]
-  loyaltyTransactions  LoyaltyTransaction[]
-  consents             UserConsent[]
-  promotionRedemptions PromotionRedemption[]
-  staffInvites         StaffInvite[]
-  aiTokenUsages        AiTokenUsage[]
-  staffAuditLogs       StaffAuditLog[]
-  referralCodes        ReferralCode[]
-  importRuns           CustomerImportRun[]
-  subscriptions        BusinessSubscription[]
-  invoices             BusinessInvoice[]
-  ocrReceipts          OcrReceipt[]
-  customerSegments     CustomerSegment[]
-  pipelineStages       PipelineStage[]
-  salesThreads         SalesThread[]
-  outboundDocuments    OutboundDocument[]
-  followUpTasks        FollowUpTask[]
-  inboundAddresses     BusinessInboundAddress[]
+  id                    String                   @id @default(cuid())
+  planId                BusinessPlanId           @default(FREE)
+  slug                  String                   @unique
+  name                  String
+  legalName             String?
+  description           String?
+  category              BusinessCategory
+  province              Province
+  phone                 String?
+  email                 String?
+  logoUrl               String?
+  coverImageUrl         String?
+  loyaltySignupBonus    Int                      @default(0)
+  pointsExpiryDays      Int                      @default(365)
+  wabaPhoneId           String?                  @unique
+  whatsappPhoneNumber   String?
+  addressLine1          String?
+  addressLine2          String?
+  suburb                String?
+  city                  String?
+  postalCode            String?
+  isActive              Boolean                  @default(true)
+  isFranchiseHQ         Boolean                  @default(false)
+  parentBusinessId      String?
+  parentBusiness        Business?                @relation("BusinessHierarchy", fields: [parentBusinessId], references: [id], onDelete: SetNull)
+  childBusinesses       Business[]               @relation("BusinessHierarchy")
+  deletedAt             DateTime?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  qrCodes               QrCode[]
+  joinLinks             JoinLink[]
+  memberships           Membership[]
+  staffMembers          StaffMember[]
+  aiWorkspace           AiWorkspace?
+  documents             BusinessDocument[]
+  webSources            WebSource[]
+  documentChunks        DocumentChunk[]
+  aiChatSessions        AiChatSession[]
+  loyaltyTiers          LoyaltyTier[]
+  rewards               Reward[]
+  promotions            Promotion[]
+  events                Event[]
+  messages              Message[]
+  loyaltyTransactions   LoyaltyTransaction[]
+  consents              UserConsent[]
+  promotionRedemptions  PromotionRedemption[]
+  staffInvites          StaffInvite[]
+  aiTokenUsages         AiTokenUsage[]
+  staffAuditLogs        StaffAuditLog[]
+  referralCodes         ReferralCode[]
+  importRuns            CustomerImportRun[]
+  subscriptions         BusinessSubscription[]
+  invoices              BusinessInvoice[]
+  ocrReceipts           OcrReceipt[]
+  customerSegments      CustomerSegment[]
+  pipelineStages        PipelineStage[]
+  salesThreads          SalesThread[]
+  outboundDocuments     OutboundDocument[]
+  followUpTasks         FollowUpTask[]
+  inboundAddresses      BusinessInboundAddress[]
+  aiProviderConnections AiProviderConnection[]
 
   @@index([parentBusinessId])
 }
@@ -279,16 +281,46 @@ enum StaffInviteStatus {
 }
 
 model AiWorkspace {
-  id               String             @id @default(cuid())
-  businessId       String             @unique
-  systemPrompt     String?
-  preferredRuntime String             @default("auto")
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  business         Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  documents        BusinessDocument[]
-  webSources       WebSource[]
-  chatSessions     AiChatSession[]
+  id                 String                @id @default(cuid())
+  businessId         String                @unique
+  systemPrompt       String?
+  preferredRuntime   String                @default("auto")
+  activeConnectionId String?               @unique
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  business           Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  activeConnection   AiProviderConnection? @relation("WorkspaceActiveConnection", fields: [activeConnectionId], references: [id], onDelete: SetNull)
+  documents          BusinessDocument[]
+  webSources         WebSource[]
+  chatSessions       AiChatSession[]
+}
+
+/// A business-supplied ("bring your own key") model provider credential that
+/// can power the AI co-worker instead of the platform-level defaults.
+/// The API key is stored AES-256-GCM encrypted; only the last four characters
+/// are kept in the clear for display.
+model AiProviderConnection {
+  id              String                     @id @default(cuid())
+  businessId      String
+  provider        AiProvider
+  label           String?
+  /// Custom OpenAI-compatible endpoints only; validated against SSRF on save
+  /// and again before every request.
+  baseUrl         String?
+  encryptedApiKey String
+  keyLast4        String
+  chatModel       String
+  status          AiProviderConnectionStatus @default(UNVERIFIED)
+  lastValidatedAt DateTime?
+  lastError       String?
+  createdByUserId String?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  business        Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdBy       User?                      @relation("AiProviderConnectionCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  activeWorkspace AiWorkspace?               @relation("WorkspaceActiveConnection")
+
+  @@index([businessId, createdAt])
 }
 
 model BusinessDocument {
@@ -912,6 +944,24 @@ enum WebSourceStatus {
   CRAWLING
   READY
   FAILED
+}
+
+enum AiProvider {
+  ANTHROPIC
+  OPENAI
+  GOOGLE
+  DEEPSEEK
+  MINIMAX
+  KIMI
+  QWEN
+  CUSTOM
+}
+
+enum AiProviderConnectionStatus {
+  UNVERIFIED
+  ACTIVE
+  INVALID
+  DISABLED
 }
 
 enum PromotionType {
