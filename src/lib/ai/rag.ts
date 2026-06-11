@@ -1,6 +1,10 @@
 import { anthropicConfigured, streamAnthropicChat } from "@/lib/ai/anthropic";
 import { embedText } from "@/lib/ai/embeddings";
 import { ollamaConfigured, streamOllamaChat } from "@/lib/ai/ollama";
+import {
+  buildQueryForRetrieval,
+  rewriteQueryForRetrieval,
+} from "@/lib/ai/query-rewriter";
 import { rerankChunks } from "@/lib/ai/reranker";
 import { ZERO_USAGE, type StreamUsage } from "@/lib/ai/stream-types";
 import { hybridSearch, type SimilarityMatch } from "@/lib/ai/vector-store";
@@ -84,40 +88,12 @@ function buildContext(matches: SimilarityMatch[]): string {
     .join("\n\n");
 }
 
-/** Exported for use in the RAG eval harness. */
-export { buildQueryForRetrieval };
-
 /**
- * Build the string used for embedding and FTS retrieval.
- *
- * For follow-up turns in a conversation, short questions ("What about weekends?",
- * "And the price?") often rely on an implicit referent from the prior assistant
- * reply. Prepending a short excerpt of that reply gives the embedding model
- * enough context to retrieve the right chunks without an extra LLM call.
+ * Re-exported for the RAG eval harness. `buildQueryForRetrieval` is the
+ * synchronous heuristic; production retrieval uses the LLM-backed
+ * `rewriteQueryForRetrieval`, which falls back to this heuristic.
  */
-function buildQueryForRetrieval(messages: ChatTurn[]): string {
-  const history = messages.slice(-MAX_HISTORY);
-  const latestUser = [...history].reverse().find((m) => m.role === "user");
-  if (!latestUser) return "";
-
-  const question = latestUser.content.trim();
-
-  // Only contextualize short follow-up questions that are likely to have
-  // unresolved references. Long questions are self-contained.
-  if (question.length >= 120) return question;
-
-  const idx = [...history].lastIndexOf(latestUser);
-  const priorAssistant = [...history]
-    .slice(0, idx)
-    .reverse()
-    .find((m) => m.role === "assistant");
-
-  if (priorAssistant) {
-    return `${priorAssistant.content.slice(0, 300)}\n\n${question}`;
-  }
-
-  return question;
-}
+export { buildQueryForRetrieval };
 
 async function buildSystemPrompt(input: { businessId: string; messages: ChatTurn[] }) {
   const business = await prisma.business.findFirstOrThrow({
@@ -125,7 +101,9 @@ async function buildSystemPrompt(input: { businessId: string; messages: ChatTurn
     include: { aiWorkspace: true },
   });
 
-  const queryText = buildQueryForRetrieval(input.messages);
+  // Rewrite multi-turn follow-ups into a standalone query before retrieval;
+  // falls back to the heuristic when no LLM is configured or the call fails.
+  const queryText = await rewriteQueryForRetrieval(input.messages);
   const queryEmbedding = await embedText(queryText);
 
   // 1. Hybrid retrieval: semantic (vector, cached embedding) + keyword (FTS) fused via RRF.
