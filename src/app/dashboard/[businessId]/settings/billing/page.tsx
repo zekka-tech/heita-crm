@@ -17,6 +17,7 @@ import {
   getEffectivePlan,
   listInvoices
 } from "@/server/services/billing.service";
+import { getConfiguredProviders } from "@/server/services/payments/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -36,14 +37,15 @@ export default async function BillingPage({
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/settings/billing`);
   }
 
-  const [planId, activeSub, invoices, business] = await Promise.all([
+  const [planId, activeSub, invoices, business, paymentProviders] = await Promise.all([
     getEffectivePlan(businessId),
     getActiveSubscription(businessId),
     listInvoices(businessId),
     prisma.business.findUnique({
       where: { id: businessId },
       select: { name: true }
-    })
+    }),
+    Promise.resolve(getConfiguredProviders())
   ]);
 
   const currentPlan = getBusinessPlan(planId);
@@ -168,6 +170,7 @@ export default async function BillingPage({
                     businessId={businessId}
                     planId={plan.id}
                     label={`Upgrade to ${plan.name}`}
+                    providers={paymentProviders}
                   />
                 </Card>
               ))}

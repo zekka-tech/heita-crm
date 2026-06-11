@@ -36,11 +36,16 @@ export default defineConfig({
         "src/server/services/loyalty.service.ts",
         "src/server/services/referral.service.ts",
         "src/server/services/billing.service.ts",
+        "src/server/services/payments/payfast.ts",
+        "src/server/services/payments/stripe.ts",
+        "src/server/services/payments/yoco.ts",
         "src/server/services/receipt-history.service.ts",
         "src/server/services/account.service.ts",
         "src/server/services/session.service.ts",
         "src/server/http/webhook-handlers.ts",
         "src/server/http/cron-handlers.ts",
+        "src/app/api/webhooks/payfast/route.ts",
+        "src/app/api/webhooks/stripe/route.ts",
         "src/app/api/webhooks/yoco/route.ts"
       ],
       thresholds: {

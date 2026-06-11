@@ -1,9 +1,22 @@
-import type { BusinessPlanId } from "@prisma/client";
+import {
+  Prisma,
+  type BusinessPlanId,
+  type PaymentProvider,
+} from "@prisma/client";
 
 import { getBusinessPlan } from "@/lib/billing";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
+import {
+  getGateway,
+  isConfiguredProvider,
+} from "@/server/services/payments/registry";
+import type {
+  CheckoutResult,
+  NormalizedPaymentEvent,
+} from "@/server/services/payments/types";
+import { isPaidPlanId } from "@/server/services/payments/types";
 
 export const PAID_BUSINESS_PLAN_IDS: BusinessPlanId[] = ["GROWTH", "SCALE"];
 export const PAST_DUE_GRACE_DAYS = 3;
@@ -12,18 +25,32 @@ function addDays(date: Date, days: number) {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
-function isPastDueGraceActive(subscription: { status: string; updatedAt: Date }, now = new Date()) {
-  return subscription.status === "PAST_DUE" && now < addDays(subscription.updatedAt, PAST_DUE_GRACE_DAYS);
+function isPastDueGraceActive(
+  subscription: { status: string; updatedAt: Date },
+  now = new Date(),
+) {
+  return (
+    subscription.status === "PAST_DUE" &&
+    now < addDays(subscription.updatedAt, PAST_DUE_GRACE_DAYS)
+  );
 }
 
-export function isPaidBusinessPlan(planId: BusinessPlanId | string | null | undefined): planId is BusinessPlanId {
+export function isPaidBusinessPlan(
+  planId: BusinessPlanId | string | null | undefined,
+): planId is BusinessPlanId {
   return planId === "GROWTH" || planId === "SCALE";
 }
 
-export async function requirePaidBusinessPlan(businessId: string, featureName = "This feature") {
+export async function requirePaidBusinessPlan(
+  businessId: string,
+  featureName = "This feature",
+) {
   const planId = await getEffectivePlan(businessId);
   if (!isPaidBusinessPlan(planId)) {
-    throw new Error(featureName + " is available on paid plans only. Upgrade to Growth or Scale to use it.");
+    throw new Error(
+      featureName +
+        " is available on paid plans only. Upgrade to Growth or Scale to use it.",
+    );
   }
   return planId;
 }
@@ -38,16 +65,16 @@ export async function getActiveSubscription(businessId: string) {
   return prisma.businessSubscription.findFirst({
     where: {
       businessId,
-      status: { in: ["ACTIVE", "TRIALING"] }
+      status: { in: ["ACTIVE", "TRIALING"] },
     },
-    orderBy: { createdAt: "desc" }
+    orderBy: { createdAt: "desc" },
   });
 }
 
 export async function getEffectivePlan(businessId: string) {
   const business = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { planId: true }
+    select: { planId: true },
   });
   const planId = business?.planId ?? "FREE";
   // Non-paid plans are unaffected by subscription state.
@@ -61,12 +88,16 @@ export async function getEffectivePlan(businessId: string) {
   const latestSub = await prisma.businessSubscription.findFirst({
     where: { businessId },
     orderBy: { createdAt: "desc" },
-    select: { status: true, updatedAt: true }
+    select: { status: true, updatedAt: true },
   });
   if (latestSub?.status === "CANCELLED") {
     return "FREE";
   }
-  if (latestSub && latestSub.status === "PAST_DUE" && !isPastDueGraceActive(latestSub)) {
+  if (
+    latestSub &&
+    latestSub.status === "PAST_DUE" &&
+    !isPastDueGraceActive(latestSub)
+  ) {
     return "FREE";
   }
   return planId;
@@ -74,7 +105,7 @@ export async function getEffectivePlan(businessId: string) {
 
 export async function checkPlanLimit(
   businessId: string,
-  key: PlanLimitKey
+  key: PlanLimitKey,
 ): Promise<{ allowed: boolean; limit: number | null; current: number }> {
   const planId = await getEffectivePlan(businessId);
   const plan = getBusinessPlan(planId);
@@ -88,12 +119,12 @@ export async function checkPlanLimit(
   } else if (key === "aiMessagesPerMonth") {
     const start = startOfMonth();
     current = await prisma.aiTokenUsage.count({
-      where: { businessId, createdAt: { gte: start } }
+      where: { businessId, createdAt: { gte: start } },
     });
   } else if (key === "documentUploadsPerMonth") {
     const start = startOfMonth();
     current = await prisma.businessDocument.count({
-      where: { businessId, createdAt: { gte: start } }
+      where: { businessId, createdAt: { gte: start } },
     });
   }
 
@@ -105,50 +136,357 @@ function startOfMonth() {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
-export async function createYocoCheckoutSession(
+function isUniqueConstraintError(err: unknown) {
+  return (
+    err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002"
+  );
+}
+
+export async function createCheckout(
   businessId: string,
   planId: BusinessPlanId,
-  returnUrl: string
-) {
+  returnUrl: string,
+  provider: PaymentProvider,
+): Promise<CheckoutResult> {
   const plan = getBusinessPlan(planId);
   if (plan.monthlyPriceZar === 0) {
     throw new Error("Cannot create a checkout session for the Free plan.");
   }
 
-  const yocoKey = process.env.YOCO_SECRET_KEY;
-  if (!yocoKey) throw new Error("YOCO_SECRET_KEY not configured.");
-
-  const amountCents = plan.monthlyPriceZar * 100;
-  // Stable idempotency key: same business+plan pair always produces the same
-  // key (within the same month) so retries don't create duplicate checkouts.
-  const monthStamp = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-  const idempotencyKey = `checkout:${businessId}:${planId}:${monthStamp}`;
-
-  const resp = await fetch("https://payments.yoco.com/api/checkouts", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${yocoKey}`,
-      "Idempotency-Key": idempotencyKey
-    },
-    body: JSON.stringify({
-      amount: amountCents,
-      currency: "ZAR",
-      metadata: { businessId, planId },
-      successUrl: `${returnUrl}?checkout=success&plan=${planId}`,
-      cancelUrl: `${returnUrl}?checkout=cancelled`
-    }),
-    signal: AbortSignal.timeout(15_000)
-  });
-
-  if (!resp.ok) {
-    const body = await resp.text();
-    logger.error({ businessId, planId, status: resp.status, body }, "yoco.checkout.failed");
-    throw new Error(`Yoco checkout failed: ${resp.status}`);
+  if (!isConfiguredProvider(provider)) {
+    throw new Error(`Payment provider ${provider} is not configured.`);
   }
 
-  const data = (await resp.json()) as { id: string; redirectUrl: string };
-  return { checkoutId: data.id, redirectUrl: data.redirectUrl };
+  return getGateway(provider).createCheckout({ businessId, planId, returnUrl });
+}
+
+export async function createYocoCheckoutSession(
+  businessId: string,
+  planId: BusinessPlanId,
+  returnUrl: string,
+) {
+  const result = await createCheckout(businessId, planId, returnUrl, "YOCO");
+  if (result.kind !== "redirect") {
+    throw new Error("Yoco checkout did not return a redirect URL.");
+  }
+  return { checkoutId: result.checkoutId, redirectUrl: result.url };
+}
+
+function normalizeLegacyYocoWebhook(payload: {
+  type: string;
+  payload: {
+    metadata?: { businessId?: string; planId?: string };
+    id?: string;
+    status?: string;
+    amount?: number;
+  };
+}): NormalizedPaymentEvent | null {
+  const meta = payload.payload?.metadata;
+  const businessId = meta?.businessId;
+  const planId = meta?.planId;
+
+  if (!businessId || !isPaidPlanId(planId)) {
+    logger.warn({ type: payload.type }, "yoco.webhook.missing_metadata");
+    return null;
+  }
+
+  if (payload.type === "payment.succeeded") {
+    return {
+      provider: "YOCO",
+      type: "payment_succeeded",
+      businessId,
+      planId,
+      providerPaymentId: payload.payload.id,
+      providerSubscriptionId: payload.payload.id,
+      amountZar:
+        typeof payload.payload.amount === "number"
+          ? payload.payload.amount / 100
+          : undefined,
+    };
+  }
+
+  if (payload.type === "payment.failed") {
+    return {
+      provider: "YOCO",
+      type: "payment_failed",
+      businessId,
+      planId,
+      providerPaymentId: payload.payload.id,
+    };
+  }
+
+  if (payload.type === "subscription.cancelled") {
+    return {
+      provider: "YOCO",
+      type: "subscription_cancelled",
+      businessId,
+      planId,
+      providerSubscriptionId: payload.payload.id,
+    };
+  }
+
+  logger.debug(
+    { type: payload.type, businessId },
+    "yoco.webhook.unhandled_event",
+  );
+  return null;
+}
+
+function assertPaidEventAmount(event: NormalizedPaymentEvent) {
+  if (event.amountZar === undefined) return;
+  const expected = getBusinessPlan(event.planId).monthlyPriceZar;
+  if (Number(event.amountZar.toFixed(2)) !== expected) {
+    logger.warn(
+      {
+        businessId: event.businessId,
+        planId: event.planId,
+        provider: event.provider,
+        expected,
+        received: event.amountZar,
+      },
+      "billing.webhook.amount_mismatch",
+    );
+    throw new Error("Payment amount does not match selected plan.");
+  }
+}
+
+export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
+  if (!event) return;
+
+  if (event.type === "payment_succeeded") {
+    if (!event.providerPaymentId) {
+      logger.warn(
+        { businessId: event.businessId, provider: event.provider },
+        "billing.webhook.missing_payment_id",
+      );
+      return;
+    }
+
+    assertPaidEventAmount(event);
+
+    const plan = getBusinessPlan(event.planId);
+    const now = new Date();
+    const periodEnd = new Date(now);
+    periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+    try {
+      await prisma.$transaction(
+        async (tx) => {
+          const existingInvoice = await tx.businessInvoice.findFirst({
+            where: {
+              provider: event.provider,
+              providerPaymentId: event.providerPaymentId,
+            },
+          });
+          if (existingInvoice) {
+            logger.info(
+              {
+                businessId: event.businessId,
+                provider: event.provider,
+                providerPaymentId: event.providerPaymentId,
+              },
+              "billing.webhook.duplicate_ignored",
+            );
+            return;
+          }
+
+          await tx.businessInvoice.create({
+            data: {
+              businessId: event.businessId,
+              planId: event.planId,
+              amountZar: plan.monthlyPriceZar,
+              status: "PAID",
+              provider: event.provider,
+              providerPaymentId: event.providerPaymentId,
+              yocoPaymentId:
+                event.provider === "YOCO" ? event.providerPaymentId : undefined,
+              paidAt: now,
+              periodStart: now,
+              periodEnd,
+            },
+          });
+
+          await tx.businessSubscription.updateMany({
+            where: {
+              businessId: event.businessId,
+              status: { in: ["ACTIVE", "TRIALING"] },
+            },
+            data: { status: "CANCELLED" },
+          });
+          await tx.business.update({
+            where: { id: event.businessId },
+            data: { planId: event.planId },
+          });
+          await tx.businessSubscription.create({
+            data: {
+              businessId: event.businessId,
+              planId: event.planId,
+              status: "ACTIVE",
+              provider: event.provider,
+              providerCustomerId: event.providerCustomerId,
+              providerSubscriptionId: event.providerSubscriptionId,
+              yocoCustomerId:
+                event.provider === "YOCO"
+                  ? event.providerCustomerId
+                  : undefined,
+              yocoSubscriptionId:
+                event.provider === "YOCO"
+                  ? event.providerSubscriptionId
+                  : undefined,
+              currentPeriodStart: now,
+              currentPeriodEnd: periodEnd,
+            },
+          });
+          await recordStaffAuditLog(
+            {
+              businessId: event.businessId,
+              actorUserId: null,
+              action: "BILLING_SUBSCRIPTION_ACTIVATED",
+              targetType: "Business",
+              targetId: event.businessId,
+              metadata: {
+                planId: event.planId,
+                provider: event.provider,
+                providerPaymentId: event.providerPaymentId,
+                amountZar: plan.monthlyPriceZar,
+              },
+            },
+            tx,
+          );
+        },
+        { maxWait: 5_000, timeout: 10_000 },
+      );
+    } catch (err) {
+      if (isUniqueConstraintError(err)) {
+        logger.info(
+          {
+            businessId: event.businessId,
+            provider: event.provider,
+            providerPaymentId: event.providerPaymentId,
+          },
+          "billing.webhook.duplicate_ignored",
+        );
+        return;
+      }
+      throw err;
+    }
+
+    logger.info(
+      {
+        businessId: event.businessId,
+        planId: event.planId,
+        provider: event.provider,
+      },
+      "billing.subscription.activated",
+    );
+    return;
+  }
+
+  if (event.type === "payment_failed") {
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.businessSubscription.updateMany({
+          where: {
+            businessId: event.businessId,
+            provider: event.provider,
+            status: "ACTIVE",
+            ...(event.providerSubscriptionId
+              ? { providerSubscriptionId: event.providerSubscriptionId }
+              : {}),
+          },
+          data: { status: "PAST_DUE" },
+        });
+        await recordStaffAuditLog(
+          {
+            businessId: event.businessId,
+            actorUserId: null,
+            action: "BILLING_PAYMENT_FAILED",
+            targetType: "Business",
+            targetId: event.businessId,
+            metadata: {
+              planId: event.planId,
+              provider: event.provider,
+              providerPaymentId: event.providerPaymentId,
+            },
+          },
+          tx,
+        );
+      },
+      { maxWait: 5_000, timeout: 10_000 },
+    );
+    logger.warn(
+      {
+        businessId: event.businessId,
+        planId: event.planId,
+        provider: event.provider,
+      },
+      "billing.subscription.past_due",
+    );
+    return;
+  }
+
+  if (event.type === "subscription_cancelled") {
+    if (!event.providerSubscriptionId) {
+      logger.warn(
+        { businessId: event.businessId, provider: event.provider },
+        "billing.webhook.missing_subscription_id",
+      );
+      return;
+    }
+
+    await prisma.$transaction(
+      async (tx) => {
+        const cancelled = await tx.businessSubscription.updateMany({
+          where: {
+            businessId: event.businessId,
+            provider: event.provider,
+            providerSubscriptionId: event.providerSubscriptionId,
+            status: { in: ["ACTIVE", "TRIALING", "PAST_DUE"] },
+          },
+          data: { status: "CANCELLED" },
+        });
+        if (cancelled.count === 0) {
+          logger.warn(
+            {
+              businessId: event.businessId,
+              provider: event.provider,
+              providerSubscriptionId: event.providerSubscriptionId,
+            },
+            "billing.webhook.stale_cancellation_ignored",
+          );
+          return;
+        }
+        await tx.business.update({
+          where: { id: event.businessId },
+          data: { planId: "FREE" },
+        });
+        await recordStaffAuditLog(
+          {
+            businessId: event.businessId,
+            actorUserId: null,
+            action: "BILLING_SUBSCRIPTION_CANCELLED",
+            targetType: "Business",
+            targetId: event.businessId,
+            metadata: {
+              planId: event.planId,
+              provider: event.provider,
+              providerSubscriptionId: event.providerSubscriptionId,
+            },
+          },
+          tx,
+        );
+      },
+      { maxWait: 5_000, timeout: 10_000 },
+    );
+    logger.info(
+      {
+        businessId: event.businessId,
+        planId: event.planId,
+        provider: event.provider,
+      },
+      "billing.subscription.cancelled",
+    );
+  }
 }
 
 export async function handleYocoWebhook(payload: {
@@ -157,123 +495,16 @@ export async function handleYocoWebhook(payload: {
     metadata?: { businessId?: string; planId?: string };
     id?: string;
     status?: string;
+    amount?: number;
   };
 }) {
-  const { type } = payload;
-  const meta = payload.payload?.metadata;
-  const businessId = meta?.businessId;
-  const planId = meta?.planId as BusinessPlanId | undefined;
-
-  if (!businessId || !planId) {
-    logger.warn({ type }, "yoco.webhook.missing_metadata");
-    return;
-  }
-
-  if (type === "payment.succeeded") {
-    const plan = getBusinessPlan(planId);
-    const now = new Date();
-    const periodEnd = new Date(now);
-    periodEnd.setMonth(periodEnd.getMonth() + 1);
-
-    await prisma.$transaction(async (tx) => {
-      // Idempotency: skip if this payment has already been processed.
-      const existingInvoice = await tx.businessInvoice.findFirst({
-        where: { yocoPaymentId: payload.payload.id }
-      });
-      if (existingInvoice) {
-        logger.info(
-          { businessId, yocoPaymentId: payload.payload.id },
-          "billing.webhook.duplicate_ignored"
-        );
-        return;
-      }
-
-      await tx.business.update({
-        where: { id: businessId },
-        data: { planId }
-      });
-      await tx.businessSubscription.create({
-        data: {
-          businessId,
-          planId,
-          status: "ACTIVE",
-          yocoSubscriptionId: payload.payload.id,
-          currentPeriodStart: now,
-          currentPeriodEnd: periodEnd
-        }
-      });
-      await tx.businessInvoice.create({
-        data: {
-          businessId,
-          planId,
-          amountZar: plan.monthlyPriceZar,
-          status: "PAID",
-          yocoPaymentId: payload.payload.id,
-          paidAt: now,
-          periodStart: now,
-          periodEnd
-        }
-      });
-      await recordStaffAuditLog(
-        {
-          businessId,
-          actorUserId: null,
-          action: "BILLING_SUBSCRIPTION_ACTIVATED",
-          targetType: "Business",
-          targetId: businessId,
-          metadata: { planId, yocoPaymentId: payload.payload.id, amountZar: plan.monthlyPriceZar }
-        },
-        tx
-      );
-    });
-
-    logger.info({ businessId, planId }, "billing.subscription.activated");
-  } else if (type === "payment.failed") {
-    await prisma.businessSubscription.updateMany({
-      where: { businessId, status: "ACTIVE" },
-      data: { status: "PAST_DUE" }
-    });
-    await recordStaffAuditLog({
-      businessId,
-      actorUserId: null,
-      action: "BILLING_PAYMENT_FAILED",
-      targetType: "Business",
-      targetId: businessId,
-      metadata: { planId, yocoPaymentId: payload.payload.id }
-    });
-    logger.warn({ businessId, planId }, "billing.subscription.past_due");
-  } else if (type === "subscription.cancelled") {
-    await prisma.$transaction(async (tx) => {
-      await tx.businessSubscription.updateMany({
-        where: { businessId, status: { in: ["ACTIVE", "TRIALING", "PAST_DUE"] } },
-        data: { status: "CANCELLED" }
-      });
-      await tx.business.update({
-        where: { id: businessId },
-        data: { planId: "FREE" }
-      });
-      await recordStaffAuditLog(
-        {
-          businessId,
-          actorUserId: null,
-          action: "BILLING_SUBSCRIPTION_CANCELLED",
-          targetType: "Business",
-          targetId: businessId,
-          metadata: { planId, yocoSubscriptionId: payload.payload.id }
-        },
-        tx
-      );
-    });
-    logger.info({ businessId, planId }, "billing.subscription.cancelled");
-  } else {
-    logger.debug({ type, businessId }, "yoco.webhook.unhandled_event");
-  }
+  await applyPaymentEvent(normalizeLegacyYocoWebhook(payload));
 }
 
 export async function listInvoices(businessId: string) {
   return prisma.businessInvoice.findMany({
     where: { businessId },
     orderBy: { issuedAt: "desc" },
-    take: 24
+    take: 24,
   });
 }

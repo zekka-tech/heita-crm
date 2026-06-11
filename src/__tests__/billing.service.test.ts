@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockTx = {
   businessInvoice: { findFirst: vi.fn(), create: vi.fn() },
-  businessSubscription: { create: vi.fn() },
+  businessSubscription: { create: vi.fn(), updateMany: vi.fn() },
   business: { update: vi.fn() }
 };
 
@@ -22,6 +22,7 @@ vi.mock("@/server/services/staff-audit.service", () => ({
 }));
 
 const {
+  applyPaymentEvent,
   checkPlanLimit,
   getEffectivePlan,
   handleYocoWebhook,
@@ -37,13 +38,14 @@ beforeEach(() => {
   mockTx.businessInvoice.findFirst.mockResolvedValue(null);
   mockTx.businessInvoice.create.mockResolvedValue({});
   mockTx.businessSubscription.create.mockResolvedValue({});
+  mockTx.businessSubscription.updateMany.mockResolvedValue({ count: 0 });
   mockTx.business.update.mockResolvedValue({});
 });
 
 describe("getEffectivePlan", () => {
   it("returns business planId when found", async () => {
-    prisma.business.findUnique.mockResolvedValue({ planId: "PROFESSIONAL" });
-    await expect(getEffectivePlan("biz1")).resolves.toBe("PROFESSIONAL");
+    prisma.business.findUnique.mockResolvedValue({ planId: "GROWTH" });
+    await expect(getEffectivePlan("biz1")).resolves.toBe("GROWTH");
   });
 
   it("falls back to FREE when business not found", async () => {
@@ -143,7 +145,7 @@ describe("handleYocoWebhook — payment.succeeded idempotency", () => {
     type: "payment.succeeded",
     payload: {
       id: "pay_test_123",
-      metadata: { businessId: "biz1", planId: "PROFESSIONAL" }
+      metadata: { businessId: "biz1", planId: "GROWTH" }
     }
   };
 
@@ -165,5 +167,88 @@ describe("handleYocoWebhook — payment.succeeded idempotency", () => {
       handleYocoWebhook({ type: "payment.succeeded", payload: {} })
     ).resolves.toBeUndefined();
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects a success event whose amount does not match the plan price", async () => {
+    await expect(
+      handleYocoWebhook({
+        type: "payment.succeeded",
+        payload: {
+          id: "pay_amount_mismatch",
+          amount: 100, // R1.00 in cents — not the GROWTH price
+          metadata: { businessId: "biz1", planId: "GROWTH" }
+        }
+      })
+    ).rejects.toThrow(/amount/i);
+    expect(mockTx.businessInvoice.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("applyPaymentEvent — payment_failed", () => {
+  it("marks the matching active subscription PAST_DUE scoped to provider", async () => {
+    await applyPaymentEvent({
+      provider: "STRIPE",
+      type: "payment_failed",
+      businessId: "biz1",
+      planId: "GROWTH",
+      providerPaymentId: "pi_failed_1",
+      providerSubscriptionId: "sub_1"
+    });
+
+    expect(mockTx.businessSubscription.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz1",
+          provider: "STRIPE",
+          status: "ACTIVE",
+          providerSubscriptionId: "sub_1"
+        }),
+        data: { status: "PAST_DUE" }
+      })
+    );
+    // A failed payment must never touch the business plan directly.
+    expect(mockTx.business.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("applyPaymentEvent — subscription_cancelled", () => {
+  it("ignores cancellations with no provider subscription id", async () => {
+    await applyPaymentEvent({
+      provider: "STRIPE",
+      type: "subscription_cancelled",
+      businessId: "biz1",
+      planId: "GROWTH"
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("does not downgrade the business when no subscription row matches (stale event)", async () => {
+    mockTx.businessSubscription.updateMany.mockResolvedValue({ count: 0 });
+    await applyPaymentEvent({
+      provider: "STRIPE",
+      type: "subscription_cancelled",
+      businessId: "biz1",
+      planId: "GROWTH",
+      providerSubscriptionId: "sub_stale"
+    });
+    expect(mockTx.businessSubscription.updateMany).toHaveBeenCalled();
+    expect(mockTx.business.update).not.toHaveBeenCalled();
+  });
+
+  it("downgrades the business to FREE when a subscription is cancelled", async () => {
+    mockTx.businessSubscription.updateMany.mockResolvedValue({ count: 1 });
+    await applyPaymentEvent({
+      provider: "STRIPE",
+      type: "subscription_cancelled",
+      businessId: "biz1",
+      planId: "GROWTH",
+      providerSubscriptionId: "sub_live"
+    });
+    expect(mockTx.business.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "biz1" },
+        data: { planId: "FREE" }
+      })
+    );
   });
 });

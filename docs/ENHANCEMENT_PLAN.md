@@ -1,12 +1,39 @@
 # Heita CRM — Analytics, AI & Performance Enhancement Plan
 
-> Status: proposed (2026-06-04). Owner: engineering. Branch base: `chore/production-readiness`.
+> Status: **delivered (2026-06-11)** — originally proposed 2026-06-04. Owner: engineering.
 > Three independent workstreams (A) Analytics, (B) AI, (C) Performance/Loading.
 > Each phase is shippable on its own; phases are ordered so earlier ones de-risk later ones.
 
-## Audit baseline (current state)
+## Delivery status (verified against `main`, 2026-06-11)
 
-What exists today, verified against the code:
+The plan below is retained as the design record. Re-verified against the code on
+`main`, effectively all of it has shipped — the "Audit baseline" section is the
+*pre-work* state and no longer reflects the codebase.
+
+| Item | Status | Evidence in code |
+|---|---|---|
+| **A1** DB-side aggregation | ✅ Done | `analytics.service.ts` uses `prisma.$queryRaw` + `date_trunc('week',…)`; dashboard reads `business._count`, not unbounded `memberships`. |
+| **A2** Cache correctness | ✅ Done | `analyticsKey()` includes `weeks`; `analyticsKeysForBusiness()` bust wired into earn/redeem/adjust paths in `loyalty.service.ts`. |
+| **A3** Real charting + KPIs + CSV | ✅ Done | Recharts via `analytics/charts-loader.tsx` (lazy); KPIs (retention/liability/active-rate/top-rewards) in `analytics.service.ts`; `analytics/export-button.tsx` streams CSV. |
+| **A4** Product analytics + RUM | ✅ Done | Consent-gated PostHog (`posthog-provider.tsx` reads `cookie-consent`); `providers/web-vitals.tsx`. |
+| **B1** Retrieval quality | ⚠️ Mostly done | Threshold + over-fetch + bge rerank (`reranker.ts`), hybrid vector+FTS fused via RRF (`hybridSearch` in `vector-store.ts`, migration `0030_fts_document_chunks`). **Gap:** multi-turn query rewriting (standalone-question rewrite) not implemented. |
+| **B2** Embedding cache | ✅ Done | `getCachedEmbedding()` in `embeddings.ts`. |
+| **B3** Anthropic prompt caching | ✅ Done | `cache_control: { type: "ephemeral" }` + beta header in `anthropic.ts`. |
+| **B4** Real token accounting | ✅ Done | `ai-usage.service.ts` records `promptTokens` / `cacheReadTokens` from model usage (migration `0031_ai_cache_token_columns`). |
+| **B5** RAG eval harness | ✅ Done | `tests/ai/rag-eval/{golden-set,retrieval.eval}.ts`, `vitest.eval.config.ts`, `npm run test:eval`. |
+| **B6** Conversation memory | ✅ Done | `ai/summarizer.ts` rolling summary beyond the turn window. |
+| **C1** Caching/rendering | ✅ Done | `Suspense` + cached shell on dashboard; `revalidate`/`unstable_cache` across public/dashboard pages. |
+| **C2** Code splitting | ✅ Done | `next/dynamic` for chat, charts, OCR card. |
+| **C3** Nav prefetch | ✅ Done | `prefetch` tuned on `bottom-nav.tsx` / `dashboard-bottom-nav.tsx`. |
+| **C4** Images/assets | ➖ N/A-ish | Imagery is light (2 `next/image` sites); no further audit needed yet. |
+| **C5** Perf budgets in CI | ✅ Done | `.lighthouserc.json` asserted in CI (`ci.yml`, `preview.yml`). |
+
+**Remaining follow-ups:** B1 multi-turn query rewriting; revisit C4 if imagery grows.
+
+## Audit baseline (pre-work state — historical)
+
+What existed *before* this plan was implemented (kept for context; superseded by
+the Delivery status table above):
 
 **Analytics**
 - `analytics.service.ts` computes weekly buckets in JS from three unbounded `findMany`
@@ -219,8 +246,8 @@ migration except A1 (none — read-only) and B4 (additive columns already exist 
 2. **Charting library (A3): Recharts** — lazy-loaded via `next/dynamic` so it stays off the initial bundle.
 3. **Reranker (B1): local bge-reranker via Ollama** — no external dependency/cost; graceful fallback to
    pure-vector retrieval if the model isn't pulled (mirrors the Ollama→Anthropic fallback pattern).
-4. **Cache-busting vs TTL (A2):** still open — default to TTL + event-based bust on earn/redeem so staff
-   see their own action immediately.
+4. **Cache-busting vs TTL (A2):** resolved — shipped as TTL + event-based bust on earn/redeem/adjust
+   (`analyticsKeysForBusiness()` called from `loyalty.service.ts`) so staff see their own action immediately.
 
 ## Risks / notes
 - POPIA: product analytics + session replay must be consent-gated and PII-scrubbed; coordinate with the
