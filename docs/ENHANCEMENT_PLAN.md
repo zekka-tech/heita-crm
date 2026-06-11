@@ -16,7 +16,7 @@ The plan below is retained as the design record. Re-verified against the code on
 | **A2** Cache correctness | ✅ Done | `analyticsKey()` includes `weeks`; `analyticsKeysForBusiness()` bust wired into earn/redeem/adjust paths in `loyalty.service.ts`. |
 | **A3** Real charting + KPIs + CSV | ✅ Done | Recharts via `analytics/charts-loader.tsx` (lazy); KPIs (retention/liability/active-rate/top-rewards) in `analytics.service.ts`; `analytics/export-button.tsx` streams CSV. |
 | **A4** Product analytics + RUM | ✅ Done | Consent-gated PostHog (`posthog-provider.tsx` reads `cookie-consent`); `providers/web-vitals.tsx`. |
-| **B1** Retrieval quality | ⚠️ Mostly done | Threshold + over-fetch + bge rerank (`reranker.ts`), hybrid vector+FTS fused via RRF (`hybridSearch` in `vector-store.ts`, migration `0030_fts_document_chunks`). **Gap:** multi-turn query rewriting (standalone-question rewrite) not implemented. |
+| **B1** Retrieval quality | ✅ Done | Threshold + over-fetch + bge rerank (`reranker.ts`), hybrid vector+FTS fused via RRF (`hybridSearch` in `vector-store.ts`, migration `0030_fts_document_chunks`), and LLM-backed multi-turn query rewriting (`query-rewriter.ts`, `rewriteQueryForRetrieval`) with a heuristic fallback. |
 | **B2** Embedding cache | ✅ Done | `getCachedEmbedding()` in `embeddings.ts`. |
 | **B3** Anthropic prompt caching | ✅ Done | `cache_control: { type: "ephemeral" }` + beta header in `anthropic.ts`. |
 | **B4** Real token accounting | ✅ Done | `ai-usage.service.ts` records `promptTokens` / `cacheReadTokens` from model usage (migration `0031_ai_cache_token_columns`). |
@@ -28,7 +28,7 @@ The plan below is retained as the design record. Re-verified against the code on
 | **C4** Images/assets | ➖ N/A-ish | Imagery is light (2 `next/image` sites); no further audit needed yet. |
 | **C5** Perf budgets in CI | ✅ Done | `.lighthouserc.json` asserted in CI (`ci.yml`, `preview.yml`). |
 
-**Remaining follow-ups:** B1 multi-turn query rewriting; revisit C4 if imagery grows.
+**Remaining follow-ups:** revisit C4 if imagery grows.
 
 ## Audit baseline (pre-work state — historical)
 
