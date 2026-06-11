@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockTx = {
   businessInvoice: { findFirst: vi.fn(), create: vi.fn() },
-  businessSubscription: { create: vi.fn() },
+  businessSubscription: { create: vi.fn(), updateMany: vi.fn() },
   business: { update: vi.fn() }
 };
 
@@ -37,13 +37,14 @@ beforeEach(() => {
   mockTx.businessInvoice.findFirst.mockResolvedValue(null);
   mockTx.businessInvoice.create.mockResolvedValue({});
   mockTx.businessSubscription.create.mockResolvedValue({});
+  mockTx.businessSubscription.updateMany.mockResolvedValue({ count: 0 });
   mockTx.business.update.mockResolvedValue({});
 });
 
 describe("getEffectivePlan", () => {
   it("returns business planId when found", async () => {
-    prisma.business.findUnique.mockResolvedValue({ planId: "PROFESSIONAL" });
-    await expect(getEffectivePlan("biz1")).resolves.toBe("PROFESSIONAL");
+    prisma.business.findUnique.mockResolvedValue({ planId: "GROWTH" });
+    await expect(getEffectivePlan("biz1")).resolves.toBe("GROWTH");
   });
 
   it("falls back to FREE when business not found", async () => {
@@ -143,7 +144,7 @@ describe("handleYocoWebhook — payment.succeeded idempotency", () => {
     type: "payment.succeeded",
     payload: {
       id: "pay_test_123",
-      metadata: { businessId: "biz1", planId: "PROFESSIONAL" }
+      metadata: { businessId: "biz1", planId: "GROWTH" }
     }
   };
 

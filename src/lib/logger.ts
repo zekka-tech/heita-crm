@@ -38,6 +38,8 @@ const _logger = pino({
       "*.acceptUrl",
       "*.metadata.contactPhone",
       "req.headers.x-yoco-signature",
+      "req.headers.stripe-signature",
+      "*.signature",
       "req.headers.x-heita-signature",
       "req.headers.x-cron-secret"
     ],

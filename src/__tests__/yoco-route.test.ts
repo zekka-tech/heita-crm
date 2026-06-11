@@ -5,7 +5,7 @@ vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
 }));
 vi.mock("@/server/services/billing.service", () => ({
-  handleYocoWebhook: vi.fn().mockResolvedValue(undefined)
+  applyPaymentEvent: vi.fn().mockResolvedValue(undefined)
 }));
 
 const SECRET = "test-yoco-webhook-secret-32char";
@@ -41,12 +41,12 @@ describe("Yoco webhook route", () => {
     process.env.YOCO_WEBHOOK_SECRET = SECRET;
   });
 
-  it("accepts a valid request without timestamp header", async () => {
+  it("rejects a request without timestamp header", async () => {
     const body = JSON.stringify({ type: "payment.succeeded", payload: {} });
     const { POST } = await import("@/app/api/webhooks/yoco/route");
     const req = makeRequest(body, { timestamp: null });
     const res = await POST(req as never);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
   it("accepts a valid request with timestamp within 5 minutes", async () => {

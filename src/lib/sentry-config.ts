@@ -20,6 +20,9 @@ const REDACT_KEYS = [
   "refresh_token",
   "secret",
   "x-hub-signature-256",
+  "x-yoco-signature",
+  "stripe-signature",
+  "signature",
   "x-at-shared-secret"
 ];
 
