@@ -65,6 +65,23 @@ describe("POST /api/email/webhook — Svix signature verification", () => {
     process.env.EMAIL_WEBHOOK_SECRET = "";
   });
 
+  it("fails closed (503) in production when EMAIL_WEBHOOK_SECRET is unset", async () => {
+    process.env.EMAIL_WEBHOOK_SECRET = "";
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      const body = JSON.stringify({ type: "email.delivered", data: { email_id: "e1", to: [], created_at: "" } });
+      const req = new NextRequest(new URL("http://localhost/api/email/webhook"), {
+        method: "POST",
+        body,
+        headers: { "svix-id": "msg_prod_nosecret", "svix-timestamp": nowSeconds() },
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(503);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("accepts a request with a valid Svix signature", async () => {
     (prisma.user.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ id: "u1" });
     (prisma.userConsent.updateMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ count: 1 });

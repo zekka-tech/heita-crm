@@ -65,21 +65,28 @@ export async function upsertBusinessInboundAddress(input: {
       throw new Error("That inbound address is already connected to another business.");
     }
 
-    const row = existing
-      ? await tx.businessInboundAddress.update({
-          where: { id: existing.id },
-          data: { label, isActive: true }
-        })
-      : await tx.businessInboundAddress.create({
-          data: {
-            businessId: input.businessId,
-            channel,
-            provider,
-            address,
-            label,
-            isActive: true
-          }
-        });
+    let row;
+    if (existing) {
+      // Tenant-scoped update (businessId in the filter, not just the PK) — the
+      // ownership check above already guarantees the same business, this is
+      // defense-in-depth against a future regression of that check.
+      await tx.businessInboundAddress.updateMany({
+        where: { id: existing.id, businessId: input.businessId },
+        data: { label, isActive: true }
+      });
+      row = await tx.businessInboundAddress.findUniqueOrThrow({ where: { id: existing.id } });
+    } else {
+      row = await tx.businessInboundAddress.create({
+        data: {
+          businessId: input.businessId,
+          channel,
+          provider,
+          address,
+          label,
+          isActive: true
+        }
+      });
+    }
 
     await recordStaffAuditLog({
       businessId: input.businessId,

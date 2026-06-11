@@ -238,6 +238,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       logger.warn("email.webhook_signature_invalid");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+  } else if (process.env.NODE_ENV === "production") {
+    // Fail closed: this webhook now creates inbound Message rows and advances
+    // sales threads, so an unverified request must never be processed. Boot
+    // validation (env.ts) also requires the secret in production.
+    logger.error("email.webhook_secret_missing");
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 503 });
   }
 
   let payload: unknown;
