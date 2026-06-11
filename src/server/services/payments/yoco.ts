@@ -21,6 +21,7 @@ function parseYocoPayload(rawBody: string) {
       payload?: {
         id?: string;
         status?: string;
+        amount?: number;
         metadata?: { businessId?: string; planId?: string };
       };
     };
@@ -135,6 +136,10 @@ export const yocoGateway: PaymentGateway = {
         planId,
         providerPaymentId: payload.payload?.id,
         providerSubscriptionId: payload.payload?.id,
+        amountZar:
+          typeof payload.payload?.amount === "number"
+            ? payload.payload.amount / 100
+            : undefined,
       };
     }
     if (payload.type === "payment.failed") {

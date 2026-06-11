@@ -178,6 +178,7 @@ function normalizeLegacyYocoWebhook(payload: {
     metadata?: { businessId?: string; planId?: string };
     id?: string;
     status?: string;
+    amount?: number;
   };
 }): NormalizedPaymentEvent | null {
   const meta = payload.payload?.metadata;
@@ -197,6 +198,10 @@ function normalizeLegacyYocoWebhook(payload: {
       planId,
       providerPaymentId: payload.payload.id,
       providerSubscriptionId: payload.payload.id,
+      amountZar:
+        typeof payload.payload.amount === "number"
+          ? payload.payload.amount / 100
+          : undefined,
     };
   }
 
@@ -490,6 +495,7 @@ export async function handleYocoWebhook(payload: {
     metadata?: { businessId?: string; planId?: string };
     id?: string;
     status?: string;
+    amount?: number;
   };
 }) {
   await applyPaymentEvent(normalizeLegacyYocoWebhook(payload));
