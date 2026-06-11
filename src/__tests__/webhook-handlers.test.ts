@@ -1,6 +1,16 @@
 import crypto from "node:crypto";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
+const prismaMock = vi.hoisted(() => ({
+  businessInboundAddress: { findFirst: vi.fn() },
+  business: { findFirst: vi.fn() },
+  user: { findFirst: vi.fn() },
+  message: { findFirst: vi.fn(), create: vi.fn() }
+}));
+const salesThreadMock = vi.hoisted(() => ({
+  markCustomerResponded: vi.fn()
+}));
+
 // ------------------------------------------------------------------
 // Mock heavy dependencies so the handler module loads cleanly
 // ------------------------------------------------------------------
@@ -22,6 +32,8 @@ vi.mock("@/lib/circuit-breaker", () => ({
 vi.mock("@/server/services/whatsapp.service", () => ({
   handleWhatsappInboundPayload: vi.fn().mockResolvedValue(undefined)
 }));
+vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
+vi.mock("@/server/services/sales-thread.service", () => salesThreadMock);
 
 const {
   handleWhatsappVerification,
@@ -197,6 +209,12 @@ describe("handleAfricasTalkingWebhook", () => {
   const AT_SECRET = "at-test-secret";
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.businessInboundAddress.findFirst.mockResolvedValue(null);
+    prismaMock.business.findFirst.mockResolvedValue(null);
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    prismaMock.message.findFirst.mockResolvedValue(null);
+    prismaMock.message.create.mockResolvedValue({ id: "msg_1", createdAt: new Date("2026-01-01T00:00:00.000Z") });
     process.env.AT_WEBHOOK_SECRET = AT_SECRET;
     // @ts-expect-error: overriding read-only env for test purposes
     process.env.NODE_ENV = "production";
@@ -227,6 +245,47 @@ describe("handleAfricasTalkingWebhook", () => {
 
     const res = await handleAfricasTalkingWebhook(req);
     expect(res.status).toBe(200);
+  });
+
+  it("routes inbound SMS shortcodes through tenant mappings", async () => {
+    prismaMock.businessInboundAddress.findFirst.mockResolvedValueOnce({ businessId: "biz_1" });
+    prismaMock.user.findFirst.mockResolvedValueOnce({ id: "user_1" });
+
+    const body = "messageId=sms_1&from=%2B27821234567&to=20880&text=Reply&timestamp=" + Date.now();
+    const req = makeRequest("https://example.com/api/webhooks/africas-talking", {
+      method: "POST",
+      headers: {
+        "x-real-ip": "196.201.214.50",
+        "x-at-shared-secret": AT_SECRET,
+        "x-at-signature": signAt(body, AT_SECRET)
+      },
+      body
+    });
+
+    const res = await handleAfricasTalkingWebhook(req);
+    expect(res.status).toBe(200);
+    expect(prismaMock.businessInboundAddress.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        channel: "SMS",
+        provider: "africas-talking",
+        address: { in: ["20880"] }
+      })
+    }));
+    expect(prismaMock.message.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        businessId: "biz_1",
+        userId: "user_1",
+        contactPhone: "+27821234567",
+        channel: "SMS",
+        direction: "INBOUND",
+        body: "Reply"
+      })
+    }));
+    expect(salesThreadMock.markCustomerResponded).toHaveBeenCalledWith(expect.objectContaining({
+      businessId: "biz_1",
+      contactPhone: "+27821234567",
+      messageId: "msg_1"
+    }));
   });
 
   it("returns 401 when the shared secret is wrong", async () => {

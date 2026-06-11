@@ -9,6 +9,19 @@ vi.mock("@/lib/prisma", () => ({
     userConsent: {
       updateMany: vi.fn(),
     },
+    businessInboundAddress: {
+      findMany: vi.fn(),
+    },
+    business: {
+      findMany: vi.fn(),
+    },
+    salesThread: {
+      findFirst: vi.fn(),
+    },
+    message: {
+      findFirst: vi.fn(),
+      create: vi.fn(),
+    },
   },
 }));
 
@@ -20,7 +33,12 @@ vi.mock("@/lib/logger", () => ({
   },
 }));
 
+vi.mock("@/server/services/sales-thread.service", () => ({
+  markCustomerResponded: vi.fn(),
+}));
+
 import { prisma } from "@/lib/prisma";
+import { markCustomerResponded } from "@/server/services/sales-thread.service";
 import { POST } from "@/app/api/email/webhook/route";
 import { NextRequest } from "next/server";
 
@@ -299,5 +317,120 @@ describe("POST /api/email/webhook", () => {
 
     const res = await POST(req);
     expect(res.status).toBe(500);
+  });
+});
+
+describe("POST /api/email/webhook — inbound sales replies", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.EMAIL_WEBHOOK_SECRET = "";
+    (prisma.businessInboundAddress.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.business.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.message.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.message.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "msg_in_1", createdAt: new Date("2026-01-01T00:00:00.000Z") });
+  });
+
+  it("links a signed inbound reply by sales thread headers and marks the customer responded", async () => {
+    (prisma.user.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ id: "user_1", email: "customer@example.com" });
+    (prisma.salesThread.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "thread_1",
+      businessId: "biz_1",
+      contactPhone: "+27821234567"
+    });
+
+    const req = new NextRequest(new URL("http://localhost/api/email/webhook"), {
+      method: "POST",
+      body: JSON.stringify({
+        type: "email.received",
+        data: {
+          email_id: "email_in_1",
+          from: "Customer <customer@example.com>",
+          to: ["sales@heita.test"],
+          subject: "Re: Quote",
+          text: "Looks good, please proceed.",
+          headers: {
+            "X-Heita-Sales-Thread-Id": "thread_1",
+            "X-Heita-Business-Id": "biz_1"
+          },
+          created_at: new Date().toISOString()
+        }
+      })
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(prisma.message.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        businessId: "biz_1",
+        userId: "user_1",
+        salesThreadId: "thread_1",
+        channel: "EMAIL",
+        direction: "INBOUND",
+        body: "Looks good, please proceed."
+      })
+    }));
+    expect(markCustomerResponded).toHaveBeenCalledWith(expect.objectContaining({
+      businessId: "biz_1",
+      threadId: "thread_1",
+      messageId: "msg_in_1"
+    }));
+  });
+
+  it("falls back to tenant reply address mapping when headers are absent", async () => {
+    (prisma.user.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ id: "user_1", email: "customer@example.com" });
+    (prisma.businessInboundAddress.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([{ businessId: "biz_1" }]);
+    (prisma.salesThread.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "thread_1",
+      businessId: "biz_1",
+      contactPhone: "+27821234567"
+    });
+
+    const req = new NextRequest(new URL("http://localhost/api/email/webhook"), {
+      method: "POST",
+      body: JSON.stringify({
+        type: "email.received",
+        data: {
+          email_id: "email_in_2",
+          from: { email: "customer@example.com" },
+          to: ["sales+biz1@inbound.heita.test"],
+          subject: "Re: Quote",
+          text: "Can you adjust the quantities?",
+          created_at: new Date().toISOString()
+        }
+      })
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(prisma.businessInboundAddress.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        channel: "EMAIL",
+        provider: "resend",
+        address: { in: ["sales+biz1@inbound.heita.test"] }
+      })
+    }));
+    expect(markCustomerResponded).toHaveBeenCalledOnce();
+  });
+
+  it("acknowledges unmatched inbound replies without creating a message", async () => {
+    (prisma.user.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+
+    const req = new NextRequest(new URL("http://localhost/api/email/webhook"), {
+      method: "POST",
+      body: JSON.stringify({
+        type: "email.received",
+        data: {
+          email_id: "email_in_3",
+          from: "unknown@example.com",
+          to: ["sales@heita.test"],
+          text: "Hello"
+        }
+      })
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(prisma.message.create).not.toHaveBeenCalled();
+    expect(markCustomerResponded).not.toHaveBeenCalled();
   });
 });

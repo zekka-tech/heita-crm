@@ -230,6 +230,10 @@ export async function sendOnChannel(input: {
       html: "<p>" + escapeHtml(text).replace(/\n/g, "<br />") + "</p>",
       tag: "marketing",
       userId: user.id,
+      headers: {
+        "X-Heita-Business-Id": input.businessId,
+        "X-Heita-Sales-Thread-Id": input.thread.id
+      },
       attachments
     });
     const externalId = typeof response === "object" && response && "id" in response ? String(response.id) : null;
