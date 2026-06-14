@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageCircle, Send } from "lucide-react";
+import { Check, CheckCheck, MessageCircle, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -32,6 +32,8 @@ type Conversation = {
   unreadCount: number;
 };
 
+type TypingState = Record<string, boolean>; // userId → isTyping
+
 type ChatWindowProps = {
   userId: string;
   businessId: string;
@@ -44,14 +46,17 @@ function formatTime(dateStr: string): string {
   return date.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
 }
 
-function statusLabel(status: string | null): string {
-  switch (status) {
-    case "SENT": return "Sent";
-    case "DELIVERED": return "Delivered";
-    case "READ": return "Read";
-    case "FAILED": return "Failed";
-    default: return "";
+function DeliveryTick({ status, readAt }: { status: string | null; readAt: string | null }) {
+  if (status === "READ" || readAt) {
+    return <CheckCheck className="inline h-3.5 w-3.5 text-sky-300" aria-label="Read" />;
   }
+  if (status === "DELIVERED") {
+    return <CheckCheck className="inline h-3.5 w-3.5 text-white/60" aria-label="Delivered" />;
+  }
+  if (status === "SENT") {
+    return <Check className="inline h-3.5 w-3.5 text-white/60" aria-label="Sent" />;
+  }
+  return null;
 }
 
 export function ChatWindow({
@@ -67,12 +72,21 @@ export function ChatWindow({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [typing, setTyping] = useState<TypingState>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
+
+  const getCsrf = () =>
+    document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("__Host-heita-csrf="))
+      ?.split("=")[1] ?? "";
 
   const fetchMessages = useCallback(async (conversationId: string) => {
     try {
@@ -88,31 +102,100 @@ export function ChatWindow({
     }
   }, [businessId]);
 
+  // Auto-ack delivered when entering a conversation.
+  const ackDelivered = useCallback(async (conversationId: string) => {
+    const msgIds = messages
+      .filter((m) => m.direction === "INBOUND" && m.status !== "DELIVERED" && m.status !== "READ")
+      .map((m) => m.id);
+    if (!msgIds.length) return;
+    try {
+      await fetch("/api/connect/ack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-heita-csrf": getCsrf() },
+        body: JSON.stringify({ conversationId, messageIds: msgIds, type: "delivered" })
+      });
+      setMessages((prev) =>
+        prev.map((m) =>
+          msgIds.includes(m.id) ? { ...m, status: "DELIVERED", deliveredAt: new Date().toISOString() } : m
+        )
+      );
+    } catch {
+      // Non-critical — backend will retry.
+    }
+  }, [messages]);
+
   useEffect(() => {
     if (!activeConversationId) return;
     fetchMessages(activeConversationId);
   }, [activeConversationId, fetchMessages]);
 
+  // Ack delivered after messages load.
+  useEffect(() => {
+    if (activeConversationId && messages.length) {
+      ackDelivered(activeConversationId);
+    }
+    // Only run when messages or conversation changes, not on every ackDelivered reference change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConversationId, messages.length]);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  // SSE: handle message.new, typing, and message.status_update events.
   useEffect(() => {
     const source = new EventSource("/api/connect/stream");
 
     source.addEventListener("message", (event) => {
       try {
-        const data = JSON.parse(event.data);
+        const data = JSON.parse(event.data) as {
+          type: string;
+          message?: Message;
+          conversationId?: string;
+          userId?: string;
+          isTyping?: boolean;
+          messageId?: string;
+          status?: string;
+          deliveredAt?: string;
+          readAt?: string;
+        };
+
         if (data.type === "message.new" && data.message) {
-          const msg = data.message as Message;
+          const msg = data.message;
           if (msg.conversationId === activeConversationId) {
             setMessages((prev) => [...prev, msg]);
           }
           setConversations((prev) =>
             prev.map((conv) =>
               conv.id === msg.conversationId
-                ? { ...conv, lastMessage: { body: msg.body, direction: msg.direction, createdAt: msg.sentAt ?? "" }, unreadCount: conv.id === activeConversationId ? conv.unreadCount : conv.unreadCount + 1 }
+                ? {
+                    ...conv,
+                    lastMessage: { body: msg.body, direction: msg.direction, createdAt: msg.sentAt ?? "" },
+                    unreadCount: conv.id === activeConversationId ? 0 : conv.unreadCount + 1
+                  }
                 : conv
+            )
+          );
+        }
+
+        if (data.type === "typing" && data.conversationId === activeConversationId && data.userId && data.userId !== userId) {
+          const uid = data.userId;
+          setTyping((prev) => ({ ...prev, [uid]: data.isTyping ?? false }));
+          // Auto-clear typing indicator after 6 s if no stop event arrives.
+          if (typingTimersRef.current[uid]) clearTimeout(typingTimersRef.current[uid]);
+          if (data.isTyping) {
+            typingTimersRef.current[uid] = setTimeout(() => {
+              setTyping((prev) => ({ ...prev, [uid]: false }));
+            }, 6_000);
+          }
+        }
+
+        if (data.type === "message.status_update" && data.messageId) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === data.messageId
+                ? { ...m, status: data.status ?? m.status, deliveredAt: data.deliveredAt ?? m.deliveredAt, readAt: data.readAt ?? m.readAt }
+                : m
             )
           );
         }
@@ -139,28 +222,71 @@ export function ChatWindow({
     };
   }, [activeConversationId, userId]);
 
+  // Heartbeat presence — keeps the user marked online every 20 s.
+  useEffect(() => {
+    const sendHeartbeat = async () => {
+      try {
+        await fetch("/api/connect/presence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-heita-csrf": getCsrf() },
+          body: JSON.stringify({ action: "heartbeat" })
+        });
+      } catch { /* ignore */ }
+    };
+    sendHeartbeat();
+    heartbeatRef.current = setInterval(sendHeartbeat, 20_000);
+    return () => { if (heartbeatRef.current) clearInterval(heartbeatRef.current); };
+  }, []);
+
+  // Typing indicator — send typing_start on input, debounced typing_stop.
+  const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTypingSentRef = useRef(false);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+    if (!activeConversationId) return;
+
+    if (!isTypingSentRef.current) {
+      isTypingSentRef.current = true;
+      fetch("/api/connect/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-heita-csrf": getCsrf() },
+        body: JSON.stringify({ action: "typing_start", conversationId: activeConversationId })
+      }).catch(() => {});
+    }
+
+    if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+    typingStopTimerRef.current = setTimeout(() => {
+      isTypingSentRef.current = false;
+      fetch("/api/connect/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-heita-csrf": getCsrf() },
+        body: JSON.stringify({ action: "typing_stop", conversationId: activeConversationId })
+      }).catch(() => {});
+    }, 3_000);
+  }, [activeConversationId]);
+
   const sendMessage = async () => {
     const trimmed = input.trim();
     if (!trimmed || !activeConversationId) return;
 
+    // Stop typing indicator immediately on send.
+    if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+    if (isTypingSentRef.current) {
+      isTypingSentRef.current = false;
+      fetch("/api/connect/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-heita-csrf": getCsrf() },
+        body: JSON.stringify({ action: "typing_stop", conversationId: activeConversationId })
+      }).catch(() => {});
+    }
+
     setSending(true);
     try {
-      const csrfToken = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("__Host-heita-csrf="))
-        ?.split("=")[1] ?? "";
-
       const response = await fetch("/api/connect/messages", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-heita-csrf": csrfToken
-        },
-        body: JSON.stringify({
-          conversationId: activeConversationId,
-          businessId,
-          content: trimmed
-        })
+        headers: { "Content-Type": "application/json", "x-heita-csrf": getCsrf() },
+        body: JSON.stringify({ conversationId: activeConversationId, businessId, content: trimmed })
       });
 
       if (response.ok) {
@@ -181,6 +307,10 @@ export function ChatWindow({
   };
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
+  const activeConvParticipants = activeConversation?.participants ?? [];
+  const typingNames = activeConvParticipants
+    .filter((p) => p.userId !== userId && typing[p.userId])
+    .map((p) => p.name ?? "Someone");
 
   return (
     <div className="grid gap-4 lg:grid-cols-[0.36fr_0.64fr]">
@@ -262,12 +392,14 @@ export function ChatWindow({
                       {msg.body}
                       <div
                         className={cn(
-                          "mt-2 text-xs",
+                          "mt-1.5 flex items-center justify-end gap-1 text-xs",
                           isOutbound ? "text-white/75" : "text-ink-subtle"
                         )}
                       >
-                        {msg.sentAt ? formatTime(msg.sentAt) : ""}
-                        {msg.status && isOutbound ? ` \u00b7 ${statusLabel(msg.status)}` : ""}
+                        <span>{msg.sentAt ? formatTime(msg.sentAt) : ""}</span>
+                        {isOutbound ? (
+                          <DeliveryTick status={msg.status} readAt={msg.readAt} />
+                        ) : null}
                       </div>
                     </div>
                     {msg.attachments?.length ? (
@@ -290,11 +422,17 @@ export function ChatWindow({
               <div ref={messagesEndRef} />
             </div>
 
+            {typingNames.length > 0 ? (
+              <p className="text-xs text-ink-muted" aria-live="polite">
+                {typingNames.join(", ")} {typingNames.length === 1 ? "is" : "are"} typing…
+              </p>
+            ) : null}
+
             <div className="flex items-center gap-3 border-t border-line pt-4">
               <input
                 type="text"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder="Type a message..."
                 className="input flex-1"

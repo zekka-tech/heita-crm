@@ -45,6 +45,45 @@ $EDITOR .env.production        # fill in every value; see notes below
   rejected if the scanner is unavailable.
 - Copy all remaining application keys from `.env.example` and set real values.
 
+### Two-role PostgreSQL model (RLS enforcement)
+
+The database runs with `FORCE ROW LEVEL SECURITY` on all business-scoped tables
+(migration `0040_enable_business_rls`). FORCE RLS constrains the table owner
+but **not** PostgreSQL superusers. The `POSTGRES_USER` (`heita`) is created as
+a superuser by the official Docker image, so it bypasses RLS. To close this
+gap, the first-boot script (`docker/postgres/init.sql`) creates a second,
+unprivileged role:
+
+| Role | Purpose | Attributes |
+|---|---|---|
+| `heita` | Owner / migrations | SUPERUSER (Docker default) |
+| `heita_app` | App runtime | NOSUPERUSER · NOBYPASSRLS |
+
+**Setup steps:**
+1. Set `POSTGRES_APP_PASSWORD` in `.env.production` (distinct from
+   `POSTGRES_PASSWORD`).
+2. Set `DATABASE_URL` to use `heita_app`:
+   ```
+   DATABASE_URL="postgresql://heita_app:<POSTGRES_APP_PASSWORD>@postgres:5432/heita"
+   ```
+3. Set `MIGRATION_DATABASE_URL` to use the owner role:
+   ```
+   MIGRATION_DATABASE_URL="postgresql://heita:<POSTGRES_PASSWORD>@postgres:5432/heita"
+   ```
+   The `migrate` compose service overrides `DATABASE_URL` with
+   `MIGRATION_DATABASE_URL` at deploy time so DDL runs as the owner.
+4. On first boot, `init.sql` creates `heita_app` with the placeholder password
+   `HEITA_APP_CHANGE_ME_NOW`. Change it immediately:
+   ```bash
+   docker compose -f docker-compose.prod.yml exec postgres \
+     psql -U heita -d heita -c \
+     "ALTER ROLE heita_app PASSWORD '<POSTGRES_APP_PASSWORD>';"
+   ```
+   Then update `DATABASE_URL` in `.env.production` and restart the app.
+
+With this setup the runtime can never bypass RLS regardless of what a
+compromised query attempts.
+
 ## 3. Authenticate to GHCR (if the image is private)
 
 ```bash
@@ -147,6 +186,7 @@ locked).
 | `/api/cron/hard-delete-users` | Hard-delete users past the soft-delete window | daily |
 | `/api/cron/sweep-follow-ups` | Re-enqueue due sales follow-ups whose delayed jobs were dropped or missed | every 15 min |
 | `/api/cron/refresh-web-sources` | Re-crawl AI web sources whose refresh interval elapsed (unchanged pages skipped via `contentHash`) | daily |
+| `/api/cron/purge-connect-messages` | Hard-delete in-app (Heita Connect) messages past POPIA retention window (default 180 days; override via `CONNECT_MESSAGE_RETENTION_DAYS`) | daily |
 
 Example host `crontab` (replace `$DOMAIN`; keep `CRON_SECRET` out of the crontab
 file itself — source it from a root-only env file):
@@ -164,6 +204,7 @@ CRON_SECRET_FILE=/etc/heita/cron.env
 0    3  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/purge-whatsapp-messages
 30   3  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/hard-delete-users
 0    4  * * *  root  . /etc/heita/cron.env; curl -fsS -m 600 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/refresh-web-sources
+30   4  * * *  root  . /etc/heita/cron.env; curl -fsS -m 300 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/purge-connect-messages
 ```
 
 `refresh-web-sources` only enqueues crawl jobs (the BullMQ `web-crawl` worker does

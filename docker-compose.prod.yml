@@ -120,8 +120,11 @@ services:
       - no-new-privileges:true
     tmpfs:
       - /tmp
-    # DATABASE_URL must resolve to the `postgres` service over heita_internal,
-    # e.g. postgresql://heita:...@postgres:5432/heita
+    # The migrate service connects as the owner role so it can run DDL (CREATE
+    # TABLE, ALTER, etc.). MIGRATION_DATABASE_URL overrides DATABASE_URL here so
+    # that the app runtime (heita_app / NOBYPASSRLS) is never used for migrations.
+    environment:
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:-${DATABASE_URL}}
     command: ["npx", "--yes", "prisma@7", "migrate", "deploy", "--schema=prisma/schema.prisma"]
 
   # TLS-terminating reverse proxy. Sits on heita_edge and forwards to app:3000.
