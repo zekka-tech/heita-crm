@@ -68,7 +68,7 @@ docker compose -f docker-compose.prod.yml restart app
 The app process is up but unhealthy. Check:
 
 - `docker compose logs app | tail -100` — look for Prisma/Redis connection errors.
-- `docker compose exec app wget -qO- http://localhost:3000/api/health?deep=1`
+- `docker compose exec app wget -qO- http://localhost:3000/api/health/ready`
   for a more detailed JSON diagnostic.
 - Postgres or Redis may have restarted and not yet accepted connections.
 

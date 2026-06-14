@@ -53,6 +53,45 @@ services:
         max-size: "100m"
         max-file: "5"
 
+  # BullMQ background job worker. Runs from the same signed image as the app,
+  # processing document ingestion, customer imports, web crawls, and follow-ups.
+  # Requires both heita_internal (DB, Redis) and heita_edge (outbound calls).
+  worker:
+    image: ghcr.io/zekka-tech/heita-crm:${HEITA_IMAGE_TAG:-latest}
+    container_name: heita_worker
+    restart: unless-stopped
+    networks:
+      - heita_internal
+      - heita_edge
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env.production
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    command: ["node", "dist/worker.mjs"]
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
   # One-shot migration runner. The app's standalone runtime image has `prisma`
   # pruned (it is a devDependency), so migrations run from a clean Node image
   # with the prisma/ folder mounted. Not started by `up` — it lives behind the
@@ -74,6 +113,13 @@ services:
       - .env.production
     volumes:
       - ./prisma:/app/prisma:ro
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
     # DATABASE_URL must resolve to the `postgres` service over heita_internal,
     # e.g. postgresql://heita:...@postgres:5432/heita
     command: ["npx", "--yes", "prisma@7", "migrate", "deploy", "--schema=prisma/schema.prisma"]
@@ -98,6 +144,18 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:exec
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -127,6 +185,13 @@ services:
       - ./docker/vector/vector.yaml:/etc/vector/vector.yaml:ro
     env_file:
       - .env.production
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
     deploy:
       resources:
         limits:
@@ -149,6 +214,13 @@ services:
       - heita_edge
     volumes:
       - clamav_data:/var/lib/clamav
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
     healthcheck:
       test: ["CMD-SHELL", "clamdscan --ping 1 || exit 1"]
       interval: 30s

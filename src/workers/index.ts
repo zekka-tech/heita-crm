@@ -53,7 +53,9 @@ export async function startWorkers() {
   };
 }
 
-if (import.meta.main) {
+const isMainModule = process.argv[1]?.endsWith("worker.mjs") ?? false;
+
+if (isMainModule) {
   startWorkers()
     .then((result) => {
       logger.info({ status: result.status }, "workers.started");

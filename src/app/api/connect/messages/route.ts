@@ -40,6 +40,15 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   try {
+    const participant = await prisma.conversationParticipant.findFirst({
+      where: { conversationId, userId },
+      select: { id: true }
+    });
+
+    if (!participant) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const result = await getConversationMessages({
       conversationId,
       businessId,

@@ -10,7 +10,6 @@ This file documents every remaining `export const dynamic = "force-dynamic"` in 
 
 ## Remaining Dynamic Routes
 
-- `src/app/discover/page.tsx` - reads cookies/headers; scheduled for the same Suspense-island treatment as b/[slug] in a follow-up pass.
 - `src/app/b/[slug]/events/page.tsx` - public, but currently resolves locale from cookies/headers via resolveLocale() and next-intl; convert after request-locale dependency is split from the static shell.
 - `src/app/b/[slug]/join/page.tsx` - session, membership state, CSRF form, referral/channel attribution.
 - `src/app/b/[slug]/rewards/page.tsx` - authenticated balance, tier, referral code, CSRF redemption, stock-sensitive reward state.
@@ -23,6 +22,7 @@ This file documents every remaining `export const dynamic = "force-dynamic"` in 
 - `src/app/(app)/notifications/page.tsx` - authenticated notifications.
 - `src/app/(app)/profile/page.tsx` - authenticated profile settings.
 - `src/app/(app)/profile/consents/page.tsx` - authenticated consent history and CSRF revoke controls.
+- `src/app/(app)/connect/page.tsx` - authenticated customer in-app conversations and business membership lookup.
 - `src/app/dashboard/[businessId]/layout.tsx` - authenticated staff shell, navigation, and business access guard.
 - `src/app/dashboard/[businessId]/page.tsx` - staff dashboard metrics scoped to authenticated staff membership.
 - `src/app/dashboard/[businessId]/analytics/page.tsx` - authenticated business analytics.
@@ -38,6 +38,9 @@ This file documents every remaining `export const dynamic = "force-dynamic"` in 
 - `src/app/dashboard/[businessId]/sales/[threadId]/page.tsx` - authenticated sales thread detail.
 - `src/app/dashboard/[businessId]/sales/approvals/page.tsx` - authenticated follow-up approval queue.
 - `src/app/dashboard/[businessId]/settings/billing/page.tsx` - authenticated billing and provider availability.
+- `src/app/dashboard/[businessId]/settings/audit/page.tsx` - authenticated staff audit log viewer with scoped filters.
+- `src/app/dashboard/[businessId]/settings/audit/export/route.ts` - authenticated staff audit CSV export.
+- `src/app/dashboard/[businessId]/settings/feature-flags/page.tsx` - authenticated feature flag management.
 - `src/app/dashboard/[businessId]/settings/staff/page.tsx` - authenticated staff/invite management.
 - `src/app/api/account/route.ts` - authenticated account read/write with CSRF.
 - `src/app/api/account/consents/[id]/revoke/route.ts` - authenticated consent revoke with CSRF.
@@ -45,6 +48,11 @@ This file documents every remaining `export const dynamic = "force-dynamic"` in 
 - `src/app/api/account/export/route.ts` - authenticated POPIA export.
 - `src/app/api/account/sign-out-all/route.ts` - authenticated session mutation.
 - `src/app/api/account/verify-email/route.ts` - tokenized account verification.
+- `src/app/api/connect/ack/route.ts` - authenticated Connect delivery/read acknowledgement mutation.
+- `src/app/api/connect/messages/route.ts` - authenticated Connect message list/create endpoint.
+- `src/app/api/connect/presence/route.ts` - authenticated Connect presence mutation.
+- `src/app/api/connect/stream/route.ts` - authenticated Connect SSE stream.
+- `src/app/api/discover/businesses/route.ts` - request-specific discover API response.
 - `src/app/api/admin/dlq/route.ts` - admin queue state.
 - `src/app/api/admin/dlq/[queue]/route.ts` - admin queue detail/actions.
 - `src/app/api/ai/chat/route.ts` - SSE streaming AI chat.
@@ -64,6 +72,7 @@ This file documents every remaining `export const dynamic = "force-dynamic"` in 
 - `src/app/api/health/live/route.ts` - liveness probe with no-store response.
 - `src/app/api/health/ready/route.ts` - readiness probe over DB/Redis/storage.
 - `src/app/api/push/subscribe/route.ts` - authenticated push subscription mutation.
+- `src/app/api/sync/offline/route.ts` - authenticated offline outbox replay endpoint.
 - `src/app/api/webhooks/payfast/route.ts` - signed payment webhook.
 - `src/app/api/webhooks/stripe/route.ts` - signed payment webhook.
 - `src/app/api/webhooks/yoco/route.ts` - signed payment webhook.

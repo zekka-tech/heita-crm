@@ -54,7 +54,7 @@ jobs:
               `- Sentry release tag: `,
               ``,
               `### Drill 1 — Redis blackout (15m)`,
-              `- [ ] /api/health?deep=1 returns 503 with checks.redis.ok=false`,
+              `- [ ] /api/health/ready returns 503 with checks.redis.ok=false`,
               `- [ ] OTP request still succeeds (in-memory fallback)`,
               `- [ ] Loyalty earn/redeem still succeed`,
               `- [ ] WhatsApp inbound webhook still returns 200`,

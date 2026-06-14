@@ -45,9 +45,12 @@ function makePrng(seed: number) {
 }
 
 function pick<T>(rng: (n: number) => number, arr: readonly T[]): T {
-  // arr is always non-empty in our usage; the non-null assertion is safe.
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  return arr[rng(arr.length)]!;
+  const index = rng(arr.length);
+  const value = arr[index];
+  if (value === undefined) {
+    throw new Error("Cannot pick from an empty array");
+  }
+  return value;
 }
 
 function randInt(rng: (n: number) => number, min: number, max: number): number {

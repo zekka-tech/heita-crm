@@ -69,8 +69,8 @@ function main() {
     process.exit(1);
   }
 
-  console.log(
-    `[error-budget-gate] OK: error budget healthy. Burn rate: ${rateStr}${atStr}.`
+  process.stdout.write(
+    `[error-budget-gate] OK: error budget healthy. Burn rate: ${rateStr}${atStr}.\n`
   );
   process.exit(0);
 }

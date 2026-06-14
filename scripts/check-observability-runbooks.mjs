@@ -34,7 +34,12 @@ for (const alert of alertBlocks) {
   }
 }
 
-const expectedSet = new Set(expected);
+const manualRunbooks = new Set([
+  "docs/runbooks/rls-enforcement.md",
+  "docs/runbooks/synthetic-probe-failure.md"
+]);
+
+const expectedSet = new Set([...expected, ...manualRunbooks]);
 const stale = readdirSync("docs/runbooks")
   .filter((file) => file.endsWith(".md"))
   .map((file) => join("docs/runbooks", file))

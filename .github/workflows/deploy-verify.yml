@@ -47,7 +47,7 @@ jobs:
 
       - name: Deep readiness probe (DB + Redis)
         run: |
-          curl -f --max-time 20 "$APP_URL/api/health?deep=1" | \
+          curl -f --max-time 20 "$APP_URL/api/health/ready" | \
             grep -q '"status"' && echo "Readiness OK"
 
       - name: Metrics endpoint protected

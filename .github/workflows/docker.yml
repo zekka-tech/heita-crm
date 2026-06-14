@@ -108,7 +108,7 @@ jobs:
 
       - name: Smoke test — deep readiness probe
         run: |
-          curl -f --max-time 15 "${{ secrets.STAGING_APP_URL }}/api/health?deep=1" | \
+          curl -f --max-time 15 "${{ secrets.STAGING_APP_URL }}/api/health/ready" | \
             grep -q '"status"' && echo "Readiness OK"
 
       - name: Smoke test — landing page reachable

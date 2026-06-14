@@ -13,8 +13,8 @@ Internet ──▶ Cloudflare (DNS/CDN/WAF) ──▶ caddy :443 ──▶ app :
                               └─ clamav :3310
 ```
 
-- **`heita_internal`** (internal, no internet): postgres, redis, app, migrate, clamav.
-- **`heita_edge`** (normal bridge): app + caddy. Gives the app outbound access
+- **`heita_internal`** (internal, no internet): postgres, redis, app, migrate, clamav, worker.
+- **`heita_edge`** (normal bridge): app + caddy + worker. Gives the app outbound access
   to Anthropic / Meta WhatsApp / Africa's Talking / R2, and carries inbound
   proxied traffic. The app port is bound to `127.0.0.1` only — never public.
 
@@ -82,6 +82,30 @@ on `heita_internal`. The deploy script invokes it before starting the app. For a
 brand-new database, the pgvector extension is created by
 `docker/postgres/init.sql` at first boot.
 
+### BullMQ worker service
+The `worker` service runs background jobs from the same signed image as the app.
+It executes `node dist/worker.mjs`, which starts four BullMQ workers:
+- **Document ingestion** — processes uploaded PDFs, DOCX files for AI training
+- **Customer import** — imports CSV customer lists
+- **Web crawl** — refreshes crawled web sources for AI knowledge
+- **Follow-up** — re-enqueues missed/delayed follow-up tasks
+
+The worker is compiled during the Docker build via `npm run build:worker`
+(esbuild bundle in `src/workers/index.ts` → `dist/worker.mjs`). It requires both
+`heita_internal` (DB, Redis) and `heita_edge` (outbound internet) network access.
+
+**Logs:**
+```bash
+docker compose -f docker-compose.prod.yml logs -f worker
+```
+
+**Verify worker is running:**
+```bash
+docker compose -f docker-compose.prod.yml ps worker
+# Should show "Up" with no restarts
+docker compose -f docker-compose.prod.yml logs --tail=20 worker | grep "workers.started"
+```
+
 ## 6. Operate
 
 ```bash
@@ -91,7 +115,7 @@ docker compose -f docker-compose.prod.yml logs -f app
 # Status / health
 docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --stream --no-summary /dev/null
-curl -s http://127.0.0.1:3000/api/health?deep=1
+curl -s http://127.0.0.1:3000/api/health/ready
 
 # Rollback to a previous tag (no down-migration — forward-fix the schema)
 ./scripts/deploy.sh v1.4.1

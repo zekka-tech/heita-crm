@@ -36,7 +36,7 @@ $COMPOSE pull
 echo "→ Running database migrations (one-shot)…"
 $COMPOSE --profile migrate run --rm migrate
 
-echo "→ Starting / updating services…"
+echo "→ Starting / updating services (app + worker + caddy + clamav + vector)…"
 $COMPOSE up -d --remove-orphans
 
 echo "→ Waiting for app health…"
