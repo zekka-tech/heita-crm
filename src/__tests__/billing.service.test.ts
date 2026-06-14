@@ -1,22 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockTx = {
-  businessInvoice: { findFirst: vi.fn(), create: vi.fn() },
-  businessSubscription: { create: vi.fn(), updateMany: vi.fn() },
-  business: { update: vi.fn() }
-};
-
+// Single unified mock — withBusinessScope passes this object as `tx`,
+// so all transactional and direct Prisma calls go through the same mock.
 const prisma = {
-  $transaction: vi.fn((fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
-  business: { findUnique: vi.fn() },
-  businessSubscription: { findFirst: vi.fn(), updateMany: vi.fn() },
+  $transaction: vi.fn((fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma)),
+  business: { findUnique: vi.fn(), update: vi.fn() },
+  businessSubscription: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+  businessInvoice: { findFirst: vi.fn(), create: vi.fn() },
   membership: { count: vi.fn() },
   staffMember: { count: vi.fn() },
   aiTokenUsage: { count: vi.fn() },
   businessDocument: { count: vi.fn() }
 };
 
-vi.mock("@/lib/prisma", () => ({ prisma }));
+vi.mock("@/lib/prisma", () => ({
+  prisma,
+  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma))
+}));
 vi.mock("@/server/services/staff-audit.service", () => ({
   recordStaffAuditLog: vi.fn().mockResolvedValue(undefined)
 }));
@@ -35,11 +35,11 @@ beforeEach(() => {
   // Default: no blocking subscription, so a paid planId stays paid unless a
   // test explicitly sets a PAST_DUE/CANCELLED subscription.
   prisma.businessSubscription.findFirst.mockResolvedValue(null);
-  mockTx.businessInvoice.findFirst.mockResolvedValue(null);
-  mockTx.businessInvoice.create.mockResolvedValue({});
-  mockTx.businessSubscription.create.mockResolvedValue({});
-  mockTx.businessSubscription.updateMany.mockResolvedValue({ count: 0 });
-  mockTx.business.update.mockResolvedValue({});
+  prisma.businessInvoice.findFirst.mockResolvedValue(null);
+  prisma.businessInvoice.create.mockResolvedValue({});
+  prisma.businessSubscription.create.mockResolvedValue({});
+  prisma.businessSubscription.updateMany.mockResolvedValue({ count: 0 });
+  prisma.business.update.mockResolvedValue({});
 });
 
 describe("getEffectivePlan", () => {
@@ -88,8 +88,9 @@ describe("getEffectivePlan", () => {
 });
 
 describe("paid-plan feature gating", () => {
-  it("identifies Growth and Scale as paid plans", () => {
+  it("identifies Starter, Growth and Scale as paid plans", () => {
     expect(isPaidBusinessPlan("FREE")).toBe(false);
+    expect(isPaidBusinessPlan("STARTER")).toBe(true);
     expect(isPaidBusinessPlan("GROWTH")).toBe(true);
     expect(isPaidBusinessPlan("SCALE")).toBe(true);
   });
@@ -97,6 +98,11 @@ describe("paid-plan feature gating", () => {
   it("rejects paid-only features on Free", async () => {
     prisma.business.findUnique.mockResolvedValue({ planId: "FREE" });
     await expect(requirePaidBusinessPlan("biz1", "Sales pipeline")).rejects.toThrow(/paid plans only/);
+  });
+
+  it("allows paid-only features on Starter", async () => {
+    prisma.business.findUnique.mockResolvedValue({ planId: "STARTER" });
+    await expect(requirePaidBusinessPlan("biz1", "Sales pipeline")).resolves.toBe("STARTER");
   });
 
   it("allows paid-only features on Growth", async () => {
@@ -151,15 +157,15 @@ describe("handleYocoWebhook — payment.succeeded idempotency", () => {
 
   it("creates subscription and invoice on first call", async () => {
     await handleYocoWebhook(successPayload);
-    expect(mockTx.businessSubscription.create).toHaveBeenCalledOnce();
-    expect(mockTx.businessInvoice.create).toHaveBeenCalledOnce();
+    expect(prisma.businessSubscription.create).toHaveBeenCalledOnce();
+    expect(prisma.businessInvoice.create).toHaveBeenCalledOnce();
   });
 
   it("skips duplicate processing when invoice already exists", async () => {
-    mockTx.businessInvoice.findFirst.mockResolvedValue({ id: "inv_existing" });
+    prisma.businessInvoice.findFirst.mockResolvedValue({ id: "inv_existing" });
     await handleYocoWebhook(successPayload);
-    expect(mockTx.businessSubscription.create).not.toHaveBeenCalled();
-    expect(mockTx.businessInvoice.create).not.toHaveBeenCalled();
+    expect(prisma.businessSubscription.create).not.toHaveBeenCalled();
+    expect(prisma.businessInvoice.create).not.toHaveBeenCalled();
   });
 
   it("logs a warning and returns early when metadata is missing", async () => {
@@ -180,7 +186,7 @@ describe("handleYocoWebhook — payment.succeeded idempotency", () => {
         }
       })
     ).rejects.toThrow(/amount/i);
-    expect(mockTx.businessInvoice.create).not.toHaveBeenCalled();
+    expect(prisma.businessInvoice.create).not.toHaveBeenCalled();
   });
 });
 
@@ -195,7 +201,7 @@ describe("applyPaymentEvent — payment_failed", () => {
       providerSubscriptionId: "sub_1"
     });
 
-    expect(mockTx.businessSubscription.updateMany).toHaveBeenCalledWith(
+    expect(prisma.businessSubscription.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           businessId: "biz1",
@@ -207,7 +213,7 @@ describe("applyPaymentEvent — payment_failed", () => {
       })
     );
     // A failed payment must never touch the business plan directly.
-    expect(mockTx.business.update).not.toHaveBeenCalled();
+    expect(prisma.business.update).not.toHaveBeenCalled();
   });
 });
 
@@ -223,7 +229,7 @@ describe("applyPaymentEvent — subscription_cancelled", () => {
   });
 
   it("does not downgrade the business when no subscription row matches (stale event)", async () => {
-    mockTx.businessSubscription.updateMany.mockResolvedValue({ count: 0 });
+    prisma.businessSubscription.updateMany.mockResolvedValue({ count: 0 });
     await applyPaymentEvent({
       provider: "STRIPE",
       type: "subscription_cancelled",
@@ -231,12 +237,12 @@ describe("applyPaymentEvent — subscription_cancelled", () => {
       planId: "GROWTH",
       providerSubscriptionId: "sub_stale"
     });
-    expect(mockTx.businessSubscription.updateMany).toHaveBeenCalled();
-    expect(mockTx.business.update).not.toHaveBeenCalled();
+    expect(prisma.businessSubscription.updateMany).toHaveBeenCalled();
+    expect(prisma.business.update).not.toHaveBeenCalled();
   });
 
   it("downgrades the business to FREE when a subscription is cancelled", async () => {
-    mockTx.businessSubscription.updateMany.mockResolvedValue({ count: 1 });
+    prisma.businessSubscription.updateMany.mockResolvedValue({ count: 1 });
     await applyPaymentEvent({
       provider: "STRIPE",
       type: "subscription_cancelled",
@@ -244,7 +250,7 @@ describe("applyPaymentEvent — subscription_cancelled", () => {
       planId: "GROWTH",
       providerSubscriptionId: "sub_live"
     });
-    expect(mockTx.business.update).toHaveBeenCalledWith(
+    expect(prisma.business.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "biz1" },
         data: { planId: "FREE" }

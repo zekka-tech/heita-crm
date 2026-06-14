@@ -1,7 +1,9 @@
 import { JoinChannel, TransactionType } from "@prisma/client";
 
 import { calculatePointsExpiryDate } from "@/lib/loyalty";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
+import { captureEvent } from "@/lib/telemetry";
+import { TELEMETRY_EVENTS } from "@/lib/telemetry-events";
 import { resolveReferralCode } from "@/server/services/referral.service";
 
 type JoinBusinessInput = {
@@ -12,7 +14,7 @@ type JoinBusinessInput = {
 };
 
 export async function joinBusiness(input: JoinBusinessInput) {
-  return prisma.$transaction(async (tx) => {
+  return withBusinessScope(input.businessId, async (tx) => {
     const existingMembership = await tx.membership.findUnique({
       where: {
         businessId_userId: {
@@ -93,8 +95,19 @@ export async function joinBusiness(input: JoinBusinessInput) {
       }
     });
 
+    captureEvent({
+      userId: input.userId,
+      event: TELEMETRY_EVENTS.membershipJoined,
+      properties: {
+        businessId: business.id,
+        joinChannel: input.joinChannel,
+        referralUsed: !!referralCode,
+        signupBonusPoints: business.loyaltySignupBonus
+      }
+    });
+
     return membership;
-  }, { maxWait: 5000, timeout: 10000 });
+  });
 }
 
 
@@ -102,22 +115,24 @@ export async function getCustomersSearch(businessId: string, query: string) {
   const q = query.trim();
   if (!q) return [];
 
-  return prisma.membership.findMany({
-    where: {
-      businessId,
-      isActive: true,
-      user: {
-        deletedAt: null,
-        OR: [
-          { phone: { contains: q } },
-          { name: { contains: q, mode: "insensitive" } }
-        ]
-      }
-    },
-    include: {
-      user: { select: { id: true, name: true, phone: true } }
-    },
-    orderBy: { joinedAt: "desc" },
-    take: 20
-  });
+  return withBusinessScope(businessId, (tx) =>
+    tx.membership.findMany({
+      where: {
+        businessId,
+        isActive: true,
+        user: {
+          deletedAt: null,
+          OR: [
+            { phone: { contains: q } },
+            { name: { contains: q, mode: "insensitive" } }
+          ]
+        }
+      },
+      include: {
+        user: { select: { id: true, name: true, phone: true } }
+      },
+      orderBy: { joinedAt: "desc" },
+      take: 20
+    })
+  );
 }

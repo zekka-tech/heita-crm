@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const { prismaMock } = vi.hoisted(() => ({
+  prismaMock: {
+    loyaltyTransaction: { findMany: vi.fn() },
+    promotion: { findMany: vi.fn() }
+  }
+}));
+
 vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    loyaltyTransaction: {
-      findMany: vi.fn(),
-    },
-    promotion: {
-      findMany: vi.fn(),
-    },
-  },
+  prisma: prismaMock,
+  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prismaMock) => unknown) => fn(prismaMock))
 }));
 
 vi.mock("@/lib/logger", () => ({

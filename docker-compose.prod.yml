@@ -18,6 +18,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      clamav:
+        condition: service_healthy
     env_file:
       - .env.production
     # Bound to loopback only — never expose the app directly. Public traffic
@@ -136,6 +138,37 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Malware scanner for uploaded documents/logos. The app connects over
+  # heita_internal; heita_edge gives FreshClam outbound access for signatures.
+  clamav:
+    image: clamav/clamav:stable
+    container_name: heita_clamav
+    restart: unless-stopped
+    networks:
+      - heita_internal
+      - heita_edge
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan --ping 1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512m
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
   postgres:
     # Digest-pinned to a specific build. Re-pin via: bash scripts/pin-image-digests.sh
     image: pgvector/pgvector:pg16@sha256:00ba258a66dac104fd5171074a0084462a64a1369d8513f3d0a634e2f24d15bc
@@ -208,12 +241,13 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  clamav_data:
   caddy_data:
   caddy_config:
 
 networks:
-  # Isolated data plane — postgres, redis, app, migrate. No route to the
-  # internet, so the database and cache are unreachable from outside the host.
+  # Isolated data plane — postgres, redis, app, migrate, clamav. No route to
+  # the internet, so the database and cache are unreachable from outside the host.
   heita_internal:
     driver: bridge
     internal: true

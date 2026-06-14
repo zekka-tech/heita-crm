@@ -39,7 +39,9 @@ const redisMock = {
   expire: vi.fn().mockResolvedValue(1)
 };
 
-vi.mock("@/lib/prisma", () => ({ prisma }));
+const withBusinessScope = vi.fn(async (_businessId: string, fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma));
+
+vi.mock("@/lib/prisma", () => ({ prisma, withBusinessScope }));
 vi.mock("@/lib/redis", () => ({ getRedis: () => redisMock }));
 vi.mock("@/server/services/referral.service", () => ({
   applyReferralRewardIfEligible: vi.fn().mockResolvedValue(null)

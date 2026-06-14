@@ -9,6 +9,7 @@ export const FOLLOW_UP_DLQ = "follow-up-dlq";
 
 export type FollowUpJob = {
   taskId: string;
+  businessId: string;
 };
 
 declare global {
@@ -51,11 +52,11 @@ export function getFollowUpDlq() {
   return global.__heitaFollowUpDlq__;
 }
 
-export async function enqueueFollowUpJob(input: { taskId: string }, options?: { delay?: number; jobId?: string }) {
+export async function enqueueFollowUpJob(input: FollowUpJob, options?: { delay?: number; jobId?: string }) {
   const queue = getFollowUpQueue();
   if (!queue || process.env.FOLLOWUP_INLINE === "1") {
     const result = await draftFollowUp(input.taskId);
-    return { enqueued: false, mode: "inline" as const, taskId: input.taskId, result };
+    return { enqueued: false, mode: "inline" as const, taskId: input.taskId, businessId: input.businessId, result };
   }
 
   const job = await queue.add("draft-follow-up", input, {
@@ -63,7 +64,7 @@ export async function enqueueFollowUpJob(input: { taskId: string }, options?: { 
     delay: Math.max(0, options?.delay ?? 0)
   });
 
-  return { enqueued: true, mode: "queue" as const, taskId: input.taskId, jobId: job.id };
+  return { enqueued: true, mode: "queue" as const, taskId: input.taskId, businessId: input.businessId, jobId: job.id };
 }
 
 export async function removeFollowUpJob(jobId: string | null | undefined) {
@@ -77,7 +78,7 @@ export async function removeFollowUpJob(jobId: string | null | undefined) {
 }
 
 export async function handleFollowUpJob(job: Job<FollowUpJob>) {
-  logger.info({ jobId: job.id, taskId: job.data.taskId }, "followup.job_start");
+  logger.info({ jobId: job.id, taskId: job.data.taskId, businessId: job.data.businessId }, "followup.job_start");
   return draftFollowUp(job.data.taskId);
 }
 

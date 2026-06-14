@@ -2,16 +2,11 @@ import { ConsentType, Prisma, StaffRole } from "@prisma/client";
 
 import { logger } from "@/lib/logger";
 import { shouldDeliverNotificationChannel } from "@/lib/notification-preferences";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { sendNotification } from "@/server/services/notification.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 import { sendEventReminderWhatsApp } from "@/server/services/whatsapp.service";
-
-const EVENT_TRANSACTION_OPTIONS = {
-  maxWait: 5_000,
-  timeout: 15_000
-};
 
 const STAFF_VIEW_ROLES = [
   StaffRole.OWNER,
@@ -51,12 +46,14 @@ export async function listEventsForStaff(
     allowedRoles: STAFF_VIEW_ROLES
   });
 
-  const events = await prisma.event.findMany({
-    where: { businessId: input.businessId },
-    orderBy: { startsAt: "asc" },
-    take: input.limit ?? 100,
-    ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {})
-  });
+  const events = await withBusinessScope(input.businessId, (tx) =>
+    tx.event.findMany({
+      where: { businessId: input.businessId },
+      orderBy: { startsAt: "asc" },
+      take: input.limit ?? 100,
+      ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {})
+    })
+  );
 
   const now = Date.now();
   return events.map((event) => {
@@ -107,7 +104,7 @@ export async function createEvent(input: CreateEventInput) {
 
   assertEventWindow(input.startsAt, input.endsAt ?? null);
 
-  return prisma.$transaction(async (tx) => {
+  return withBusinessScope(input.businessId, async (tx) => {
     const event = await tx.event.create({
       data: {
         businessId: input.businessId,
@@ -139,7 +136,7 @@ export async function createEvent(input: CreateEventInput) {
     );
 
     return event;
-  }, EVENT_TRANSACTION_OPTIONS);
+  });
 }
 
 export type UpdateEventInput = {
@@ -155,15 +152,17 @@ export type UpdateEventInput = {
 };
 
 export async function updateEvent(input: UpdateEventInput) {
-  const existing = await prisma.event.findUniqueOrThrow({
-    where: { id: input.eventId, businessId: input.businessId },
-    select: {
-      id: true,
-      businessId: true,
-      startsAt: true,
-      endsAt: true
-    }
-  });
+  const existing = await withBusinessScope(input.businessId, (tx) =>
+    tx.event.findUniqueOrThrow({
+      where: { id: input.eventId, businessId: input.businessId },
+      select: {
+        id: true,
+        businessId: true,
+        startsAt: true,
+        endsAt: true
+      }
+    })
+  );
 
   await requireRole({
     businessId: existing.businessId,
@@ -202,7 +201,7 @@ export async function updateEvent(input: UpdateEventInput) {
     data.isReminderOn = input.isReminderOn;
   }
 
-  return prisma.$transaction(async (tx) => {
+  return withBusinessScope(existing.businessId, async (tx) => {
     const event = await tx.event.update({
       where: { id: existing.id },
       data
@@ -223,7 +222,7 @@ export async function updateEvent(input: UpdateEventInput) {
     );
 
     return event;
-  }, EVENT_TRANSACTION_OPTIONS);
+  });
 }
 
 export type DeleteEventInput = {
@@ -233,10 +232,12 @@ export type DeleteEventInput = {
 };
 
 export async function deleteEvent(input: DeleteEventInput) {
-  const existing = await prisma.event.findUniqueOrThrow({
-    where: { id: input.eventId, businessId: input.businessId },
-    select: { id: true, businessId: true, title: true }
-  });
+  const existing = await withBusinessScope(input.businessId, (tx) =>
+    tx.event.findUniqueOrThrow({
+      where: { id: input.eventId, businessId: input.businessId },
+      select: { id: true, businessId: true, title: true }
+    })
+  );
 
   await requireRole({
     businessId: existing.businessId,
@@ -244,7 +245,7 @@ export async function deleteEvent(input: DeleteEventInput) {
     allowedRoles: MANAGER_ROLES
   });
 
-  return prisma.$transaction(async (tx) => {
+  return withBusinessScope(existing.businessId, async (tx) => {
     const event = await tx.event.delete({
       where: { id: existing.id }
     });
@@ -264,7 +265,7 @@ export async function deleteEvent(input: DeleteEventInput) {
     );
 
     return event;
-  }, EVENT_TRANSACTION_OPTIONS);
+  });
 }
 
 const DEFAULT_REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -423,10 +424,12 @@ export async function sendDueEventReminders(
     totalRecipients += memberships.length;
     totalFailures += failures;
 
-    await prisma.event.update({
-      where: { id: event.id },
-      data: { reminderSentAt: now }
-    });
+    await withBusinessScope(event.businessId, (tx) =>
+      tx.event.update({
+        where: { id: event.id, businessId: event.businessId },
+        data: { reminderSentAt: now }
+      })
+    );
 
     if (failures > 0) {
       logger.warn(

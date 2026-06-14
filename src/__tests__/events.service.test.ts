@@ -30,8 +30,11 @@ const prisma = {
 const sendNotification = vi.fn();
 const sendEventReminderWhatsApp = vi.fn();
 
+const withBusinessScope = vi.fn(async (_businessId: string, callback: (tx: typeof prisma) => unknown) => callback(prisma));
+
 vi.mock("@/lib/prisma", () => ({
-  prisma
+  prisma,
+  withBusinessScope
 }));
 
 vi.mock("@/server/services/notification.service", () => ({
@@ -264,7 +267,7 @@ describe("sendDueEventReminders", () => {
       })
     );
     expect(prisma.event.update).toHaveBeenCalledWith({
-      where: { id: "evt_due" },
+      where: { id: "evt_due", businessId: "biz_1" },
       data: { reminderSentAt: now }
     });
   });
@@ -299,7 +302,7 @@ describe("sendDueEventReminders", () => {
     expect(result.totalRecipients).toBe(2);
     expect(result.totalFailures).toBe(1);
     expect(prisma.event.update).toHaveBeenCalledWith({
-      where: { id: "evt_partial" },
+      where: { id: "evt_partial", businessId: "biz_1" },
       data: { reminderSentAt: now }
     });
   });

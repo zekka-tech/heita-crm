@@ -36,7 +36,10 @@ vi.mock("@/lib/storage", () => ({
   getStoredObjectBuffer: vi.fn()
 }));
 vi.mock("@/server/services/notification.service", () => ({ sendNotification: vi.fn() }));
-vi.mock("@/lib/prisma", () => ({ prisma: mocks.prisma }));
+vi.mock("@/lib/prisma", () => ({
+  prisma: mocks.prisma,
+  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
+}));
 
 const { sendOnChannel } = await import("@/server/services/channel-dispatch.service");
 const { MessageChannel } = await import("@prisma/client");

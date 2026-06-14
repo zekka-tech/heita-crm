@@ -17,6 +17,7 @@ const protectedPrefixes = [
   "/wallet",
   "/notifications",
   "/profile",
+  "/connect",
   "/dashboard",
   "/onboard"
 ];

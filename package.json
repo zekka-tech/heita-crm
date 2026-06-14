@@ -25,6 +25,7 @@
     "db:setup": "tsx scripts/db-preflight.ts && prisma migrate deploy && prisma db seed",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:staging": "tsx prisma/seed-staging.ts",
     "db:studio": "prisma studio",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",

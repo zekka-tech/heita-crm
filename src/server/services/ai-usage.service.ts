@@ -31,6 +31,18 @@ export function estimateTokenCount(...segments: Array<string | null | undefined>
   return Math.max(1, Math.ceil(joined.length / 4));
 }
 
+export async function checkAiMessageAllowance(businessId: string) {
+  try {
+    const result = await assertAiMessageQuotaAvailable({ businessId });
+    return { allowed: true, limit: result.limit, used: result.used };
+  } catch (err) {
+    if (err instanceof AiUsageQuotaExceededError) {
+      return { allowed: false, limit: err.limit, used: err.used };
+    }
+    throw err;
+  }
+}
+
 export async function assertAiMessageQuotaAvailable(input: {
   businessId: string;
 }) {
@@ -173,6 +185,11 @@ export async function finalizeAiTokenUsage(input: {
   cacheReadTokens?: number | null;
   cacheCreationTokens?: number | null;
 }) {
+  // TODO(isOverage): once prisma/migrations/0041_ai_token_usage_is_overage is added,
+  // also set `isOverage: true` here when the business has consumed >= its plan limit.
+  // This will allow downstream reporting to distinguish overage traffic from plan-included
+  // traffic and drive the per-message overage billing (R0.20/msg) described in §5 of the
+  // CTO advisory memo. Migration not added here to avoid blocking this PR.
   return prisma.aiTokenUsage.update({
     where: {
       id: input.usageId

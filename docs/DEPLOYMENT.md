@@ -9,10 +9,11 @@ Internet ──▶ Cloudflare (DNS/CDN/WAF) ──▶ caddy :443 ──▶ app :
                                                           │
                           heita_internal (no egress) ◀────┤
                               ├─ postgres :5432
-                              └─ redis :6379
+                              ├─ redis :6379
+                              └─ clamav :3310
 ```
 
-- **`heita_internal`** (internal, no internet): postgres, redis, app, migrate.
+- **`heita_internal`** (internal, no internet): postgres, redis, app, migrate, clamav.
 - **`heita_edge`** (normal bridge): app + caddy. Gives the app outbound access
   to Anthropic / Meta WhatsApp / Africa's Talking / R2, and carries inbound
   proxied traffic. The app port is bound to `127.0.0.1` only — never public.
@@ -38,6 +39,10 @@ $EDITOR .env.production        # fill in every value; see notes below
 - `POSTGRES_PASSWORD` and `REDIS_PASSWORD` are required (compose fails without
   them) and must match the credentials embedded in the URLs above.
 - `DOMAIN` and `ACME_EMAIL` drive the Caddyfile.
+- Production malware scanning is fail-closed: set `MALWARE_SCAN_MODE=clamav`,
+  `MALWARE_SCAN_REQUIRED=1`, `CLAMAV_HOST=clamav`, and `CLAMAV_PORT=3310`.
+  The `clamav` sidecar exposes clamd only on the Compose networks; uploads are
+  rejected if the scanner is unavailable.
 - Copy all remaining application keys from `.env.example` and set real values.
 
 ## 3. Authenticate to GHCR (if the image is private)
@@ -85,6 +90,7 @@ docker compose -f docker-compose.prod.yml logs -f app
 
 # Status / health
 docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml exec clamav clamdscan --stream --no-summary /dev/null
 curl -s http://127.0.0.1:3000/api/health?deep=1
 
 # Rollback to a previous tag (no down-migration — forward-fix the schema)
@@ -138,6 +144,67 @@ CRON_SECRET_FILE=/etc/heita/cron.env
 `refresh-web-sources` only enqueues crawl jobs (the BullMQ `web-crawl` worker does
 the work), so its request returns quickly; give it a longer `-m` only if you run
 crawls inline (`AI_INGEST_INLINE=1`).
+
+### Malware scanning
+
+The `clamav` sidecar runs ClamAV (`clamav/clamav:stable`) as a clamd TCP daemon
+on `heita_internal:3310`. The app connects using `CLAMAV_HOST=clamav` /
+`CLAMAV_PORT=3310` and streams uploaded files via clamd's `INSTREAM` protocol.
+Fail-closed: when `MALWARE_SCAN_REQUIRED=1`, any upload attempt returns HTTP 503
+if the scanner is unreachable or still starting up.
+
+**Sidecar start-up**: ClamAV downloads virus definitions on first boot via
+`freshclam`. This can take 2–5 minutes on a cold start. The container's
+`start_period: 120s` allows for this; the `app` service's `depends_on` waits for
+the healthcheck to pass before the app accepts traffic. Check progress with:
+
+```bash
+docker compose -f docker-compose.prod.yml logs -f clamav
+```
+
+**Verify with an EICAR test file** (safe, industry-standard AV test string):
+
+```bash
+# Create the EICAR test file
+printf 'X5O!P%%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' \
+  > /tmp/eicar.txt
+
+# Copy into the container and scan — expect "Eicar-Signature FOUND"
+docker cp /tmp/eicar.txt heita_clamav:/tmp/eicar.txt
+docker compose -f docker-compose.prod.yml exec clamav \
+  clamdscan --stream /tmp/eicar.txt
+
+# Confirm clean file passes — expect "/dev/null: OK"
+docker compose -f docker-compose.prod.yml exec clamav \
+  clamdscan --stream --no-summary /dev/null
+```
+
+**Keep definitions fresh**: `freshclam` runs automatically inside the container
+on `heita_edge` (outbound internet access). If definitions age more than 7 days,
+ClamAV logs warnings. Monitor for `Database version is X days old` in the
+container logs and verify `heita_edge` network connectivity.
+
+**Resource limits**: The sidecar is capped at 512 MB RAM (deploy resources limit).
+The ClamAV signature database consumes ~400 MB in memory. If the VPS is
+memory-constrained, increase the limit rather than lowering it — an OOM kill of
+clamd blocks all uploads when `MALWARE_SCAN_REQUIRED=1`.
+
+### Staging seed
+
+For a staging environment that mirrors production load, populate realistic
+high-volume data after applying migrations:
+
+```bash
+npm run db:seed:staging
+```
+
+This creates 5 businesses across all plan tiers (FREE / STARTER / STARTER /
+GROWTH / SCALE), with member counts from 1 000 to 50 000 per business, loyalty
+transactions, messages, and webhook events. The seed is **idempotent** — safe
+to re-run; it skips businesses and users that already exist by seeding slug.
+
+Run this seed only on staging or a fresh development database, never against
+production.
 
 ### Backups
 Postgres data lives in the `postgres_data` volume. Schedule

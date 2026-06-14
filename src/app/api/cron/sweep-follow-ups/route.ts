@@ -10,7 +10,11 @@ import { constantTimeEqual } from "@/lib/security";
 export const dynamic = "force-dynamic";
 
 const MAX_PER_RUN = 50;
-const PAID_PLAN_IDS: BusinessPlanId[] = [BusinessPlanId.GROWTH, BusinessPlanId.SCALE];
+const PAID_PLAN_IDS: BusinessPlanId[] = [
+  BusinessPlanId.STARTER,
+  BusinessPlanId.GROWTH,
+  BusinessPlanId.SCALE
+];
 const ACTIVE_STATUSES = [
   FollowUpStatus.SCHEDULED,
   FollowUpStatus.DRAFTING,
@@ -68,7 +72,7 @@ export async function POST(request: Request) {
           reason: "cron_sweep"
         }
       });
-      const job = await enqueueFollowUpJob({ taskId: task.id }, { delay: 0, jobId: "followup:" + task.id });
+      const job = await enqueueFollowUpJob({ taskId: task.id, businessId: thread.businessId }, { delay: 0, jobId: "followup:" + task.id });
       if (job.enqueued) {
         await prisma.followUpTask.update({ where: { id: task.id }, data: { bullJobId: job.jobId ?? null } });
       }

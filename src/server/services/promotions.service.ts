@@ -2,16 +2,11 @@ import { ConsentType, Prisma, PromotionType, StaffRole } from "@prisma/client";
 
 import { logger } from "@/lib/logger";
 import { shouldDeliverNotificationChannel } from "@/lib/notification-preferences";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { sendNotification } from "@/server/services/notification.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 import { sendPromotionWhatsApp } from "@/server/services/whatsapp.service";
-
-const PROMOTION_TRANSACTION_OPTIONS = {
-  maxWait: 5_000,
-  timeout: 15_000
-};
 
 const STAFF_VIEW_ROLES = [
   StaffRole.OWNER,
@@ -35,12 +30,14 @@ export async function listPromotions(input: ListPromotionsInput) {
     allowedRoles: STAFF_VIEW_ROLES
   });
 
-  return prisma.promotion.findMany({
-    where: { businessId: input.businessId },
-    orderBy: { startsAt: "desc" },
-    take: input.limit ?? 50,
-    ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {})
-  });
+  return withBusinessScope(input.businessId, (tx) =>
+    tx.promotion.findMany({
+      where: { businessId: input.businessId },
+      orderBy: { startsAt: "desc" },
+      take: input.limit ?? 50,
+      ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {})
+    })
+  );
 }
 
 export type CreatePromotionInput = {
@@ -89,7 +86,7 @@ export async function createPromotion(input: CreatePromotionInput) {
   const code = normalizeCode(input.code);
   const targetTierIds = input.targetTierIds ?? [];
 
-  return prisma.$transaction(async (tx) => {
+  return withBusinessScope(input.businessId, async (tx) => {
     const promotion = await tx.promotion.create({
       data: {
         businessId: input.businessId,
@@ -124,7 +121,7 @@ export async function createPromotion(input: CreatePromotionInput) {
     );
 
     return promotion;
-  }, PROMOTION_TRANSACTION_OPTIONS);
+  });
 }
 
 export type UpdatePromotionInput = {
@@ -143,15 +140,17 @@ export type UpdatePromotionInput = {
 };
 
 export async function updatePromotion(input: UpdatePromotionInput) {
-  const existing = await prisma.promotion.findUniqueOrThrow({
-    where: { id: input.promotionId, businessId: input.businessId },
-    select: {
-      id: true,
-      businessId: true,
-      startsAt: true,
-      endsAt: true
-    }
-  });
+  const existing = await withBusinessScope(input.businessId, (tx) =>
+    tx.promotion.findUniqueOrThrow({
+      where: { id: input.promotionId, businessId: input.businessId },
+      select: {
+        id: true,
+        businessId: true,
+        startsAt: true,
+        endsAt: true
+      }
+    })
+  );
 
   await requireRole({
     businessId: existing.businessId,
@@ -197,7 +196,7 @@ export async function updatePromotion(input: UpdatePromotionInput) {
     data.isActive = input.isActive;
   }
 
-  return prisma.$transaction(async (tx) => {
+  return withBusinessScope(existing.businessId, async (tx) => {
     const promotion = await tx.promotion.update({
       where: { id: existing.id },
       data
@@ -218,7 +217,7 @@ export async function updatePromotion(input: UpdatePromotionInput) {
     );
 
     return promotion;
-  }, PROMOTION_TRANSACTION_OPTIONS);
+  });
 }
 
 export type DeletePromotionInput = {
@@ -228,10 +227,12 @@ export type DeletePromotionInput = {
 };
 
 export async function deletePromotion(input: DeletePromotionInput) {
-  const existing = await prisma.promotion.findUniqueOrThrow({
-    where: { id: input.promotionId, businessId: input.businessId },
-    select: { id: true, businessId: true }
-  });
+  const existing = await withBusinessScope(input.businessId, (tx) =>
+    tx.promotion.findUniqueOrThrow({
+      where: { id: input.promotionId, businessId: input.businessId },
+      select: { id: true, businessId: true }
+    })
+  );
 
   await requireRole({
     businessId: existing.businessId,
@@ -239,7 +240,7 @@ export async function deletePromotion(input: DeletePromotionInput) {
     allowedRoles: MANAGER_ROLES
   });
 
-  return prisma.$transaction(async (tx) => {
+  return withBusinessScope(existing.businessId, async (tx) => {
     const promotion = await tx.promotion.update({
       where: { id: existing.id },
       data: { isActive: false }
@@ -260,7 +261,7 @@ export async function deletePromotion(input: DeletePromotionInput) {
     );
 
     return promotion;
-  }, PROMOTION_TRANSACTION_OPTIONS);
+  });
 }
 
 export type BroadcastPromotionInput = {
@@ -303,12 +304,14 @@ function assertPromotionBroadcastable(promotion: {
 export async function broadcastPromotion(
   input: BroadcastPromotionInput
 ): Promise<BroadcastPromotionResult> {
-  const promotion = await prisma.promotion.findUniqueOrThrow({
-    where: { id: input.promotionId, businessId: input.businessId },
-    include: {
-      business: { select: { id: true, slug: true, name: true, wabaPhoneId: true } }
-    }
-  });
+  const promotion = await withBusinessScope(input.businessId, (tx) =>
+    tx.promotion.findUniqueOrThrow({
+      where: { id: input.promotionId, businessId: input.businessId },
+      include: {
+        business: { select: { id: true, slug: true, name: true, wabaPhoneId: true } }
+      }
+    })
+  );
 
   await requireRole({
     businessId: promotion.businessId,
@@ -321,10 +324,12 @@ export async function broadcastPromotion(
   // Atomically claim the broadcast slot — prevents two concurrent callers from
   // both passing assertPromotionBroadcastable and double-sending.
   const broadcastAt = new Date();
-  const claimed = await prisma.promotion.updateMany({
-    where: { id: promotion.id, broadcastAt: null },
-    data: { broadcastAt }
-  });
+  const claimed = await withBusinessScope(promotion.businessId, (tx) =>
+    tx.promotion.updateMany({
+      where: { id: promotion.id, broadcastAt: null },
+      data: { broadcastAt }
+    })
+  );
   if (claimed.count === 0) {
     throw new Error("This promotion has already been broadcast.");
   }
@@ -340,7 +345,7 @@ export async function broadcastPromotion(
   let totalWhatsappFailed = 0;
 
   do {
-    const batch = await prisma.membership.findMany({
+    const batch = await withBusinessScope(promotion.businessId, (tx) => tx.membership.findMany({
       where: {
         businessId: promotion.businessId,
         isActive: true,
@@ -366,7 +371,7 @@ export async function broadcastPromotion(
       },
       take: MEMBERSHIP_BATCH,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
-    });
+    }));
 
     if (batch.length === 0) break;
 
@@ -444,7 +449,7 @@ export async function broadcastPromotion(
     );
   }
 
-  await prisma.$transaction(async (tx) => {
+  await withBusinessScope(promotion.businessId, async (tx) => {
     await tx.promotion.update({
       where: { id: promotion.id },
       data: { broadcastSentBy: input.actorUserId }
@@ -465,7 +470,7 @@ export async function broadcastPromotion(
       },
       tx
     );
-  }, PROMOTION_TRANSACTION_OPTIONS);
+  });
 
   return {
     promotionId: promotion.id,
@@ -488,28 +493,32 @@ export async function redeemPromotionCode(input: RedeemPromotionCodeInput) {
   }
 
   const now = new Date();
-  const promotion = await prisma.promotion.findFirst({
-    where: {
-      businessId: input.businessId,
-      code,
-      isActive: true,
-      startsAt: { lte: now },
-      endsAt: { gt: now }
-    }
-  });
+  const promotion = await withBusinessScope(input.businessId, (tx) =>
+    tx.promotion.findFirst({
+      where: {
+        businessId: input.businessId,
+        code,
+        isActive: true,
+        startsAt: { lte: now },
+        endsAt: { gt: now }
+      }
+    })
+  );
 
   if (!promotion) {
     throw new Error("This promotion code is not currently active.");
   }
 
   try {
-    await prisma.promotionRedemption.create({
-      data: {
-        promotionId: promotion.id,
-        userId: input.userId,
-        businessId: input.businessId
-      }
-    });
+    await withBusinessScope(input.businessId, (tx) =>
+      tx.promotionRedemption.create({
+        data: {
+          promotionId: promotion.id,
+          userId: input.userId,
+          businessId: input.businessId
+        }
+      })
+    );
   } catch (err) {
     if (
       err instanceof Prisma.PrismaClientKnownRequestError &&

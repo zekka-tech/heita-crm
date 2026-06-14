@@ -123,6 +123,11 @@ const envSchema = z
     AI_INGEST_INLINE: z.enum(["0", "1"]).optional(),
     FOLLOWUP_INLINE: z.enum(["0", "1"]).default("0"),
 
+    // AI confidence floor for RAG retrieval (§7.7.5 hallucination guard).
+    // Chunks with similarity below this threshold trigger a soft-fail prefix.
+    // Default 0.35; configure via AI_CONFIDENCE_FLOOR env var.
+    AI_CONFIDENCE_FLOOR: z.coerce.number().min(0).max(1).default(0.35),
+
     // Process / runtime ops
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60_000).optional(),
     TRUSTED_PROXY_IPS: z.string().optional(),

@@ -31,7 +31,11 @@ vi.mock("@/lib/prisma", () => ({
         .mockResolvedValue([])
     },
     $transaction: mockExpireTx
-  }
+  },
+  // withBusinessScope delegates to mockExpireTx so tests preserve existing behaviour.
+  withBusinessScope: vi.fn().mockImplementation(
+    async (_businessId: string, fn: (tx: unknown) => Promise<unknown>) => mockExpireTx(fn)
+  )
 }));
 
 const { expireEligiblePoints } = await import("@/server/services/loyalty.service");

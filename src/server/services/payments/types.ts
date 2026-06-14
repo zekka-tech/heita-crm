@@ -1,6 +1,6 @@
 import type { BusinessPlanId, PaymentProvider } from "@prisma/client";
 
-const PAID_PLAN_IDS = new Set<string>(["GROWTH", "SCALE"]);
+const PAID_PLAN_IDS = new Set<string>(["STARTER", "GROWTH", "SCALE"]);
 
 export function isPaidPlanId(value: string | null | undefined): value is BusinessPlanId {
   return PAID_PLAN_IDS.has(value ?? "");

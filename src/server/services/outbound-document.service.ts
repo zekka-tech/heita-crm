@@ -2,7 +2,7 @@ import { MessageChannel, OutboundDocumentKind, StaffRole } from "@prisma/client"
 import { randomUUID } from "node:crypto";
 
 import { scanStoredObjectForMalware } from "@/lib/malware-scan";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { deleteStoredObject, putStoredObject, storageConfigured } from "@/lib/storage";
 import { sendOnChannel, type ChannelDispatchResult } from "@/server/services/channel-dispatch.service";
@@ -10,7 +10,6 @@ import { requirePaidBusinessPlan } from "@/server/services/billing.service";
 import { scheduleFollowUp } from "@/server/services/follow-up.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
-const TX_OPTIONS = { maxWait: 5_000, timeout: 15_000 };
 const MAX_DOCUMENT_BYTES = 15 * 1024 * 1024;
 const ALLOWED_DOCUMENT_TYPES = new Set([
   "application/pdf",
@@ -46,10 +45,12 @@ export async function attachDocument(input: {
     throw new Error("Document must be a PDF, PNG, JPEG, or WebP file.");
   }
 
-  const thread = await prisma.salesThread.findFirstOrThrow({
-    where: { id: input.threadId, businessId: input.businessId },
-    select: { id: true }
-  });
+  const thread = await withBusinessScope(input.businessId, (tx) =>
+    tx.salesThread.findFirstOrThrow({
+      where: { id: input.threadId, businessId: input.businessId },
+      select: { id: true }
+    })
+  );
 
   const fileName = sanitizeFileName(input.file.name);
   const documentId = randomUUID();
@@ -64,7 +65,7 @@ export async function attachDocument(input: {
   }
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await withBusinessScope(input.businessId, async (tx) => {
       const document = await tx.outboundDocument.create({
         data: {
           businessId: input.businessId,
@@ -87,7 +88,7 @@ export async function attachDocument(input: {
         metadata: { kind: input.kind, byteSize: input.file.size, mimeType: input.file.type }
       }, tx);
       return document;
-    }, TX_OPTIONS);
+    });
   } catch (error) {
     await deleteStoredObject(storageKey).catch(() => undefined);
     throw error;
@@ -109,13 +110,17 @@ export async function sendDocument(input: {
   const body = input.body.trim();
   if (!body) throw new Error("Message body is required.");
 
-  const thread = await prisma.salesThread.findFirstOrThrow({
-    where: { id: input.threadId, businessId: input.businessId },
-    include: { stage: true }
-  });
-  const document = await prisma.outboundDocument.findFirstOrThrow({
-    where: { id: input.documentId, businessId: input.businessId, salesThreadId: input.threadId }
-  });
+  const [thread, document] = await withBusinessScope(input.businessId, (tx) =>
+    Promise.all([
+      tx.salesThread.findFirstOrThrow({
+        where: { id: input.threadId, businessId: input.businessId },
+        include: { stage: true }
+      }),
+      tx.outboundDocument.findFirstOrThrow({
+        where: { id: input.documentId, businessId: input.businessId, salesThreadId: input.threadId }
+      })
+    ])
+  );
 
   const results: ChannelDispatchResult[] = [];
   const primaryChannel = channels[0]!;
@@ -131,7 +136,7 @@ export async function sendDocument(input: {
 
   const now = new Date();
   const dueAt = followUpDueAt(thread.stage.defaultFollowUpHours);
-  await prisma.$transaction(async (tx) => {
+  await withBusinessScope(input.businessId, async (tx) => {
     await tx.salesThread.update({
       where: { id: thread.id },
       data: {
@@ -148,7 +153,7 @@ export async function sendDocument(input: {
       targetId: document.id,
       metadata: { threadId: thread.id, channels, messageIds: results.map((result) => result.messageId) }
     }, tx);
-  }, TX_OPTIONS);
+  });
 
   if (dueAt) {
     await scheduleFollowUp({

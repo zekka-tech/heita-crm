@@ -11,7 +11,7 @@ import {
   formatZar,
   getBusinessPlan
 } from "@/lib/billing";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import {
   getActiveSubscription,
   getEffectivePlan,
@@ -41,9 +41,11 @@ export default async function BillingPage({
     getEffectivePlan(businessId),
     getActiveSubscription(businessId),
     listInvoices(businessId),
-    prisma.business.findUnique({
-      where: { id: businessId },
-      select: { name: true }
+    withBusinessScope(businessId, (tx) => {
+      return tx.business.findUnique({
+        where: { id: businessId },
+        select: { name: true }
+      });
     }),
     Promise.resolve(getConfiguredProviders())
   ]);
@@ -70,7 +72,7 @@ export default async function BillingPage({
 
       {sales === "upgrade" && (
         <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-ink">
-          Sales pipeline is available on paid plans only. Upgrade to Growth or Scale to create sales threads, send documents, and approve AI follow-ups.
+          Sales pipeline is available on paid plans only. Upgrade to Starter, Growth, or Scale to create sales threads, send documents, and approve AI follow-ups.
         </div>
       )}
 

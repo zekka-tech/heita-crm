@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockTx = {
   ocrReceipt: {
+    create: vi.fn(),
+    findMany: vi.fn(),
     findUnique: vi.fn(),
     update: vi.fn()
   },
@@ -15,17 +17,11 @@ const mockTx = {
   }
 };
 
-const prisma = {
-  $transaction: vi.fn((fn: (tx: typeof mockTx) => Promise<unknown>, _opts?: unknown) =>
-    fn(mockTx)
-  ),
-  ocrReceipt: {
-    findUnique: vi.fn(),
-    update: vi.fn()
-  }
-};
+const withBusinessScope = vi.fn((_businessId: string, fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx));
 
-vi.mock("@/lib/prisma", () => ({ prisma }));
+const prisma = mockTx;
+
+vi.mock("@/lib/prisma", () => ({ prisma, withBusinessScope }));
 vi.mock("@/server/services/loyalty.service", () => ({
   recalculateTier: vi.fn().mockResolvedValue(undefined)
 }));
@@ -33,7 +29,7 @@ vi.mock("@/server/services/staff-audit.service", () => ({
   recordStaffAuditLog: vi.fn().mockResolvedValue(undefined)
 }));
 
-const { approveOcrReceipt, rejectOcrReceipt, parseReceiptText, extractReceiptData } = await import(
+const { approveOcrReceipt, rejectOcrReceipt, listPendingOcrReceipts, parseReceiptText, extractReceiptData, submitOcrReceipt } = await import(
   "@/server/services/ocr-receipt.service"
 );
 
@@ -50,14 +46,13 @@ function mockPendingReceipt() {
     pointsToAward: 100,
     status: "PENDING_REVIEW"
   };
-  prisma.ocrReceipt.findUnique.mockResolvedValue(receipt);
+  mockTx.ocrReceipt.findUnique.mockResolvedValue(receipt);
   mockTx.ocrReceipt.findUnique.mockResolvedValue(receipt);
   mockTx.loyaltyTransaction.findFirst.mockResolvedValue(null);
   mockTx.loyaltyTransaction.create.mockResolvedValue({ id: "txn1" });
   mockTx.membership.findFirst.mockResolvedValue({ id: "mem1" });
   mockTx.membership.update.mockResolvedValue({});
   mockTx.ocrReceipt.update.mockResolvedValue({});
-  prisma.ocrReceipt.update.mockResolvedValue({ businessId: "biz1" });
 }
 
 describe("approveOcrReceipt", () => {
@@ -75,7 +70,8 @@ describe("approveOcrReceipt", () => {
     mockPendingReceipt();
     await approveOcrReceipt("rcpt1", "staff1", "biz1");
     expect(recordStaffAuditLog).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "OCR_RECEIPT_APPROVED", targetId: "rcpt1" })
+      expect.objectContaining({ action: "OCR_RECEIPT_APPROVED", targetId: "rcpt1" }),
+      mockTx
     );
   });
 
@@ -85,37 +81,89 @@ describe("approveOcrReceipt", () => {
     await approveOcrReceipt("rcpt1", "staff1", "biz1");
     expect(mockTx.loyaltyTransaction.create).not.toHaveBeenCalled();
     expect(mockTx.ocrReceipt.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "APPROVED" }) })
+      expect.objectContaining({
+        where: { id: "rcpt1", businessId: "biz1" },
+        data: expect.objectContaining({ status: "APPROVED" })
+      })
     );
   });
 
   it("throws when receipt is not found", async () => {
-    prisma.ocrReceipt.findUnique.mockResolvedValue(null);
+    mockTx.ocrReceipt.findUnique.mockResolvedValue(null);
     await expect(approveOcrReceipt("missing", "staff1", "biz1")).rejects.toThrow("not found");
   });
 
   it("throws when receipt is already approved", async () => {
-    prisma.ocrReceipt.findUnique.mockResolvedValue({ id: "rcpt1", businessId: "biz1", status: "APPROVED" });
+    mockTx.ocrReceipt.findUnique.mockResolvedValue({ id: "rcpt1", businessId: "biz1", status: "APPROVED" });
     await expect(approveOcrReceipt("rcpt1", "staff1", "biz1")).rejects.toThrow("APPROVED");
   });
 });
 
 describe("rejectOcrReceipt", () => {
   it("updates status to REJECTED and writes audit log", async () => {
-    prisma.ocrReceipt.update.mockResolvedValue({});
-    prisma.ocrReceipt.findUnique.mockResolvedValue({ id: "rcpt1", businessId: "biz1", status: "PENDING_REVIEW" });
+    mockTx.ocrReceipt.update.mockResolvedValue({});
+    mockTx.ocrReceipt.findUnique.mockResolvedValue({ id: "rcpt1", businessId: "biz1", status: "PENDING_REVIEW" });
     await rejectOcrReceipt("rcpt1", "staff1", "biz1");
-    expect(prisma.ocrReceipt.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "REJECTED" }) })
+    expect(mockTx.ocrReceipt.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "rcpt1", businessId: "biz1" },
+        data: expect.objectContaining({ status: "REJECTED" })
+      })
     );
     expect(recordStaffAuditLog).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "OCR_RECEIPT_REJECTED", targetId: "rcpt1" })
+      expect.objectContaining({ action: "OCR_RECEIPT_REJECTED", targetId: "rcpt1" }),
+      mockTx
     );
   });
 
   it("throws when receipt belongs to a different business", async () => {
-    prisma.ocrReceipt.findUnique.mockResolvedValue({ id: "rcpt1", businessId: "biz_other", status: "PENDING_REVIEW" });
+    mockTx.ocrReceipt.findUnique.mockResolvedValue({ id: "rcpt1", businessId: "biz_other", status: "PENDING_REVIEW" });
     await expect(rejectOcrReceipt("rcpt1", "staff1", "biz1")).rejects.toThrow("not found");
+  });
+});
+
+
+
+describe("submitOcrReceipt", () => {
+  it("creates a pending receipt inside the business scope", async () => {
+    mockTx.ocrReceipt.create.mockResolvedValue({ id: "rcpt_submit" });
+
+    await expect(
+      submitOcrReceipt({
+        businessId: "biz1",
+        userId: "usr1",
+        imageUrl: "https://store.example/r.jpg",
+        clientRawText: "KFC\nTOTAL R 89.90"
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({ receiptId: "rcpt_submit", pointsToAward: 90 })
+    );
+
+    expect(withBusinessScope).toHaveBeenCalledWith("biz1", expect.any(Function));
+    expect(mockTx.ocrReceipt.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        businessId: "biz1",
+        userId: "usr1",
+        imageUrl: "https://store.example/r.jpg",
+        pointsToAward: 90,
+        status: "PENDING_REVIEW"
+      })
+    });
+  });
+});
+
+describe("listPendingOcrReceipts", () => {
+  it("lists pending receipts inside the business scope", async () => {
+    mockTx.ocrReceipt.findMany.mockResolvedValue([{ id: "rcpt1" }]);
+
+    await expect(listPendingOcrReceipts("biz1")).resolves.toEqual([{ id: "rcpt1" }]);
+
+    expect(withBusinessScope).toHaveBeenCalledWith("biz1", expect.any(Function));
+    expect(mockTx.ocrReceipt.findMany).toHaveBeenCalledWith({
+      where: { businessId: "biz1", status: "PENDING_REVIEW" },
+      orderBy: { createdAt: "asc" },
+      take: 50
+    });
   });
 });
 

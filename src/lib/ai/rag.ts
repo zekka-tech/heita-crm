@@ -9,6 +9,7 @@ import {
 import { rerankChunks } from "@/lib/ai/reranker";
 import { ZERO_USAGE, type StreamUsage } from "@/lib/ai/stream-types";
 import { hybridSearch, type SimilarityMatch } from "@/lib/ai/vector-store";
+import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import {
@@ -41,6 +42,12 @@ export type RagAnswerStream = {
   stream: AsyncGenerator<string>;
   /** Resolves with real token counts after the stream is consumed or abandoned. */
   usage: Promise<StreamUsage>;
+  /**
+   * When the top retrieved chunk falls below the AI_CONFIDENCE_FLOOR threshold,
+   * this prefix is prepended to the streamed response as a soft hallucination guard
+   * (§7.7.5 of the CTO advisory memo).
+   */
+  lowConfidencePrefix: string | null;
 };
 
 export type RagStreamInput = {
@@ -144,6 +151,28 @@ async function buildSystemPrompt(input: { businessId: string; messages: ChatTurn
   };
 }
 
+/**
+ * Returns a soft-fail prefix when the top retrieved chunk falls below the
+ * configured confidence floor. Addresses §7.7.5 of the CTO advisory memo:
+ * "AI hallucination on stock/pricing can create a customer-trust incident."
+ *
+ * Configurable via AI_CONFIDENCE_FLOOR env var (default 0.35).
+ */
+function buildLowConfidencePrefix(topChunks: SimilarityMatch[]): string | null {
+  const confidenceFloor = env.AI_CONFIDENCE_FLOOR;
+  if (topChunks.length === 0 || (topChunks[0]?.similarity ?? 0) < confidenceFloor) {
+    logger.info(
+      {
+        topSimilarity: topChunks[0]?.similarity ?? null,
+        confidenceFloor,
+      },
+      "rag.low_confidence_prefix"
+    );
+    return "I don't have enough information about that in my knowledge base. ";
+  }
+  return null;
+}
+
 export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerStream> {
   const history = input.messages.slice(-MAX_HISTORY);
   const latestUserMessage = [...history].reverse().find((turn) => turn.role === "user");
@@ -156,6 +185,7 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
       prompt: "",
       citations: [],
       retrievedChunks: [],
+      lowConfidencePrefix: null,
       stream: (async function* () {
         yield "Please send a question to start the conversation.";
       })(),
@@ -167,6 +197,8 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
     businessId: input.businessId,
     messages: history,
   });
+
+  const lowConfidencePrefix = buildLowConfidencePrefix(topChunks);
 
   // Bring-your-own-model: when the business has connected its own provider
   // key, that connection is the brain. Failures degrade to the platform
@@ -189,6 +221,7 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
         prompt,
         citations,
         retrievedChunks: topChunks,
+        lowConfidencePrefix,
         stream,
         usage,
       };
@@ -217,7 +250,7 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
           })),
         ],
       });
-      return { runtime: "ollama", model, prompt, citations, retrievedChunks: topChunks, stream, usage };
+      return { runtime: "ollama", model, prompt, citations, retrievedChunks: topChunks, lowConfidencePrefix, stream, usage };
     } catch (error) {
       logger.warn({ err: error }, "rag.ollama_fallback");
     }
@@ -236,7 +269,7 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
       model,
       enablePromptCache: true,
     });
-    return { runtime: "anthropic", model, prompt, citations, retrievedChunks: topChunks, stream, usage };
+    return { runtime: "anthropic", model, prompt, citations, retrievedChunks: topChunks, lowConfidencePrefix, stream, usage };
   }
 
   return {
@@ -245,6 +278,7 @@ export async function streamRagAnswer(input: RagStreamInput): Promise<RagAnswerS
     prompt,
     citations,
     retrievedChunks: [],
+    lowConfidencePrefix: null,
     stream: (async function* () {
       yield "AI co-worker is not configured for this environment. Add OLLAMA_BASE_URL or ANTHROPIC_API_KEY to enable replies.";
     })(),

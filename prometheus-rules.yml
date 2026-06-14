@@ -13,6 +13,7 @@ groups:
         annotations:
           summary: "HTTP error rate > 1%"
           description: "{{ $value | humanizePercentage }} of requests are returning 5xx over the last 5 minutes."
+          runbook_url: "docs/runbooks/high-error-rate.md"
 
       - alert: HighP99Latency
         expr: |
@@ -25,6 +26,7 @@ groups:
         annotations:
           summary: "P99 latency > 500ms"
           description: "Route {{ $labels.route }} P99 is {{ $value | humanizeDuration }}."
+          runbook_url: "docs/runbooks/high-p99-latency.md"
 
       - alert: DlqDepthCritical
         expr: heita_dlq_pending_jobs > 100
@@ -34,6 +36,7 @@ groups:
         annotations:
           summary: "Dead-letter queue depth > 100"
           description: "{{ $value }} jobs in DLQ — investigate worker failures immediately."
+          runbook_url: "docs/runbooks/dlq-depth-critical.md"
 
   - name: heita_crm_security
     interval: 30s
@@ -46,6 +49,7 @@ groups:
         annotations:
           summary: "OTP request rate spike"
           description: "{{ $value | humanize }} OTP requests/s — possible automated abuse or credential stuffing."
+          runbook_url: "docs/runbooks/otp-request-spike.md"
 
       - alert: WebhookAuthFailureSpike
         expr: rate(heita_webhook_auth_failures_total[5m]) > 0.1
@@ -55,6 +59,7 @@ groups:
         annotations:
           summary: "Webhook auth failure rate elevated"
           description: "{{ $value | humanize }} auth failures/s on webhook {{ $labels.provider }} — possible replay or forged requests."
+          runbook_url: "docs/runbooks/webhook-auth-failure-spike.md"
 
       - alert: RedisErrorSpike
         expr: rate(heita_redis_errors_total[5m]) > 0.5
@@ -64,6 +69,7 @@ groups:
         annotations:
           summary: "Redis error rate elevated"
           description: "{{ $value | humanize }} Redis errors/s — rate limiting and OTP delivery may be degraded."
+          runbook_url: "docs/runbooks/redis-error-spike.md"
 
   - name: heita_crm_warning
     interval: 60s
@@ -79,6 +85,7 @@ groups:
         annotations:
           summary: "HTTP error rate > 0.5%"
           description: "{{ $value | humanizePercentage }} 5xx rate — trending up."
+          runbook_url: "docs/runbooks/elevated-error-rate.md"
 
       - alert: AuthFailureSpike
         expr: rate(heita_auth_attempts_total{status="failure"}[5m]) > 10
@@ -88,6 +95,7 @@ groups:
         annotations:
           summary: "Auth failure rate elevated"
           description: "{{ $value | humanize }} failed auth attempts/s — possible credential stuffing."
+          runbook_url: "docs/runbooks/auth-failure-spike.md"
 
       - alert: LoyaltyTransactionFailures
         expr: rate(heita_loyalty_events_total{type="error"}[5m]) > 1
@@ -97,6 +105,7 @@ groups:
         annotations:
           summary: "Loyalty transaction errors elevated"
           description: "{{ $value | humanize }} loyalty errors/s."
+          runbook_url: "docs/runbooks/loyalty-transaction-failures.md"
 
       - alert: QueueJobFailures
         expr: rate(heita_queue_jobs_total{status="failed"}[10m]) > 5
@@ -106,6 +115,7 @@ groups:
         annotations:
           summary: "BullMQ job failure rate elevated"
           description: "{{ $value | humanize }} failed jobs/s in queue {{ $labels.queue }}."
+          runbook_url: "docs/runbooks/queue-job-failures.md"
 
       - alert: AiChatErrors
         expr: rate(heita_ai_chat_requests_total{status="error"}[10m]) > 2
@@ -115,6 +125,7 @@ groups:
         annotations:
           summary: "AI chat error rate elevated"
           description: "{{ $value | humanize }} AI errors/s — check Ollama/Anthropic availability."
+          runbook_url: "docs/runbooks/ai-chat-errors.md"
 
       - alert: WebhookProcessingErrors
         expr: rate(heita_webhook_events_total{status="error"}[5m]) > 1
@@ -124,6 +135,7 @@ groups:
         annotations:
           summary: "Webhook processing errors"
           description: "{{ $value | humanize }} webhook errors/s on {{ $labels.provider }}."
+          runbook_url: "docs/runbooks/webhook-processing-errors.md"
 
   - name: heita_crm_availability
     interval: 60s
@@ -136,6 +148,7 @@ groups:
         annotations:
           summary: "Heita CRM is down"
           description: "Prometheus cannot scrape the /api/metrics endpoint."
+          runbook_url: "docs/runbooks/service-down.md"
 
       - alert: DlqDepthElevated
         expr: heita_dlq_pending_jobs > 10
@@ -145,6 +158,7 @@ groups:
         annotations:
           summary: "Dead-letter queue depth elevated"
           description: "{{ $value }} jobs in DLQ for more than 10 minutes."
+          runbook_url: "docs/runbooks/dlq-depth-elevated.md"
 
   # Multi-window, multi-burn-rate error-budget alerts — the enforcement layer for
   # the SLOs in docs/SLO.md §2. Each alert fires only when BOTH a long window and
@@ -176,6 +190,7 @@ groups:
         annotations:
           summary: "Fast error-budget burn (availability SLO)"
           description: "Burning the 99.9% availability budget at >14.4x (≈2% in 1h). At this rate the 30-day budget is gone in ~2 days. Page on-call."
+          runbook_url: "docs/runbooks/error-budget-burn-fast.md"
 
       - alert: ErrorBudgetBurnSlow
         expr: |
@@ -196,18 +211,19 @@ groups:
         annotations:
           summary: "Slow error-budget burn (availability SLO)"
           description: "Burning the 99.9% availability budget at >6x (≈5% in 6h). Open a reliability ticket and pause non-critical releases per docs/SLO.md §2."
+          runbook_url: "docs/runbooks/error-budget-burn-slow.md"
 
       # ── A6 Webhook ingestion (Tier 1) — SLO 99.9%, budget 0.001 ─────────────
       - alert: WebhookErrorBudgetBurnFast
         expr: |
           (
-            sum(rate(heita_webhook_events_total{status="error"}[1h]))
-            / sum(rate(heita_webhook_events_total[1h]))
+            sum by (provider) (rate(heita_webhook_events_total{status="error"}[1h]))
+            / sum by (provider) (rate(heita_webhook_events_total[1h]))
           ) > (14.4 * 0.001)
           and
           (
-            sum(rate(heita_webhook_events_total{status="error"}[5m]))
-            / sum(rate(heita_webhook_events_total[5m]))
+            sum by (provider) (rate(heita_webhook_events_total{status="error"}[5m]))
+            / sum by (provider) (rate(heita_webhook_events_total[5m]))
           ) > (14.4 * 0.001)
         for: 2m
         labels:
@@ -217,6 +233,7 @@ groups:
         annotations:
           summary: "Fast error-budget burn (webhook ingestion SLO)"
           description: "Webhook {{ $labels.provider }} burning the 99.9% ingestion budget at >14.4x. Inbound WhatsApp/Africa's Talking events are being lost — page on-call."
+          runbook_url: "docs/runbooks/webhook-error-budget-burn-fast.md"
 
       # ── A5 AI chat (Tier 2) — SLO 99.0%, budget 0.01 ───────────────────────
       - alert: AiChatErrorBudgetBurnSlow
@@ -238,3 +255,4 @@ groups:
         annotations:
           summary: "Slow error-budget burn (AI chat SLO)"
           description: "AI chat burning the 99.0% budget at >6x even after Ollama→Anthropic fallback. Check both runtimes; open a ticket per docs/SLO.md §2."
+          runbook_url: "docs/runbooks/ai-chat-error-budget-burn-slow.md"

@@ -1,6 +1,6 @@
 import { TransactionType } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 
 export type ReceiptHistoryFilter = {
   businessSlug: string;
@@ -30,24 +30,26 @@ export async function getReceiptHistory(input: ReceiptHistoryFilter) {
     return null;
   }
 
-  const transactions = await prisma.loyaltyTransaction.findMany({
-    where: {
-      membershipId: membership.id,
-      ...(input.type && input.type !== "ALL" ? { type: input.type } : {}),
-      ...(input.dateFrom || input.dateTo
-        ? {
-            createdAt: {
-              ...(input.dateFrom ? { gte: input.dateFrom } : {}),
-              ...(input.dateTo ? { lte: input.dateTo } : {})
+  const transactions = await withBusinessScope(membership.businessId, (tx) =>
+    tx.loyaltyTransaction.findMany({
+      where: {
+        membershipId: membership.id,
+        ...(input.type && input.type !== "ALL" ? { type: input.type } : {}),
+        ...(input.dateFrom || input.dateTo
+          ? {
+              createdAt: {
+                ...(input.dateFrom ? { gte: input.dateFrom } : {}),
+                ...(input.dateTo ? { lte: input.dateTo } : {})
+              }
             }
-          }
-        : {})
-    },
-    orderBy: {
-      createdAt: "desc"
-    },
-    take: 200
-  });
+          : {})
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 200
+    })
+  );
 
   return {
     membership,

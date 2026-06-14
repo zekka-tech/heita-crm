@@ -1,0 +1,95 @@
+{
+  "title": "Heita CAC/LTV by Acquisition Channel",
+  "description": "Paid-CAC diligence dashboard. PostHog event data contract: acquisition channel comes from 'business_joined' (joinChannel, referralUsed) and 'membership.joined' (joinChannel, referralUsed, signupBonusPoints); customer value comes from 'points_earned' (points), 'points_redeemed' (points/rewardId), 'tier_upgraded' (previousTier, newTier), 'subscription_started' (plan, billingInterval), and 'subscription_upgraded' (previousPlan, newPlan, billingInterval). All events scoped by businessId. CAC numerator: ad spend from warehouse ad_spend table by joinChannel. LTV numerator: gross margin from billing + loyalty redemption value. Replace stub SQL panels with warehouse/PostHog queries when CAC spend import lands.",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "1h",
+  "tags": [
+    "heita",
+    "posthog",
+    "cac",
+    "ltv",
+    "growth"
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Dashboard contract",
+      "options": {
+        "mode": "markdown",
+        "content": "Stub for paid-CAC diligence dashboard. Join source comes from membership.joined joinChannel/referralUsed; value comes from loyalty.points_earned and loyalty.points_redeemed plus billing revenue. Replace text panels with warehouse/PostHog queries when CAC spend import lands."
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      }
+    },
+    {
+      "id": 2,
+      "type": "barchart",
+      "title": "CAC by channel",
+      "datasource": {
+        "type": "postgres",
+        "uid": "${WAREHOUSE_DS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "-- TODO: ad_spend.channel spend / membership.joined users by joinChannel"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "id": 3,
+      "type": "barchart",
+      "title": "LTV by channel",
+      "datasource": {
+        "type": "postgres",
+        "uid": "${WAREHOUSE_DS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "-- TODO: gross margin / members grouped by acquisition channel"
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "LTV:CAC payback trend",
+      "datasource": {
+        "type": "postgres",
+        "uid": "${WAREHOUSE_DS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "-- TODO: monthly LTV:CAC and payback period by channel"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 24,
+        "h": 8
+      }
+    }
+  ]
+}

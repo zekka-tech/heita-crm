@@ -14,6 +14,9 @@ const prisma = {
     update: vi.fn(),
     updateMany: vi.fn().mockResolvedValue({ count: 1 })
   },
+  promotionRedemption: {
+    create: vi.fn()
+  },
   membership: {
     findMany: vi.fn()
   },
@@ -25,8 +28,11 @@ const prisma = {
 const sendNotification = vi.fn();
 const sendPromotionWhatsApp = vi.fn();
 
+const withBusinessScope = vi.fn(async (_businessId: string, callback: (tx: typeof prisma) => unknown) => callback(prisma));
+
 vi.mock("@/lib/prisma", () => ({
-  prisma
+  prisma,
+  withBusinessScope
 }));
 
 vi.mock("@/server/services/notification.service", () => ({

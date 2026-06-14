@@ -7,44 +7,47 @@ datasource db {
 }
 
 model User {
-  id                      String                 @id @default(cuid())
-  name                    String?
-  email                   String?                @unique
-  emailVerified           DateTime?
-  image                   String?
-  phone                   String?                @unique
-  phoneVerifiedAt         DateTime?
-  preferredAiMode         String?                @default("auto")
-  pendingEmail            String?
-  notificationPreferences Json?
-  sessionVersion          Int                    @default(0)
-  deletedAt               DateTime?
-  createdAt               DateTime               @default(now())
-  updatedAt               DateTime               @updatedAt
-  accounts                Account[]
-  sessions                Session[]
-  memberships             Membership[]
-  staffMemberships        StaffMember[]
-  staffInvitesSent        StaffInvite[]          @relation("StaffInviteIssuer")
-  notifications           Notification[]
-  pushSubscriptions       PushSubscription[]
-  otpCodes                OtpCode[]
-  aiChatSessions          AiChatSession[]
-  loyaltyEvents           LoyaltyTransaction[]
-  messages                Message[]
-  consents                UserConsent[]
-  promotionRedemptions    PromotionRedemption[]
-  aiTokenUsages           AiTokenUsage[]
-  staffAuditLogs          StaffAuditLog[]        @relation("StaffAuditActor")
-  referralCodesOwned      ReferralCode[]
-  importRuns              CustomerImportRun[]    @relation("CustomerImportActor")
-  ocrReceipts             OcrReceipt[]
-  reviewedReceipts        OcrReceipt[]           @relation("OcrReceiptReviewer")
-  salesThreads            SalesThread[]
-  salesThreadsCreated     SalesThread[]          @relation("SalesThreadCreator")
-  outboundDocuments       OutboundDocument[]     @relation("OutboundDocumentUploader")
-  followUpsApproved       FollowUpTask[]         @relation("FollowUpApprover")
-  aiProviderConnections   AiProviderConnection[] @relation("AiProviderConnectionCreator")
+  id                          String                 @id @default(cuid())
+  name                        String?
+  email                       String?                @unique
+  emailVerified               DateTime?
+  image                       String?
+  phone                       String?                @unique
+  phoneVerifiedAt             DateTime?
+  preferredAiMode             String?                @default("auto")
+  pendingEmail                String?
+  notificationPreferences     Json?
+  sessionVersion              Int                    @default(0)
+  deletedAt                   DateTime?
+  createdAt                   DateTime               @default(now())
+  updatedAt                   DateTime               @updatedAt
+  accounts                    Account[]
+  sessions                    Session[]
+  memberships                 Membership[]
+  staffMemberships            StaffMember[]
+  staffInvitesSent            StaffInvite[]          @relation("StaffInviteIssuer")
+  notifications               Notification[]
+  pushSubscriptions           PushSubscription[]
+  otpCodes                    OtpCode[]
+  aiChatSessions              AiChatSession[]
+  loyaltyEvents               LoyaltyTransaction[]
+  messages                    Message[]
+  consents                    UserConsent[]
+  promotionRedemptions        PromotionRedemption[]
+  aiTokenUsages               AiTokenUsage[]
+  staffAuditLogs              StaffAuditLog[]        @relation("StaffAuditActor")
+  referralCodesOwned          ReferralCode[]
+  importRuns                  CustomerImportRun[]    @relation("CustomerImportActor")
+  ocrReceipts                 OcrReceipt[]
+  reviewedReceipts            OcrReceipt[]           @relation("OcrReceiptReviewer")
+  salesThreads                SalesThread[]
+  salesThreadsCreated         SalesThread[]          @relation("SalesThreadCreator")
+  outboundDocuments           OutboundDocument[]     @relation("OutboundDocumentUploader")
+  followUpsApproved           FollowUpTask[]         @relation("FollowUpApprover")
+  aiProviderConnections       AiProviderConnection[] @relation("AiProviderConnectionCreator")
+  featureFlagOverridesUpdated FeatureFlagOverride[]  @relation("FeatureFlagOverrideUpdater")
+  conversations               Conversation[]
+  conversationParticipants    ConversationParticipant[]
 }
 
 model Account {
@@ -161,8 +164,38 @@ model Business {
   followUpTasks         FollowUpTask[]
   inboundAddresses      BusinessInboundAddress[]
   aiProviderConnections AiProviderConnection[]
+  featureFlagOverrides  FeatureFlagOverride[]
+  conversations         Conversation[]
 
   @@index([parentBusinessId])
+}
+
+model FeatureFlag {
+  id             String                @id @default(cuid())
+  key            String                @unique
+  label          String
+  description    String
+  defaultEnabled Boolean               @default(false)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  overrides      FeatureFlagOverride[]
+}
+
+model FeatureFlagOverride {
+  id          String      @id @default(cuid())
+  businessId  String
+  key         String
+  isEnabled   Boolean     @default(false)
+  updatedById String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  flag        FeatureFlag @relation(fields: [key], references: [key], onDelete: Cascade)
+  updatedBy   User?       @relation("FeatureFlagOverrideUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([businessId, key])
+  @@index([businessId, isEnabled])
+  @@index([key])
 }
 
 model BusinessInboundAddress {
@@ -512,25 +545,29 @@ model Event {
 }
 
 model Message {
-  id            String              @id @default(cuid())
-  businessId    String
-  userId        String?
-  contactPhone  String?
-  channel       MessageChannel
-  direction     String
-  externalId    String?
-  status        MessageStatus?
-  body          String
-  metadata      Json?
-  sentAt        DateTime?
-  readByStaffAt DateTime?
-  salesThreadId String?
-  createdAt     DateTime            @default(now())
-  business      Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user          User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
-  attachments   MessageAttachment[]
-  salesThread   SalesThread?        @relation(fields: [salesThreadId], references: [id], onDelete: SetNull)
-  followUpTask  FollowUpTask?
+  id              String              @id @default(cuid())
+  businessId      String
+  userId          String?
+  contactPhone    String?
+  conversationId  String?
+  channel         MessageChannel
+  direction       String
+  externalId      String?
+  status          MessageStatus?
+  body            String
+  metadata        Json?
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  readAt          DateTime?
+  readByStaffAt   DateTime?
+  salesThreadId   String?
+  createdAt       DateTime            @default(now())
+  business        Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user            User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation    Conversation?       @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  attachments     MessageAttachment[]
+  salesThread     SalesThread?        @relation(fields: [salesThreadId], references: [id], onDelete: SetNull)
+  followUpTask    FollowUpTask?
 
   @@unique([channel, externalId])
   @@index([businessId, channel, createdAt])
@@ -539,6 +576,7 @@ model Message {
   @@index([businessId, readByStaffAt])
   @@index([salesThreadId, createdAt])
   @@index([userId])
+  @@index([conversationId, createdAt])
 }
 
 model LoyaltyTransaction {
@@ -583,6 +621,42 @@ model MessageAttachment {
 
   @@index([messageId, createdAt])
   @@index([externalMediaId])
+}
+
+model Conversation {
+  id            String              @id @default(cuid())
+  businessId    String
+  customerId    String
+  subject       String?
+  channel       MessageChannel      @default(IN_APP)
+  status        ConversationStatus  @default(ACTIVE)
+  lastMessageAt DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  business     Business                @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer     User                    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([businessId, status])
+  @@index([customerId])
+  @@index([lastMessageAt])
+}
+
+model ConversationParticipant {
+  id             String          @id @default(cuid())
+  conversationId String
+  userId         String
+  role           ParticipantRole @default(MEMBER)
+  lastReadAt     DateTime?
+  isTyping       Boolean         @default(false)
+  joinedAt       DateTime        @default(now())
+
+  conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
 }
 
 model PipelineStage {
@@ -1091,6 +1165,19 @@ enum InvoiceStatus {
 
 enum BusinessPlanId {
   FREE
+  STARTER
   GROWTH
   SCALE
+}
+
+enum ConversationStatus {
+  ACTIVE
+  ARCHIVED
+  BLOCKED
+}
+
+enum ParticipantRole {
+  OWNER
+  AGENT
+  MEMBER
 }

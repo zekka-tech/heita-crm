@@ -59,6 +59,23 @@ const txB = {
 
 const findTxMock = vi.fn();
 
+const txClient = {
+  membership: {
+    findUniqueOrThrow: vi.fn().mockResolvedValue(membership),
+    update: vi.fn().mockResolvedValue(membership)
+  },
+  loyaltyTransaction: {
+    findUniqueOrThrow: findTxMock,
+    create: vi.fn().mockResolvedValue({ id: "tx_refund" }),
+    findMany: vi.fn().mockResolvedValue([]),
+    updateMany: vi.fn().mockResolvedValue({ count: 0 })
+  },
+  reward: { findFirstOrThrow: vi.fn(), update: vi.fn() },
+  staffAuditLog: { create: vi.fn() },
+  notification: { create: vi.fn().mockResolvedValue({ id: "notif_1" }) },
+  pushSubscription: { findMany: vi.fn().mockResolvedValue([]) }
+};
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     membership: {
@@ -71,25 +88,12 @@ vi.mock("@/lib/prisma", () => ({
       findMany: vi.fn().mockResolvedValue([])
     },
     $transaction: vi.fn().mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        membership: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue(membership),
-          update: vi.fn().mockResolvedValue(membership)
-        },
-        loyaltyTransaction: {
-          findUniqueOrThrow: findTxMock,
-          create: vi.fn().mockResolvedValue({ id: "tx_refund" }),
-          findMany: vi.fn().mockResolvedValue([]),
-          updateMany: vi.fn().mockResolvedValue({ count: 0 })
-        },
-        reward: { findFirstOrThrow: vi.fn(), update: vi.fn() },
-        staffAuditLog: { create: vi.fn() },
-        notification: { create: vi.fn().mockResolvedValue({ id: "notif_1" }) },
-        pushSubscription: { findMany: vi.fn().mockResolvedValue([]) }
-      };
-      return fn(tx);
+      return fn(txClient);
     })
-  }
+  },
+  withBusinessScope: vi.fn().mockImplementation(
+    async (_businessId: string, fn: (tx: typeof txClient) => Promise<unknown>) => fn(txClient)
+  )
 }));
 
 vi.mock("@/lib/staff", () => ({

@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { captureEvent } from "@/lib/telemetry";
+import { TELEMETRY_EVENTS } from "@/lib/telemetry-events";
 import {
   createBusinessWithDefaults,
   uploadBusinessLogo
@@ -71,7 +72,7 @@ export async function createBusinessAction(formData: FormData) {
   } catch (error) {
     captureEvent({
       userId,
-      event: "onboarding_error",
+      event: TELEMETRY_EVENTS.onboardingError,
       properties: {
         error: error instanceof Error ? error.message : String(error)
       }
@@ -81,7 +82,7 @@ export async function createBusinessAction(formData: FormData) {
 
   captureEvent({
     userId,
-    event: "onboarding_completed",
+    event: TELEMETRY_EVENTS.onboardingCompleted,
     properties: {
       businessName: name,
       category,

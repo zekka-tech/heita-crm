@@ -1,6 +1,6 @@
 import { StaffRole } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 
 const ROLE_LEVEL: Record<Exclude<StaffRole, "AI_TRAINER" | "FRANCHISE_ADMIN">, number> = {
   STAFF: 1,
@@ -57,16 +57,18 @@ export async function requireRole(input: {
   userId: string;
   allowedRoles: readonly StaffRole[];
 }) {
-  const staffMembership = await prisma.staffMember.findUnique({
-    where: {
-      businessId_userId: {
-        businessId: input.businessId,
-        userId: input.userId
+  const staffMembership = await withBusinessScope(input.businessId, (tx) => {
+    return tx.staffMember.findUnique({
+      where: {
+        businessId_userId: {
+          businessId: input.businessId,
+          userId: input.userId
+        }
+      },
+      select: {
+        role: true
       }
-    },
-    select: {
-      role: true
-    }
+    });
   });
 
   if (!staffMembership) {

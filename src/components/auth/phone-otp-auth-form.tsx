@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState, useTransition } from "react";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -258,13 +259,13 @@ export function PhoneOtpAuthForm({
             />
             <span>
               I agree to the{" "}
-              <a href="/terms" className="text-primary-action underline">
+              <Link href="/terms" className="text-primary-action underline">
                 Terms
-              </a>{" "}
+              </Link>{" "}
               and{" "}
-              <a href="/privacy" className="text-primary-action underline">
+              <Link href="/privacy" className="text-primary-action underline">
                 Privacy Policy
-              </a>
+              </Link>
               .
             </span>
           </label>

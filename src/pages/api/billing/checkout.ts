@@ -8,7 +8,7 @@ import { requireRole } from "@/lib/staff";
 import { createCheckout } from "@/server/services/billing.service";
 import { isConfiguredProvider } from "@/server/services/payments/registry";
 
-const VALID_PLANS: BusinessPlanId[] = ["GROWTH", "SCALE"];
+const VALID_PLANS: BusinessPlanId[] = ["STARTER", "GROWTH", "SCALE"];
 const VALID_PROVIDERS: PaymentProvider[] = ["YOCO", "STRIPE", "PAYFAST"];
 
 export default async function handler(

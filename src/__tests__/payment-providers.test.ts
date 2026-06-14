@@ -114,6 +114,38 @@ describe("Stripe gateway", () => {
     });
   });
 
+  it("normalizes Starter checkout sessions at the Starter price", async () => {
+    const payload = JSON.stringify({
+      id: "evt_checkout_starter_paid",
+      object: "event",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_test_starter",
+          object: "checkout.session",
+          payment_status: "paid",
+          currency: "zar",
+          amount_total: 49900,
+          payment_intent: "pi_test_starter",
+          metadata: { businessId: "biz1", planId: "STARTER" },
+        },
+      },
+    });
+
+    const event = await stripeGateway.verifyAndParseWebhook(
+      signedStripeRequest(payload),
+      payload,
+    );
+
+    expect(event).toMatchObject({
+      provider: "STRIPE",
+      type: "payment_succeeded",
+      businessId: "biz1",
+      planId: "STARTER",
+      amountZar: 499,
+    });
+  });
+
   it("ignores completed checkout sessions that are not paid", async () => {
     const payload = JSON.stringify({
       id: "evt_checkout_unpaid",
@@ -188,6 +220,38 @@ describe("PayFast gateway", () => {
         createPayFastSignature(result.fields, "secret-passphrase"),
       );
     }
+  });
+
+  it("creates a signed Starter form-post checkout", async () => {
+    const result = await payfastGateway.createCheckout({
+      businessId: "biz1",
+      planId: "STARTER",
+      returnUrl: "https://app.test/dashboard/biz1/settings/billing",
+    });
+
+    expect(result.kind).toBe("form_post");
+    if (result.kind === "form_post") {
+      expect(result.fields.amount).toBe("499.00");
+      expect(result.fields.custom_str2).toBe("STARTER");
+      expect(result.fields.signature).toBe(
+        createPayFastSignature(result.fields, "secret-passphrase"),
+      );
+    }
+  });
+
+  it("accepts a valid Starter ITN after signature, postback, and amount validation", async () => {
+    const event = await payfastGateway.verifyAndParseWebhook(
+      new Request("https://app.test/api/webhooks/payfast", { method: "POST" }),
+      payfastRawBody({ amount_gross: "499.00", custom_str2: "STARTER" }),
+    );
+
+    expect(event).toMatchObject({
+      provider: "PAYFAST",
+      type: "payment_succeeded",
+      businessId: "biz1",
+      planId: "STARTER",
+      providerPaymentId: "pf-payment-1",
+    });
   });
 
   it("accepts a valid ITN after signature, postback, and amount validation", async () => {

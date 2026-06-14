@@ -3,7 +3,8 @@ import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 
-export const dynamic = "force-dynamic";
+// OG images are session-independent; cache per-slug for one hour.
+export const revalidate = 3600;
 export const runtime = "nodejs";
 
 const WIDTH = 1200;
