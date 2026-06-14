@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { businessCategories, formatEnumLabel } from "@/lib/business";
+import { serializeJsonLd } from "@/lib/json-ld";
 import { listFeaturedCategories } from "@/server/services/discovery.service";
 
 const features = [
@@ -68,7 +69,7 @@ export default async function LandingPage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify([
+          __html: serializeJsonLd([
             {
               "@context": "https://schema.org",
               "@type": "WebSite",

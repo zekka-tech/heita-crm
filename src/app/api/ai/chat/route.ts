@@ -72,6 +72,15 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: "message is required." }, { status: 400 });
   }
 
+  // Cap input to prevent unbounded token spend (CRITICAL — §6.3 audit finding 3).
+  const MAX_MESSAGE_CHARS = 8_000;
+  if (message.trim().length > MAX_MESSAGE_CHARS) {
+    return NextResponse.json(
+      { error: `Message is too long. Please keep your message under ${MAX_MESSAGE_CHARS} characters.` },
+      { status: 400 }
+    );
+  }
+
   if (!businessSlug && !bodyBusinessId) {
     return NextResponse.json({ error: "businessSlug or businessId is required." }, { status: 400 });
   }

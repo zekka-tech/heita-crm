@@ -84,11 +84,12 @@ brand-new database, the pgvector extension is created by
 
 ### BullMQ worker service
 The `worker` service runs background jobs from the same signed image as the app.
-It executes `node dist/worker.mjs`, which starts four BullMQ workers:
+It executes `node dist/worker.mjs`, which starts five BullMQ workers:
 - **Document ingestion** — processes uploaded PDFs, DOCX files for AI training
 - **Customer import** — imports CSV customer lists
 - **Web crawl** — refreshes crawled web sources for AI knowledge
 - **Follow-up** — re-enqueues missed/delayed follow-up tasks
+- **Receipt batch** — async OCR processing for bulk till-slip imports (Growth/Scale tier)
 
 The worker is compiled during the Docker build via `npm run build:worker`
 (esbuild bundle in `src/workers/index.ts` → `dist/worker.mjs`). It requires both

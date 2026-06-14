@@ -32,9 +32,14 @@ export function startDocumentIngestionWorker() {
   });
 
   worker.on("failed", (job, error) => {
-    logger.error({ err: error, jobId: job?.id }, "ai.document.worker_failed");
+    const attempt = job?.attemptsMade ?? 0;
+    const maxAttempts = job?.opts.attempts ?? 3;
+    logger.error(
+      { err: error, jobId: job?.id, attempt, maxAttempts },
+      "ai.document.worker_failed"
+    );
     incrementQueueJobMetric("document-ingestion", "failed");
-    if (job && job.attemptsMade >= (job.opts.attempts ?? 3)) {
+    if (job && attempt >= maxAttempts) {
       void moveIngestionJobToDlq(job, error).catch((dlqErr) => {
         logger.error({ err: dlqErr, jobId: job.id }, "ingestion.dlq.move_failed");
       });

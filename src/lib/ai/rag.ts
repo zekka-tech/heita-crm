@@ -140,8 +140,14 @@ async function buildSystemPrompt(input: { businessId: string; messages: ChatTurn
     );
   }
 
+  // Cap systemPrompt to prevent unbounded token consumption and prompt injection
+  // via overly large or adversarial workspace configurations (audit finding 2).
+  const MAX_SYSTEM_PROMPT_CHARS = 4_096;
+  const rawPrompt = business.aiWorkspace?.systemPrompt?.trim() ?? "";
   const persona =
-    business.aiWorkspace?.systemPrompt?.trim() || defaultSystemPrompt(business.name);
+    rawPrompt.length > 0
+      ? rawPrompt.slice(0, MAX_SYSTEM_PROMPT_CHARS)
+      : defaultSystemPrompt(business.name);
   const context = buildContext(topChunks);
 
   return {

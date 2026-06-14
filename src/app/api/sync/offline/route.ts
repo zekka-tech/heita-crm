@@ -157,6 +157,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No items to sync." }, { status: 400 });
   }
 
+  // Cap batch size to prevent DoS via sequential DB writes (audit finding 6).
+  const MAX_SYNC_ITEMS = 100;
+  if (body.items.length > MAX_SYNC_ITEMS) {
+    return NextResponse.json(
+      { error: `Cannot sync more than ${MAX_SYNC_ITEMS} items per request.` },
+      { status: 400 }
+    );
+  }
+
   const results: Array<{ id: string; ok: boolean; error?: string }> = [];
 
   for (const item of body.items) {

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import {
   clearTyping,
   setPresence,
@@ -21,6 +22,19 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Rate limit: max 20 presence events per second per user (audit finding 5).
+  const rl = await enforceRateLimit({
+    identifier: `presence:${userId}`,
+    windowSeconds: 1,
+    max: 20
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many presence updates. Slow down." },
+      { status: 429, headers: { "Retry-After": "1" } }
+    );
   }
 
   let body: {

@@ -437,6 +437,7 @@ model AiChatSession {
   tokenUsage  AiTokenUsage[]
 
   @@index([businessId, createdAt])
+  @@index([userId])
 }
 
 model AiChatMessage {
@@ -657,6 +658,8 @@ model ConversationParticipant {
   user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
+  @@index([userId])
+  @@index([conversationId])
 }
 
 model PipelineStage {
@@ -860,6 +863,7 @@ model AiTokenUsage {
   totalTokens         Int?
   cacheReadTokens     Int?
   cacheCreationTokens Int?
+  isOverage           Boolean        @default(false)
   createdAt           DateTime       @default(now())
   business            Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   session             AiChatSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
@@ -867,6 +871,8 @@ model AiTokenUsage {
 
   @@index([businessId, createdAt])
   @@index([sessionId, createdAt])
+  @@index([userId])
+  @@index([isOverage, businessId])
 }
 
 model StaffAuditLog {
