@@ -305,8 +305,23 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
 
+      - name: Malware scan production config gate
+        run: bash scripts/check-malware-scan-config.sh
+
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --progress=false
+
+      - name: Observability runbook coverage
+        run: node scripts/check-observability-runbooks.mjs
+
+      - name: Error-budget release gate
+        run: node scripts/check-error-budget.mjs
+
+      - name: Prometheus rules syntax
+        run: docker run --rm -v "$PWD:/workspace" --entrypoint promtool prom/prometheus:v2.55.1 check rules /workspace/prometheus-rules.yml
+
+      - name: Alertmanager config syntax
+        run: docker run --rm -v "$PWD:/workspace" --entrypoint /bin/sh prom/alertmanager:v0.27.0 -c 'sed -e "s|\${SLACK_WEBHOOK_URL}|https://hooks.slack.com/services/test/test/test|g" -e "s|\${PAGERDUTY_ROUTING_KEY}|test-routing-key|g" /workspace/alertmanager.yml > /tmp/alertmanager.yml && amtool check-config /tmp/alertmanager.yml'
 
       - name: npm audit (production only, moderate — blocking)
         run: npm audit --omit=dev --audit-level=moderate

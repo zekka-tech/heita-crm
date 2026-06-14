@@ -8,11 +8,18 @@ import { generateAnonymisedBasketReport } from "@/server/services/analytics-expo
 const BASKET_REPORT_SECRET = process.env.BASKET_REPORT_SECRET;
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  if (BASKET_REPORT_SECRET) {
-    const header = request.headers.get("authorization");
-    if (!header || !header.startsWith("Bearer ") || header.slice(7) !== BASKET_REPORT_SECRET) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const isAuthenticated = (() => {
+    if (BASKET_REPORT_SECRET) {
+      const header = request.headers.get("authorization");
+      if (header?.startsWith("Bearer ") && header.slice(7) === BASKET_REPORT_SECRET) {
+        return true;
+      }
     }
+    return false;
+  })();
+
+  if (!isAuthenticated) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const rateLimit = await enforceRateLimit({

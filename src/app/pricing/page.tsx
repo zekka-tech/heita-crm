@@ -61,67 +61,72 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section className="mt-10 grid gap-4 xl:grid-cols-3">
-        {businessPlans.map((plan, index) => (
-          <Card
-            key={plan.id}
-            variant={index === 1 ? "hero" : "surface"}
-            className="flex h-full flex-col justify-between gap-6"
-          >
-            <div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-2xl font-semibold">{plan.name}</h2>
-                  <p className={index === 1 ? "text-white/80" : "text-ink-muted"}>
-                    {plan.description}
-                  </p>
+      <section className="mt-10 grid gap-4 xl:grid-cols-4">
+        {businessPlans.map((plan) => {
+          const isPopular = plan.id === "GROWTH";
+          return (
+            <Card
+              key={plan.id}
+              variant={isPopular ? "hero" : "surface"}
+              className="flex h-full flex-col justify-between gap-6"
+            >
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="font-display text-2xl font-semibold">{plan.name}</h2>
+                    <p className={isPopular ? "text-white/80" : "text-ink-muted"}>
+                      {plan.description}
+                    </p>
+                  </div>
+                  {isPopular ? (
+                    <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-white/90">
+                      Popular
+                    </span>
+                  ) : null}
                 </div>
-                {index === 1 ? (
-                  <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-white/90">
-                    Popular
-                  </span>
-                ) : null}
+
+                <div className="mt-6">
+                  <p className="font-display text-4xl font-extrabold">
+                    {formatZar(plan.monthlyPriceZar)}
+                    <span className={isPopular ? "text-white/80 text-base" : "text-ink-muted text-base"}>
+                      /month
+                    </span>
+                  </p>
+                  {plan.annualPriceZar > 0 ? (
+                    <p className={isPopular ? "mt-2 text-sm text-white/80" : "mt-2 text-sm text-ink-muted"}>
+                      Annual option: {formatZar(plan.annualPriceZar)} billed once per year
+                    </p>
+                  ) : null}
+                </div>
+
+                <ul className="mt-6 space-y-3 text-sm">
+                  {plan.highlights.map((highlight) => (
+                    <li key={highlight} className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{highlight}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
 
-              <div className="mt-6">
-                <p className="font-display text-4xl font-extrabold">
-                  {formatZar(plan.monthlyPriceZar)}
-                  <span className={index === 1 ? "text-white/80 text-base" : "text-ink-muted text-base"}>
-                    /month
-                  </span>
-                </p>
-                <p className={index === 1 ? "mt-2 text-sm text-white/80" : "mt-2 text-sm text-ink-muted"}>
-                  Annual option: {formatZar(plan.annualPriceZar)} billed once per year
-                </p>
+              <div className="space-y-4">
+                <div className={isPopular ? "rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-white/85" : "rounded-2xl border border-line bg-surface-elevated p-4 text-sm text-ink-muted"}>
+                  <p>{formatPlanLimit(plan.limits.members, "members")}</p>
+                  <p>{formatPlanLimit(plan.limits.staffSeats, "staff seats")}</p>
+                  <p>{formatPlanLimit(plan.limits.aiMessagesPerMonth, "AI replies / month")}</p>
+                  <p>{formatPlanLimit(plan.limits.documentUploadsPerMonth, "document uploads / month")}</p>
+                </div>
+                <Button asChild variant={isPopular ? "secondary" : "primary"} size="lg">
+                  {plan.id === "FREE" ? (
+                    <Link href="/onboard">{plan.ctaLabel}</Link>
+                  ) : (
+                    <a href="mailto:sales@heita.co.za">{plan.ctaLabel}</a>
+                  )}
+                </Button>
               </div>
-
-              <ul className="mt-6 space-y-3 text-sm">
-                {plan.highlights.map((highlight) => (
-                  <li key={highlight} className="flex items-start gap-2">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>{highlight}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="space-y-4">
-              <div className={index === 1 ? "rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-white/85" : "rounded-2xl border border-line bg-surface-elevated p-4 text-sm text-ink-muted"}>
-                <p>{formatPlanLimit(plan.limits.members, "members")}</p>
-                <p>{formatPlanLimit(plan.limits.staffSeats, "staff seats")}</p>
-                <p>{formatPlanLimit(plan.limits.aiMessagesPerMonth, "AI replies / month")}</p>
-                <p>{formatPlanLimit(plan.limits.documentUploadsPerMonth, "document uploads / month")}</p>
-              </div>
-              <Button asChild variant={index === 1 ? "secondary" : "primary"} size="lg">
-                {plan.id === "FREE" ? (
-                  <Link href="/onboard">{plan.ctaLabel}</Link>
-                ) : (
-                  <a href="mailto:sales@heita.co.za">{plan.ctaLabel}</a>
-                )}
-              </Button>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </section>
 
       <section className="mt-10 grid gap-4 lg:grid-cols-3">

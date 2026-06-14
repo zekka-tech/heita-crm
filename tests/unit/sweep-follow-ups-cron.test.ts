@@ -57,6 +57,6 @@ describe("POST /api/cron/sweep-follow-ups", () => {
     expect(prisma.followUpTask.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ salesThreadId: "thread_1", channel: "SMS" })
     }));
-    expect(enqueueFollowUpJob).toHaveBeenCalledWith({ taskId: "task_1" }, { delay: 0, jobId: "followup:task_1" });
+    expect(enqueueFollowUpJob).toHaveBeenCalledWith({ taskId: "task_1", businessId: "biz_1" }, { delay: 0, jobId: "followup:task_1" });
   });
 });

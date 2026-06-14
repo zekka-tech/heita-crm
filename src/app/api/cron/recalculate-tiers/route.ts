@@ -18,7 +18,10 @@ function isAuthorized(request: Request): boolean {
 
 async function isAlreadyRunning(): Promise<boolean> {
   const redis = getRedis();
-  if (!redis) return false;
+  // Fail-closed: if Redis is unavailable we cannot guarantee idempotency, so
+  // treat as already-running to prevent duplicate concurrent tier recalculations
+  // (audit finding 11). The cron will retry on the next scheduled firing.
+  if (!redis) return true;
   // Hour-scoped key: only one run per hour regardless of concurrent cron firings.
   const key = `cron:recalculate-tiers:${new Date().toISOString().slice(0, 13)}`;
   const set = await redis.set(key, "1", "EX", 7200, "NX");

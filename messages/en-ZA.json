@@ -163,6 +163,7 @@
   "bottomNav": {
     "home": "Home",
     "wallet": "Wallet",
+    "connect": "Connect",
     "alerts": "Alerts",
     "profile": "Profile"
   },
@@ -299,5 +300,10 @@
   "languageSwitcher": {
     "label": "Language",
     "shortcut": "Lang"
+  },
+  "connect": {
+    "title": "Messages",
+    "description": "Chat with businesses you've joined. Messages are delivered in real time.",
+    "noBusiness": "You haven't joined any businesses yet. Browse the home page to find businesses near you."
   }
 }

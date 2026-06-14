@@ -9,11 +9,12 @@ Internet ──▶ Cloudflare (DNS/CDN/WAF) ──▶ caddy :443 ──▶ app :
                                                           │
                           heita_internal (no egress) ◀────┤
                               ├─ postgres :5432
-                              └─ redis :6379
+                              ├─ redis :6379
+                              └─ clamav :3310
 ```
 
-- **`heita_internal`** (internal, no internet): postgres, redis, app, migrate.
-- **`heita_edge`** (normal bridge): app + caddy. Gives the app outbound access
+- **`heita_internal`** (internal, no internet): postgres, redis, app, migrate, clamav, worker.
+- **`heita_edge`** (normal bridge): app + caddy + worker. Gives the app outbound access
   to Anthropic / Meta WhatsApp / Africa's Talking / R2, and carries inbound
   proxied traffic. The app port is bound to `127.0.0.1` only — never public.
 
@@ -38,7 +39,50 @@ $EDITOR .env.production        # fill in every value; see notes below
 - `POSTGRES_PASSWORD` and `REDIS_PASSWORD` are required (compose fails without
   them) and must match the credentials embedded in the URLs above.
 - `DOMAIN` and `ACME_EMAIL` drive the Caddyfile.
+- Production malware scanning is fail-closed: set `MALWARE_SCAN_MODE=clamav`,
+  `MALWARE_SCAN_REQUIRED=1`, `CLAMAV_HOST=clamav`, and `CLAMAV_PORT=3310`.
+  The `clamav` sidecar exposes clamd only on the Compose networks; uploads are
+  rejected if the scanner is unavailable.
 - Copy all remaining application keys from `.env.example` and set real values.
+
+### Two-role PostgreSQL model (RLS enforcement)
+
+The database runs with `FORCE ROW LEVEL SECURITY` on all business-scoped tables
+(migration `0040_enable_business_rls`). FORCE RLS constrains the table owner
+but **not** PostgreSQL superusers. The `POSTGRES_USER` (`heita`) is created as
+a superuser by the official Docker image, so it bypasses RLS. To close this
+gap, the first-boot script (`docker/postgres/init.sql`) creates a second,
+unprivileged role:
+
+| Role | Purpose | Attributes |
+|---|---|---|
+| `heita` | Owner / migrations | SUPERUSER (Docker default) |
+| `heita_app` | App runtime | NOSUPERUSER · NOBYPASSRLS |
+
+**Setup steps:**
+1. Set `POSTGRES_APP_PASSWORD` in `.env.production` (distinct from
+   `POSTGRES_PASSWORD`).
+2. Set `DATABASE_URL` to use `heita_app`:
+   ```
+   DATABASE_URL="postgresql://heita_app:<POSTGRES_APP_PASSWORD>@postgres:5432/heita"
+   ```
+3. Set `MIGRATION_DATABASE_URL` to use the owner role:
+   ```
+   MIGRATION_DATABASE_URL="postgresql://heita:<POSTGRES_PASSWORD>@postgres:5432/heita"
+   ```
+   The `migrate` compose service overrides `DATABASE_URL` with
+   `MIGRATION_DATABASE_URL` at deploy time so DDL runs as the owner.
+4. On first boot, `init.sql` creates `heita_app` with the placeholder password
+   `HEITA_APP_CHANGE_ME_NOW`. Change it immediately:
+   ```bash
+   docker compose -f docker-compose.prod.yml exec postgres \
+     psql -U heita -d heita -c \
+     "ALTER ROLE heita_app PASSWORD '<POSTGRES_APP_PASSWORD>';"
+   ```
+   Then update `DATABASE_URL` in `.env.production` and restart the app.
+
+With this setup the runtime can never bypass RLS regardless of what a
+compromised query attempts.
 
 ## 3. Authenticate to GHCR (if the image is private)
 
@@ -77,6 +121,31 @@ on `heita_internal`. The deploy script invokes it before starting the app. For a
 brand-new database, the pgvector extension is created by
 `docker/postgres/init.sql` at first boot.
 
+### BullMQ worker service
+The `worker` service runs background jobs from the same signed image as the app.
+It executes `node dist/worker.mjs`, which starts five BullMQ workers:
+- **Document ingestion** — processes uploaded PDFs, DOCX files for AI training
+- **Customer import** — imports CSV customer lists
+- **Web crawl** — refreshes crawled web sources for AI knowledge
+- **Follow-up** — re-enqueues missed/delayed follow-up tasks
+- **Receipt batch** — async OCR processing for bulk till-slip imports (Growth/Scale tier)
+
+The worker is compiled during the Docker build via `npm run build:worker`
+(esbuild bundle in `src/workers/index.ts` → `dist/worker.mjs`). It requires both
+`heita_internal` (DB, Redis) and `heita_edge` (outbound internet) network access.
+
+**Logs:**
+```bash
+docker compose -f docker-compose.prod.yml logs -f worker
+```
+
+**Verify worker is running:**
+```bash
+docker compose -f docker-compose.prod.yml ps worker
+# Should show "Up" with no restarts
+docker compose -f docker-compose.prod.yml logs --tail=20 worker | grep "workers.started"
+```
+
 ## 6. Operate
 
 ```bash
@@ -85,7 +154,8 @@ docker compose -f docker-compose.prod.yml logs -f app
 
 # Status / health
 docker compose -f docker-compose.prod.yml ps
-curl -s http://127.0.0.1:3000/api/health?deep=1
+docker compose -f docker-compose.prod.yml exec clamav clamdscan --stream --no-summary /dev/null
+curl -s http://127.0.0.1:3000/api/health/ready
 
 # Rollback to a previous tag (no down-migration — forward-fix the schema)
 ./scripts/deploy.sh v1.4.1
@@ -116,6 +186,7 @@ locked).
 | `/api/cron/hard-delete-users` | Hard-delete users past the soft-delete window | daily |
 | `/api/cron/sweep-follow-ups` | Re-enqueue due sales follow-ups whose delayed jobs were dropped or missed | every 15 min |
 | `/api/cron/refresh-web-sources` | Re-crawl AI web sources whose refresh interval elapsed (unchanged pages skipped via `contentHash`) | daily |
+| `/api/cron/purge-connect-messages` | Hard-delete in-app (Heita Connect) messages past POPIA retention window (default 180 days; override via `CONNECT_MESSAGE_RETENTION_DAYS`) | daily |
 
 Example host `crontab` (replace `$DOMAIN`; keep `CRON_SECRET` out of the crontab
 file itself — source it from a root-only env file):
@@ -133,11 +204,73 @@ CRON_SECRET_FILE=/etc/heita/cron.env
 0    3  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/purge-whatsapp-messages
 30   3  * * *  root  . /etc/heita/cron.env; curl -fsS -m 120 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/hard-delete-users
 0    4  * * *  root  . /etc/heita/cron.env; curl -fsS -m 600 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/refresh-web-sources
+30   4  * * *  root  . /etc/heita/cron.env; curl -fsS -m 300 -X POST -H "Authorization: Bearer $CRON_SECRET" https://$DOMAIN/api/cron/purge-connect-messages
 ```
 
 `refresh-web-sources` only enqueues crawl jobs (the BullMQ `web-crawl` worker does
 the work), so its request returns quickly; give it a longer `-m` only if you run
 crawls inline (`AI_INGEST_INLINE=1`).
+
+### Malware scanning
+
+The `clamav` sidecar runs ClamAV (`clamav/clamav:stable`) as a clamd TCP daemon
+on `heita_internal:3310`. The app connects using `CLAMAV_HOST=clamav` /
+`CLAMAV_PORT=3310` and streams uploaded files via clamd's `INSTREAM` protocol.
+Fail-closed: when `MALWARE_SCAN_REQUIRED=1`, any upload attempt returns HTTP 503
+if the scanner is unreachable or still starting up.
+
+**Sidecar start-up**: ClamAV downloads virus definitions on first boot via
+`freshclam`. This can take 2–5 minutes on a cold start. The container's
+`start_period: 120s` allows for this; the `app` service's `depends_on` waits for
+the healthcheck to pass before the app accepts traffic. Check progress with:
+
+```bash
+docker compose -f docker-compose.prod.yml logs -f clamav
+```
+
+**Verify with an EICAR test file** (safe, industry-standard AV test string):
+
+```bash
+# Create the EICAR test file
+printf 'X5O!P%%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' \
+  > /tmp/eicar.txt
+
+# Copy into the container and scan — expect "Eicar-Signature FOUND"
+docker cp /tmp/eicar.txt heita_clamav:/tmp/eicar.txt
+docker compose -f docker-compose.prod.yml exec clamav \
+  clamdscan --stream /tmp/eicar.txt
+
+# Confirm clean file passes — expect "/dev/null: OK"
+docker compose -f docker-compose.prod.yml exec clamav \
+  clamdscan --stream --no-summary /dev/null
+```
+
+**Keep definitions fresh**: `freshclam` runs automatically inside the container
+on `heita_edge` (outbound internet access). If definitions age more than 7 days,
+ClamAV logs warnings. Monitor for `Database version is X days old` in the
+container logs and verify `heita_edge` network connectivity.
+
+**Resource limits**: The sidecar is capped at 512 MB RAM (deploy resources limit).
+The ClamAV signature database consumes ~400 MB in memory. If the VPS is
+memory-constrained, increase the limit rather than lowering it — an OOM kill of
+clamd blocks all uploads when `MALWARE_SCAN_REQUIRED=1`.
+
+### Staging seed
+
+For a staging environment that mirrors production load, populate realistic
+high-volume data after applying migrations:
+
+```bash
+npm run db:seed:staging
+```
+
+This creates 5 businesses across all plan tiers (FREE / STARTER / STARTER /
+GROWTH / SCALE), with member counts from 1 000 to 50 000 per business, loyalty
+transactions, messages, and webhook events. The seed is **idempotent** — safe
+to re-run; it skips businesses and users that already exist by seeding slug.
+
+Run this seed only on staging or a fresh development database, never against
+production.
 
 ### Backups
 Postgres data lives in the `postgres_data` volume. Schedule

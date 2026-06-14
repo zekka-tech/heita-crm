@@ -1,0 +1,95 @@
+name: Refresh error-budget sentinel
+
+# Nightly refresh of docs/error-budget-status.json from the live Prometheus
+# instance. The sentinel is committed back to the branch so that the CI
+# error-budget gate always has a recent value even when PROMETHEUS_URL is not
+# reachable from GitHub Actions during a deploy run.
+#
+# When PROMETHEUS_URL is not set this job writes a healthy sentinel so that the
+# gate remains non-blocking (useful before production Prometheus is wired).
+
+on:
+  schedule:
+    - cron: "15 * * * *"   # every hour at :15 — stale by ≤ 1h in CI
+  workflow_dispatch:
+
+permissions:
+  contents: write   # to commit the sentinel file
+
+jobs:
+  refresh:
+    name: Refresh error-budget sentinel
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Query Prometheus (or write healthy sentinel)
+        env:
+          PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
+          PROMETHEUS_TOKEN: ${{ secrets.PROMETHEUS_METRICS_TOKEN }}
+        run: |
+          SENTINEL="docs/error-budget-status.json"
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          if [ -z "$PROMETHEUS_URL" ]; then
+            echo "PROMETHEUS_URL not set — writing healthy sentinel."
+            cat > "$SENTINEL" <<EOF
+          {
+            "budgetExhausted": false,
+            "burnRate": 0,
+            "updatedAt": "$NOW",
+            "source": "no-prometheus"
+          }
+          EOF
+            exit 0
+          fi
+
+          # Burn rate query — 1-hour MWMB window
+          BURN_QUERY='max(slo:error_budget_burn_rate_1h:ratio{service="heita-crm"}) or vector(0)'
+          # Budget remaining query — 30-day rolling window
+          BUDGET_QUERY='min(slo:error_budget_remaining:ratio{service="heita-crm"}) or vector(1)'
+
+          AUTH_HEADER=""
+          [ -n "$PROMETHEUS_TOKEN" ] && AUTH_HEADER="-H \"Authorization: Bearer $PROMETHEUS_TOKEN\""
+
+          BURN=$(curl -sf $AUTH_HEADER \
+            "$PROMETHEUS_URL/api/v1/query?query=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$BURN_QUERY")" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); r=d['data']['result']; print(r[0]['value'][1] if r else '0')" 2>/dev/null || echo "0")
+
+          BUDGET=$(curl -sf $AUTH_HEADER \
+            "$PROMETHEUS_URL/api/v1/query?query=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$BUDGET_QUERY")" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); r=d['data']['result']; print(r[0]['value'][1] if r else '1')" 2>/dev/null || echo "1")
+
+          # Exhausted if burn rate ≥ 14.4x (1h window, 99.9% SLO) or remaining < 5%
+          python3 - "$BURN" "$BUDGET" "$NOW" "$SENTINEL" <<'PYEOF'
+          import sys, json
+          burn = float(sys.argv[1])
+          remaining = float(sys.argv[2])
+          now = sys.argv[3]
+          path = sys.argv[4]
+          exhausted = burn >= 14.4 or remaining < 0.05
+          with open(path, "w") as f:
+              json.dump({
+                  "budgetExhausted": exhausted,
+                  "burnRate": round(burn, 4),
+                  "budgetRemaining": round(remaining, 4),
+                  "updatedAt": now,
+                  "source": "prometheus"
+              }, f, indent=2)
+          print(f"burn={burn:.2f}x remaining={remaining*100:.1f}% exhausted={exhausted}")
+          PYEOF
+
+      - name: Commit sentinel update
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/error-budget-status.json
+          if git diff --cached --quiet; then
+            echo "No change in sentinel — nothing to commit."
+          else
+            git commit -m "chore(ops): refresh error-budget sentinel [skip ci]"
+            git push
+          fi

@@ -1,9 +1,11 @@
 import { StaffRole } from "@prisma/client";
 import { MessageCircle, Paperclip, Send } from "lucide-react";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { sendWhatsappReplyAction } from "@/app/dashboard/[businessId]/messages/actions";
 import { CsrfField } from "@/components/security/csrf-field";
+import { Chip } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
@@ -13,8 +15,25 @@ export const dynamic = "force-dynamic";
 
 type MessagesPageProps = {
   params: Promise<{ businessId: string }>;
-  searchParams?: Promise<{ contactPhone?: string; sent?: string }>;
+  searchParams?: Promise<{ contactPhone?: string; sent?: string; channel?: string; conversationId?: string }>;
 };
+
+function channelBadge(channel: string) {
+  const labels: Record<string, string> = {
+    WHATSAPP: "WA",
+    IN_APP: "In-App",
+    SMS: "SMS",
+    EMAIL: "Email",
+    PUSH: "Push"
+  };
+  return labels[channel] ?? channel;
+}
+
+const TABS = [
+  { key: "whatsapp", label: "WhatsApp", icon: null },
+  { key: "in-app", label: "In-App", icon: null },
+  { key: "all", label: "All Channels", icon: null }
+] as const;
 
 export default async function DashboardMessagesPage({
   params,
@@ -29,7 +48,10 @@ export default async function DashboardMessagesPage({
   const [
     { auth },
     { requireRole },
-    { prisma },
+    {
+      prisma,
+      withBusinessScope
+    },
     {
       getBusinessConversationThread,
       getWhatsappCustomerServiceWindowStatus,
@@ -70,21 +92,146 @@ export default async function DashboardMessagesPage({
     notFound();
   }
 
-  const conversations = await listBusinessConversations({ businessId });
+  const activeChannel = resolvedSearchParams.channel ?? "whatsapp";
+
+  const whatsappConversations = await listBusinessConversations({ businessId });
+
+  let inAppConversations: {
+    id: string;
+    customerId: string;
+    subject: string | null;
+    customerName: string | null;
+    customerPhone: string | null;
+    lastMessageAt: Date | null;
+    lastMessageBody: string | null;
+    lastDirection: string | null;
+    status: string;
+    unreadCount: number;
+  }[] = [];
+
+  if (activeChannel === "in-app" || activeChannel === "all") {
+    inAppConversations = await withBusinessScope(businessId, async (tx) => {
+      const convs = await tx.conversation.findMany({
+        where: {
+          businessId,
+          channel: "IN_APP"
+        },
+        include: {
+          customer: {
+            select: { id: true, name: true, phone: true }
+          },
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: {
+              id: true,
+              body: true,
+              direction: true,
+              createdAt: true
+            }
+          }
+        },
+        orderBy: { lastMessageAt: "desc" },
+        take: 50
+      });
+
+      return convs.map((conv) => ({
+        id: conv.id,
+        customerId: conv.customerId,
+        subject: conv.subject,
+        customerName: conv.customer.name,
+        customerPhone: conv.customer.phone,
+        lastMessageAt: conv.lastMessageAt,
+        lastMessageBody: conv.messages[0]?.body ?? null,
+        lastDirection: conv.messages[0]?.direction ?? null,
+        status: conv.status,
+        unreadCount: 0
+      }));
+    });
+  }
+
+  const selectedInAppId =
+    activeChannel === "in-app" && resolvedSearchParams.conversationId
+      ? resolvedSearchParams.conversationId
+      : null;
+
+  let inAppThread: Awaited<ReturnType<typeof withBusinessScope>> | null = null;
+  if (selectedInAppId) {
+    inAppThread = await withBusinessScope(businessId, (tx) =>
+      tx.message.findMany({
+        where: {
+          businessId,
+          conversationId: selectedInAppId
+        },
+        include: {
+          attachments: {
+            orderBy: { createdAt: "asc" }
+          },
+          user: {
+            select: { id: true, name: true }
+          }
+        },
+        orderBy: { createdAt: "asc" },
+        take: 100
+      })
+    );
+  }
+
   const activeContactPhone =
-    resolvedSearchParams.contactPhone ?? conversations[0]?.contactPhone ?? null;
+    activeChannel === "whatsapp"
+      ? (resolvedSearchParams.contactPhone ?? whatsappConversations[0]?.contactPhone ?? null)
+      : null;
+
   const thread = activeContactPhone
     ? await getBusinessConversationThread({
         businessId,
         contactPhone: activeContactPhone
       })
     : [];
+
   const serviceWindow = activeContactPhone
     ? await getWhatsappCustomerServiceWindowStatus({
         businessId,
         contactPhone: activeContactPhone
       })
     : null;
+
+  const allConversations = [
+    ...whatsappConversations.map((c) => ({
+      key: c.contactPhone,
+      channel: "WHATSAPP" as const,
+      displayName: c.name || c.contactPhone,
+      subtext: c.contactPhone,
+      lastMessageBody: c.lastMessageBody,
+      lastDirection: c.lastDirection,
+      unreadCount: c.unreadCount,
+      link: `/dashboard/${businessId}/messages?channel=whatsapp&contactPhone=${encodeURIComponent(c.contactPhone)}`
+    })),
+    ...inAppConversations.map((c) => ({
+      key: c.id,
+      channel: "IN_APP" as const,
+      displayName: c.subject || c.customerName || c.customerPhone || "Customer",
+      subtext: "In-App",
+      lastMessageBody: c.lastMessageBody,
+      lastDirection: c.lastDirection,
+      unreadCount: c.unreadCount,
+      link: `/dashboard/${businessId}/messages?channel=in-app&conversationId=${c.id}`
+    }))
+  ];
+
+  const filteredConversations =
+    activeChannel === "all"
+      ? allConversations
+      : activeChannel === "in-app"
+        ? allConversations.filter((c) => c.channel === "IN_APP")
+        : allConversations.filter((c) => c.channel === "WHATSAPP");
+
+  const activeKey =
+    activeChannel === "whatsapp"
+      ? activeContactPhone
+      : activeChannel === "in-app"
+        ? selectedInAppId
+        : activeContactPhone ?? selectedInAppId;
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
@@ -94,25 +241,45 @@ export default async function DashboardMessagesPage({
             Staff conversations
           </h1>
           <p className="mt-2 max-w-2xl text-white/85">
-            View inbound WhatsApp threads, inspect attachments, and reply with free-form
-            text or a pre-approved template.
+            View inbound threads across channels, inspect attachments, and reply.
           </p>
         </Card>
+
+        <nav className="flex gap-2" aria-label="Channel tabs">
+          {TABS.map((tab) => {
+            const active = activeChannel === tab.key;
+            return (
+              <Link
+                key={tab.key}
+                href={`/dashboard/${businessId}/messages?channel=${tab.key}`}
+                className={[
+                  "rounded-full px-4 py-2 text-sm font-medium transition",
+                  active
+                    ? "bg-primary text-white"
+                    : "bg-surface-elevated text-ink-muted hover:text-ink"
+                ].join(" ")}
+                aria-current={active ? "page" : undefined}
+              >
+                {tab.label}
+              </Link>
+            );
+          })}
+        </nav>
 
         <div className="grid gap-4 lg:grid-cols-[0.36fr_0.64fr]">
           <Card variant="surface" className="space-y-3">
             <header className="flex items-center justify-between">
               <h2 className="section-title">Conversations</h2>
-              <span className="text-xs text-ink-subtle">{conversations.length} threads</span>
+              <span className="text-xs text-ink-subtle">{filteredConversations.length} threads</span>
             </header>
-            {conversations.length ? (
+            {filteredConversations.length ? (
               <div className="grid gap-2">
-                {conversations.map((conversation) => {
-                  const active = conversation.contactPhone === activeContactPhone;
+                {filteredConversations.map((conversation) => {
+                  const active = conversation.key === activeKey;
                   return (
-                    <a
-                      key={conversation.contactPhone}
-                      href={`/dashboard/${businessId}/messages?contactPhone=${encodeURIComponent(conversation.contactPhone)}`}
+                    <Link
+                      key={conversation.key}
+                      href={conversation.link as unknown as import("next").Route<string>}
                       className={[
                         "rounded-xl border px-4 py-3 text-left transition",
                         active
@@ -122,10 +289,15 @@ export default async function DashboardMessagesPage({
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="font-medium text-ink">
-                            {conversation.name || conversation.contactPhone}
-                          </p>
-                          <p className="text-xs text-ink-subtle">{conversation.contactPhone}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-ink">
+                              {conversation.displayName}
+                            </p>
+                            <Chip variant="default" className="text-[0.625rem]">
+                              {channelBadge(conversation.channel)}
+                            </Chip>
+                          </div>
+                          <p className="text-xs text-ink-subtle">{conversation.subtext}</p>
                         </div>
                         {conversation.unreadCount > 0 ? (
                           <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-white">
@@ -133,16 +305,18 @@ export default async function DashboardMessagesPage({
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-2 line-clamp-2 text-sm text-ink-muted">
-                        {conversation.lastDirection === "OUTBOUND" ? "You: " : ""}
-                        {conversation.lastMessageBody}
-                      </p>
-                    </a>
+                      {conversation.lastMessageBody ? (
+                        <p className="mt-2 line-clamp-2 text-sm text-ink-muted">
+                          {conversation.lastDirection === "OUTBOUND" ? "You: " : ""}
+                          {conversation.lastMessageBody}
+                        </p>
+                      ) : null}
+                    </Link>
                   );
                 })}
               </div>
             ) : (
-              <p className="text-sm text-ink-muted">No WhatsApp conversations yet.</p>
+              <p className="text-sm text-ink-muted">No conversations yet.</p>
             )}
           </Card>
 
@@ -150,11 +324,69 @@ export default async function DashboardMessagesPage({
             <header className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5 text-primary-action" />
               <h2 className="section-title">
-                {activeContactPhone ?? "Select a conversation"}
+                {activeKey
+                  ? (activeChannel === "in-app"
+                      ? (inAppConversations.find((c) => c.id === activeKey)?.subject ??
+                         inAppConversations.find((c) => c.id === activeKey)?.customerName ??
+                         "Customer")
+                      : activeContactPhone)
+                  : "Select a conversation"}
               </h2>
             </header>
 
-            {activeContactPhone ? (
+            {activeKey && activeChannel === "in-app" && inAppThread ? (
+              <>
+                <div className="grid max-h-[26rem] gap-3 overflow-y-auto pr-1">
+                  {(inAppThread as {
+                    id: string;
+                    body: string;
+                    direction: string;
+                    status: string | null;
+                    createdAt: Date;
+                    sentAt: Date | null;
+                    attachments: { id: string; fileName: string | null; sourceUrl: string | null; mediaType: string }[];
+                  }[]).map((message) => (
+                    <div key={message.id} className="grid gap-2">
+                      <div
+                        className={[
+                          "max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-6",
+                          message.direction === "OUTBOUND"
+                            ? "ml-auto bg-primary text-white"
+                            : "mr-auto border border-line bg-surface-elevated text-ink"
+                        ].join(" ")}
+                      >
+                        {message.body}
+                        <div
+                          className={[
+                            "mt-2 text-xs",
+                            message.direction === "OUTBOUND"
+                              ? "text-white/75"
+                              : "text-ink-subtle"
+                          ].join(" ")}
+                        >
+                          {(message.sentAt ?? message.createdAt).toLocaleString("en-ZA")}
+                          {message.status ? ` \u00b7 ${message.status}` : ""}
+                        </div>
+                      </div>
+                      {message.attachments.length ? (
+                        <div className="flex flex-wrap gap-2">
+                          {message.attachments.map((attachment) => (
+                            <a
+                              key={attachment.id}
+                              href={attachment.sourceUrl ?? "#"}
+                              className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs text-ink-muted"
+                            >
+                              <Paperclip className="h-3 w-3" />
+                              {attachment.fileName ?? attachment.mediaType}
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : activeContactPhone ? (
               <>
                 <div className="grid max-h-[26rem] gap-3 overflow-y-auto pr-1">
                   {thread.map((message) => (
@@ -177,7 +409,7 @@ export default async function DashboardMessagesPage({
                           ].join(" ")}
                         >
                           {message.createdAt.toLocaleString("en-ZA")}
-                          {message.status ? ` · ${message.status}` : ""}
+                          {message.status ? ` \u00b7 ${message.status}` : ""}
                         </div>
                       </div>
                       {message.attachments.length ? (
@@ -285,7 +517,7 @@ export default async function DashboardMessagesPage({
               </>
             ) : (
               <p className="text-sm text-ink-muted">
-                Select a contact to inspect the thread and send a reply.
+                Select a conversation to inspect the thread and send a reply.
               </p>
             )}
           </Card>

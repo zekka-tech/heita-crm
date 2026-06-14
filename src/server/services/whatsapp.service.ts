@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 import { isUnixTimestampWithinSkew } from "@/lib/security";
 import { putStoredObject, storageConfigured } from "@/lib/storage";
 import {
@@ -202,20 +202,22 @@ async function logOutboundWhatsappMessage(input: {
   status?: MessageStatus | null;
   metadata?: Record<string, unknown>;
 }) {
-  await prisma.message.create({
-    data: {
-      businessId: input.businessId,
-      userId: input.userId ?? null,
-      contactPhone: input.contactPhone,
-      channel: MessageChannel.WHATSAPP,
-      direction: "OUTBOUND",
-      externalId: input.externalId ?? null,
-      status: input.status ?? MessageStatus.QUEUED,
-      body: input.body,
-      metadata: input.metadata as Prisma.InputJsonValue | undefined,
-      sentAt: new Date()
-    }
-  });
+  await withBusinessScope(input.businessId, (tx) =>
+    tx.message.create({
+      data: {
+        businessId: input.businessId,
+        userId: input.userId ?? null,
+        contactPhone: input.contactPhone,
+        channel: MessageChannel.WHATSAPP,
+        direction: "OUTBOUND",
+        externalId: input.externalId ?? null,
+        status: input.status ?? MessageStatus.QUEUED,
+        body: input.body,
+        metadata: input.metadata as Prisma.InputJsonValue | undefined,
+        sentAt: new Date()
+      }
+    })
+  );
 }
 
 /**
@@ -467,19 +469,21 @@ async function routeInboundToBusiness(input: RouteInput): Promise<void> {
     where: { phone: input.fromPhone, deletedAt: null }
   });
 
-  const inboundMessage = await prisma.message.create({
-    data: {
-      businessId: input.businessId,
-      userId: existingUser?.id ?? null,
-      contactPhone: input.fromPhone,
-      channel: MessageChannel.WHATSAPP,
-      direction: "INBOUND",
-      externalId: input.externalId,
-      status: MessageStatus.RECEIVED,
-      body: input.body,
-      metadata: { fromPhone: input.fromPhone }
-    }
-  });
+  const inboundMessage = await withBusinessScope(input.businessId, (tx) =>
+    tx.message.create({
+      data: {
+        businessId: input.businessId,
+        userId: existingUser?.id ?? null,
+        contactPhone: input.fromPhone,
+        channel: MessageChannel.WHATSAPP,
+        direction: "INBOUND",
+        externalId: input.externalId,
+        status: MessageStatus.RECEIVED,
+        body: input.body,
+        metadata: { fromPhone: input.fromPhone }
+      }
+    })
+  );
 
   if (input.mediaMessage && getMediaDescriptor(input.mediaMessage)) {
     await persistInboundMediaAttachment({
@@ -505,14 +509,16 @@ async function routeInboundToBusiness(input: RouteInput): Promise<void> {
   const optedOut = await handleOptOut({ ...input, existingUser });
   if (optedOut) return;
 
-  const membership = await prisma.membership.findUnique({
-    where: {
-      businessId_userId: {
-        businessId: input.businessId,
-        userId: existingUser.id
+  const membership = await withBusinessScope(input.businessId, (tx) =>
+    tx.membership.findUnique({
+      where: {
+        businessId_userId: {
+          businessId: input.businessId,
+          userId: existingUser.id
+        }
       }
-    }
-  });
+    })
+  );
 
   if (!membership) {
     await sendJoinInvite({

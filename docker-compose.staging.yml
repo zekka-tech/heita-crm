@@ -23,10 +23,38 @@ services:
     ports:
       - "3000:3000"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health?deep=1"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health/ready"]
       interval: 30s
       timeout: 5s
       retries: 5
+
+  # BullMQ background job worker. Runs document ingestion, customer imports,
+  # web crawls, and follow-up processing from staging image.
+  worker:
+    image: ${HEITA_IMAGE:-ghcr.io/zekka-tech/heita-crm:latest}
+    container_name: heita_staging_worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env.staging
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-heita}:${POSTGRES_PASSWORD:?required}@postgres:5432/${POSTGRES_DB:-heita}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?required}@redis:6379
+    command: ["node", "dist/worker.mjs"]
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
 
   postgres:
     image: pgvector/pgvector:pg16

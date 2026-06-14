@@ -1,30 +1,30 @@
-import type { Route } from "next";
-import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { serializeJsonLd } from "@/lib/json-ld";
 import {
   Building2,
   Calendar,
   Gift,
   MapPin,
-  MessageSquare,
   Sparkles,
   Tag
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/shared/breadcrumb";
-import { auth } from "@/lib/auth";
 import { withBusinessProfileCache } from "@/lib/data-cache";
 import { describeTierPerks } from "@/lib/loyalty";
 import { prisma } from "@/lib/prisma";
 
-// auth() reads cookies so this page stays dynamic, but the heavy business
-// data query (rewards, promotions, events, tiers) is served from Redis
-// cache (10-min TTL via withBusinessProfileCache) on repeat visits.
-export const dynamic = "force-dynamic";
+import { MembershipCard, MembershipCta } from "./_components/membership-cta";
+
+// Public shell is statically generated and revalidated every 60 seconds (ISR).
+// Auth-dependent islands (join/rewards CTA, membership stats) are wrapped in
+// <Suspense> boundaries so they stream in per-request without blocking the
+// cached shell. See _components/membership-cta.tsx.
+export const revalidate = 60;
 
 type BusinessLandingPageProps = {
   params: Promise<{ slug: string }>;
@@ -100,25 +100,6 @@ export default async function BusinessLandingPage({
     notFound();
   }
 
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
-
-  const [membership, staffMember] = await Promise.all([
-    userId
-      ? prisma.membership.findUnique({
-          where: { businessId_userId: { businessId: business.id, userId } },
-          include: { tier: true }
-        })
-      : null,
-    userId
-      ? prisma.staffMember.findUnique({
-          where: { businessId_userId: { businessId: business.id, userId } },
-          select: { id: true }
-        })
-      : null
-  ]);
-  const isStaff = Boolean(staffMember);
-
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
       <Breadcrumb
@@ -131,7 +112,7 @@ export default async function BusinessLandingPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify([
+          __html: serializeJsonLd([
             {
               "@context": "https://schema.org",
               "@type": "LocalBusiness",
@@ -188,31 +169,16 @@ export default async function BusinessLandingPage({
               {business.description ||
                 `Join the loyalty programme at ${business.name} to earn points, unlock rewards, and stay in touch.`}
             </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Button asChild variant="gradient" size="lg">
-                <Link
-                  href={
-                    membership
-                      ? (`/b/${slug}/rewards` as Route)
-                      : (`/b/${slug}/join` as Route)
-                  }
-                >
-                  {membership
-                    ? t("viewRewards")
-                    : t("joinWithBonus", {
-                        points: business.loyaltySignupBonus
-                      })}
-                </Link>
-              </Button>
-              {isStaff ? (
-                <Button asChild variant="secondary" size="lg">
-                  <Link href={`/b/${slug}/chat` as Route}>
-                    <MessageSquare className="h-4 w-4" />
-                    {t("talkToTeam")}
-                  </Link>
-                </Button>
-              ) : null}
-            </div>
+
+            {/* Auth-dependent CTA buttons stream in after the cached shell */}
+            <Suspense fallback={<div className="mt-6 h-12" />}>
+              <MembershipCta
+                slug={slug}
+                businessId={business.id}
+                loyaltySignupBonus={business.loyaltySignupBonus}
+              />
+            </Suspense>
+
             {business.addressLine1 || business.suburb || business.city ? (
               <p className="mt-4 inline-flex items-center gap-2 text-sm text-white/75">
                 <MapPin className="h-4 w-4" />
@@ -223,33 +189,22 @@ export default async function BusinessLandingPage({
             ) : null}
           </div>
 
+          {/* Auth-dependent membership stats card streams in after the cached shell */}
           <div className="surface-glass rounded-2xl p-6 text-ink shadow-xl">
-            {membership ? (
-              <>
-                <p className="eyebrow text-primary-action">{t("yourMembership")}</p>
-                <p className="metric-value mt-3">
-                  {membership.pointsBalance.toLocaleString()}
-                </p>
-                <p className="metric-label">{t("pointsLabel")}</p>
-                <p className="mt-4 text-sm text-ink-muted">
-                  {t("currentTier")}{" "}
-                  <span className="font-semibold text-ink">
-                    {membership.tier?.name ?? t("unranked")}
-                  </span>
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="eyebrow text-primary-action">{t("freeToJoin")}</p>
-                <p className="metric-value mt-3">
-                  {business.loyaltySignupBonus}
-                </p>
-                <p className="metric-label">{t("welcomePoints")}</p>
-                <p className="mt-4 text-sm text-ink-muted">
-                  {t("joinPrompt")}
-                </p>
-              </>
-            )}
+            <Suspense
+              fallback={
+                <div className="space-y-3">
+                  <div className="h-4 w-24 rounded bg-ink/10" />
+                  <div className="h-10 w-16 rounded bg-ink/10" />
+                  <div className="h-3 w-20 rounded bg-ink/10" />
+                </div>
+              }
+            >
+              <MembershipCard
+                businessId={business.id}
+                loyaltySignupBonus={business.loyaltySignupBonus}
+              />
+            </Suspense>
           </div>
         </div>
       </section>

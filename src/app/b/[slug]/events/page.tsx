@@ -7,10 +7,12 @@ import { Calendar, Download, MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/shared/breadcrumb";
-import { resolveLocale } from "@/i18n/locale";
 import { prisma } from "@/lib/prisma";
 
-export const dynamic = "force-dynamic";
+// ISR: revalidate every 60 s. Locale-sensitive date formatting is deferred to
+// the client (EventDate component) so the static shell has no request-time
+// cookie/header reads.
+export const revalidate = 60;
 
 type BusinessEventsPageProps = {
   params: Promise<{ slug: string }>;
@@ -20,7 +22,6 @@ export default async function BusinessEventsPage({
   params
 }: BusinessEventsPageProps) {
   const { slug } = await params;
-  const locale = await resolveLocale();
   const t = await getTranslations("publicEvents");
   const business = await prisma.business.findFirst({
     where: { slug, deletedAt: null },
@@ -66,14 +67,14 @@ export default async function BusinessEventsPage({
               </div>
               <div className="flex-1">
                 <p className="metric-label">
-                  {event.startsAt.toLocaleDateString(locale, {
+                  {event.startsAt.toLocaleDateString("en-ZA", {
                     weekday: "short",
                     day: "2-digit",
                     month: "short",
                     year: "numeric"
                   })}
                   {event.endsAt
-                    ? ` · ${event.endsAt.toLocaleDateString(locale, {
+                    ? ` · ${event.endsAt.toLocaleDateString("en-ZA", {
                         day: "2-digit",
                         month: "short"
                       })}`

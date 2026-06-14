@@ -6,7 +6,7 @@ import {
 
 import { getBusinessPlan } from "@/lib/billing";
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 import {
   getGateway,
@@ -18,7 +18,8 @@ import type {
 } from "@/server/services/payments/types";
 import { isPaidPlanId } from "@/server/services/payments/types";
 
-export const PAID_BUSINESS_PLAN_IDS: BusinessPlanId[] = ["GROWTH", "SCALE"];
+export const PAID_BUSINESS_PLAN_IDS: BusinessPlanId[] = ["STARTER", "GROWTH", "SCALE"];
+
 export const PAST_DUE_GRACE_DAYS = 3;
 
 function addDays(date: Date, days: number) {
@@ -38,7 +39,7 @@ function isPastDueGraceActive(
 export function isPaidBusinessPlan(
   planId: BusinessPlanId | string | null | undefined,
 ): planId is BusinessPlanId {
-  return planId === "GROWTH" || planId === "SCALE";
+  return planId === "STARTER" || planId === "GROWTH" || planId === "SCALE";
 }
 
 export async function requirePaidBusinessPlan(
@@ -49,7 +50,7 @@ export async function requirePaidBusinessPlan(
   if (!isPaidBusinessPlan(planId)) {
     throw new Error(
       featureName +
-        " is available on paid plans only. Upgrade to Growth or Scale to use it.",
+        " is available on paid plans only. Upgrade to Starter, Growth, or Scale to use it.",
     );
   }
   return planId;
@@ -62,19 +63,23 @@ export type PlanLimitKey =
   | "documentUploadsPerMonth";
 
 export async function getActiveSubscription(businessId: string) {
-  return prisma.businessSubscription.findFirst({
-    where: {
-      businessId,
-      status: { in: ["ACTIVE", "TRIALING"] },
-    },
-    orderBy: { createdAt: "desc" },
+  return withBusinessScope(businessId, (tx) => {
+    return tx.businessSubscription.findFirst({
+      where: {
+        businessId,
+        status: { in: ["ACTIVE", "TRIALING"] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
   });
 }
 
 export async function getEffectivePlan(businessId: string) {
-  const business = await prisma.business.findUnique({
-    where: { id: businessId },
-    select: { planId: true },
+  const business = await withBusinessScope(businessId, (tx) => {
+    return tx.business.findUnique({
+      where: { id: businessId },
+      select: { planId: true },
+    });
   });
   const planId = business?.planId ?? "FREE";
   // Non-paid plans are unaffected by subscription state.
@@ -85,10 +90,12 @@ export async function getEffectivePlan(businessId: string) {
   // subscriptions fail closed to FREE without waiting for a planId downgrade.
   // A paid planId with no subscription row at all (e.g. an admin/seed grant) is
   // trusted as-is.
-  const latestSub = await prisma.businessSubscription.findFirst({
-    where: { businessId },
-    orderBy: { createdAt: "desc" },
-    select: { status: true, updatedAt: true },
+  const latestSub = await withBusinessScope(businessId, (tx) => {
+    return tx.businessSubscription.findFirst({
+      where: { businessId },
+      orderBy: { createdAt: "desc" },
+      select: { status: true, updatedAt: true },
+    });
   });
   if (latestSub?.status === "CANCELLED") {
     return "FREE";
@@ -113,18 +120,26 @@ export async function checkPlanLimit(
 
   let current = 0;
   if (key === "members") {
-    current = await prisma.membership.count({ where: { businessId } });
+    current = await withBusinessScope(businessId, (tx) => {
+      return tx.membership.count({ where: { businessId } });
+    });
   } else if (key === "staffSeats") {
-    current = await prisma.staffMember.count({ where: { businessId } });
+    current = await withBusinessScope(businessId, (tx) => {
+      return tx.staffMember.count({ where: { businessId } });
+    });
   } else if (key === "aiMessagesPerMonth") {
     const start = startOfMonth();
-    current = await prisma.aiTokenUsage.count({
-      where: { businessId, createdAt: { gte: start } },
+    current = await withBusinessScope(businessId, (tx) => {
+      return tx.aiTokenUsage.count({
+        where: { businessId, createdAt: { gte: start } },
+      });
     });
   } else if (key === "documentUploadsPerMonth") {
     const start = startOfMonth();
-    current = await prisma.businessDocument.count({
-      where: { businessId, createdAt: { gte: start } },
+    current = await withBusinessScope(businessId, (tx) => {
+      return tx.businessDocument.count({
+        where: { businessId, createdAt: { gte: start } },
+      });
     });
   }
 
@@ -270,8 +285,7 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
     periodEnd.setMonth(periodEnd.getMonth() + 1);
 
     try {
-      await prisma.$transaction(
-        async (tx) => {
+      await withBusinessScope(event.businessId, async (tx) => {
           const existingInvoice = await tx.businessInvoice.findFirst({
             where: {
               provider: event.provider,
@@ -353,9 +367,7 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
             },
             tx,
           );
-        },
-        { maxWait: 5_000, timeout: 10_000 },
-      );
+      });
     } catch (err) {
       if (isUniqueConstraintError(err)) {
         logger.info(
@@ -383,8 +395,7 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
   }
 
   if (event.type === "payment_failed") {
-    await prisma.$transaction(
-      async (tx) => {
+    await withBusinessScope(event.businessId, async (tx) => {
         await tx.businessSubscription.updateMany({
           where: {
             businessId: event.businessId,
@@ -411,9 +422,7 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
           },
           tx,
         );
-      },
-      { maxWait: 5_000, timeout: 10_000 },
-    );
+    });
     logger.warn(
       {
         businessId: event.businessId,
@@ -434,8 +443,7 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
       return;
     }
 
-    await prisma.$transaction(
-      async (tx) => {
+    await withBusinessScope(event.businessId, async (tx) => {
         const cancelled = await tx.businessSubscription.updateMany({
           where: {
             businessId: event.businessId,
@@ -475,9 +483,7 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
           },
           tx,
         );
-      },
-      { maxWait: 5_000, timeout: 10_000 },
-    );
+    });
     logger.info(
       {
         businessId: event.businessId,
@@ -502,9 +508,11 @@ export async function handleYocoWebhook(payload: {
 }
 
 export async function listInvoices(businessId: string) {
-  return prisma.businessInvoice.findMany({
-    where: { businessId },
-    orderBy: { issuedAt: "desc" },
-    take: 24,
+  return withBusinessScope(businessId, (tx) => {
+    return tx.businessInvoice.findMany({
+      where: { businessId },
+      orderBy: { issuedAt: "desc" },
+      take: 24,
+    });
   });
 }

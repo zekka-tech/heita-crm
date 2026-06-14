@@ -15,7 +15,8 @@ const TABS = [
   { href: "integrations", label: "Integrations" },
   { href: "ai-models", label: "AI model" },
   { href: "templates", label: "Templates" },
-  { href: "billing", label: "Billing" }
+  { href: "billing", label: "Billing" },
+  { href: "audit", label: "Audit Log" }
 ] as const;
 
 export default async function DashboardSettingsLayout({

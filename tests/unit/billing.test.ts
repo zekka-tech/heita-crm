@@ -5,7 +5,7 @@ import { businessPlans, formatPlanLimit, formatZar, getBusinessPlan } from "@/li
 describe("billing helpers", () => {
   it("returns the expected default plan details", () => {
     expect(getBusinessPlan("FREE").name).toBe("Free");
-    expect(businessPlans).toHaveLength(3);
+    expect(businessPlans).toHaveLength(4);
   });
 
   it("formats rand values and unlimited plan limits safely", () => {

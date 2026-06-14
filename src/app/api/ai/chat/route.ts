@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { captureEvent } from "@/lib/telemetry";
 import {
   AiUsageQuotaExceededError,
-  buildAiQuotaExceededResponse,
+  checkAiMessageAllowance,
   reserveAiMessageQuota,
   finalizeAiTokenUsage,
   releaseAiTokenUsage
@@ -70,6 +70,15 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   if (!message?.trim()) {
     return NextResponse.json({ error: "message is required." }, { status: 400 });
+  }
+
+  // Cap input to prevent unbounded token spend (CRITICAL — §6.3 audit finding 3).
+  const MAX_MESSAGE_CHARS = 8_000;
+  if (message.trim().length > MAX_MESSAGE_CHARS) {
+    return NextResponse.json(
+      { error: `Message is too long. Please keep your message under ${MAX_MESSAGE_CHARS} characters.` },
+      { status: 400 }
+    );
   }
 
   if (!businessSlug && !bodyBusinessId) {
@@ -208,8 +217,46 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: "Internal server error." }, { status: 500 });
   }
 
-  // Enforce plan quota before touching the model — this also reserves a usage
-  // slot atomically so concurrent requests can't exceed the limit.
+  // Check plan quota before touching the model. When the plan limit is reached,
+  // stream a graceful SSE error frame so the client can render a friendly message
+  // rather than receiving a hard HTTP error code mid-stream. This satisfies §1.3/§5
+  // of the CTO advisory memo: "AI provider cost is not enforced (token budget is a
+  // metric, not a hard cap)."
+  const allowance = await checkAiMessageAllowance(businessId).catch((err: unknown) => {
+    logger.error({ err }, "ai.chat.allowance_check_error");
+    return null;
+  });
+
+  if (allowance && !allowance.allowed) {
+    const encoder = new TextEncoder();
+    const limitExceededStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            `event: limit_exceeded\ndata: ${JSON.stringify({
+              type: "limit_exceeded",
+              tier: "STARTER",
+              limit: allowance.limit,
+              used: allowance.used,
+              overagePrice: 0.20
+            })}\n\n`
+          )
+        );
+        controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"));
+        controller.close();
+      }
+    });
+    return new Response(limitExceededStream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no"
+      }
+    });
+  }
+
+  // Reserve a usage slot atomically so concurrent requests can't exceed the limit.
   let usageId: string;
   try {
     const reserved = await reserveAiMessageQuota({
@@ -220,13 +267,34 @@ export async function POST(request: NextRequest): Promise<Response> {
     usageId = reserved.usageId;
   } catch (err) {
     if (err instanceof AiUsageQuotaExceededError) {
-      return new Response(
-        JSON.stringify(buildAiQuotaExceededResponse(err)),
-        {
-          status: 429,
-          headers: { "Content-Type": "application/json" }
+      // Race condition: quota was used up between our allowance check and the
+      // atomic reserve. Stream a graceful SSE limit_exceeded frame.
+      const encoder = new TextEncoder();
+      const raceStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              `event: limit_exceeded\ndata: ${JSON.stringify({
+                type: "limit_exceeded",
+                tier: "STARTER",
+                limit: err.limit,
+                used: err.used,
+                overagePrice: 0.20
+              })}\n\n`
+            )
+          );
+          controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"));
+          controller.close();
         }
-      );
+      });
+      return new Response(raceStream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no"
+        }
+      });
     }
     logger.error({ err }, "ai.chat.quota_reserve_error");
     return NextResponse.json({ error: "Internal server error." }, { status: 500 });
@@ -260,8 +328,19 @@ export async function POST(request: NextRequest): Promise<Response> {
           );
         }
 
-        // Stream tokens
+        // If retrieval confidence is below the floor, prepend a soft-fail prefix
+        // to the response so customers aren't misled by low-quality RAG answers.
+        // This addresses §7.7.5: "AI hallucination on stock/pricing can create a
+        // customer-trust incident."
         let assistantContent = "";
+        if (ragAnswer.lowConfidencePrefix) {
+          assistantContent = ragAnswer.lowConfidencePrefix;
+          controller.enqueue(
+            encoder.encode(sseFrame("message", { chunk: ragAnswer.lowConfidencePrefix }))
+          );
+        }
+
+        // Stream tokens
         for await (const chunk of ragAnswer.stream) {
           assistantContent += chunk;
           controller.enqueue(

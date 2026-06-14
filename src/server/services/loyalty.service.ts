@@ -9,23 +9,13 @@ import {
 } from "@/lib/loyalty";
 import { runIdempotentOperation } from "@/lib/idempotency";
 import { logger } from "@/lib/logger";
-import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
+import { prisma, withBusinessScope, type PrismaTransactionClient } from "@/lib/prisma";
 import { withSpan } from "@/lib/tracing";
 import { sendNotification } from "@/server/services/notification.service";
 import { applyReferralRewardIfEligible } from "@/server/services/referral.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 type LoyaltyTx = PrismaTransactionClient;
-
-const LOYALTY_TRANSACTION_OPTIONS = {
-  maxWait: 5_000,
-  timeout: 20_000
-};
-
-const REDEEM_TRANSACTION_OPTIONS = {
-  ...LOYALTY_TRANSACTION_OPTIONS,
-  isolationLevel: Prisma.TransactionIsolationLevel.Serializable
-};
 
 const REFUNDABLE_TYPES = new Set<TransactionType>([
   TransactionType.EARN,
@@ -233,7 +223,8 @@ async function _earnPoints(input: EarnPointsInput) {
     scope: `loyalty:earn:${input.businessId}:${input.membershipId}`,
     key: input.idempotencyKey,
     execute: async () =>
-      prisma.$transaction(
+      withBusinessScope(
+        input.businessId,
         async (tx) => {
           const membership = await getMembershipForLoyalty(tx, input.membershipId);
           ensureBusinessOwnership(membership, input.businessId);
@@ -307,8 +298,7 @@ async function _earnPoints(input: EarnPointsInput) {
           });
 
           return updatedMembership;
-        },
-        LOYALTY_TRANSACTION_OPTIONS
+        }
       ),
     replay: async () =>
       prisma.membership.findUniqueOrThrow({
@@ -340,7 +330,8 @@ async function _redeemPoints(input: RedeemPointsInput) {
     scope: `loyalty:redeem:${input.businessId}:${input.membershipId}`,
     key: input.idempotencyKey,
     execute: async () =>
-      prisma.$transaction(
+      withBusinessScope(
+        input.businessId,
         async (tx) => {
           const membership = await getMembershipForLoyalty(tx, input.membershipId);
           ensureBusinessOwnership(membership, input.businessId);
@@ -447,8 +438,7 @@ async function _redeemPoints(input: RedeemPointsInput) {
           });
 
           return updatedMembership;
-        },
-        REDEEM_TRANSACTION_OPTIONS
+        }
       ),
     replay: async () =>
       prisma.membership.findUniqueOrThrow({
@@ -472,7 +462,8 @@ async function _refundTransaction(input: RefundTransactionInput) {
     scope: `loyalty:refund:${input.businessId}:${input.transactionId}`,
     key: input.idempotencyKey,
     execute: async () =>
-      prisma.$transaction(
+      withBusinessScope(
+        input.businessId,
         async (tx) => {
           const sourceTransaction = await tx.loyaltyTransaction.findUniqueOrThrow({
             where: {
@@ -606,8 +597,7 @@ async function _refundTransaction(input: RefundTransactionInput) {
           });
 
           return refund;
-        },
-        LOYALTY_TRANSACTION_OPTIONS
+        }
       ),
     replay: async () =>
       prisma.loyaltyTransaction.findFirstOrThrow({
@@ -869,14 +859,14 @@ export async function expireEligiblePoints(now = new Date()): Promise<ExpirePoin
     cursor = lastMembership?.id;
 
     for (const membership of memberships) {
-      const result = await prisma.$transaction(
+      const result = await withBusinessScope(
+        membership.businessId,
         (tx) =>
           expireMembershipPoints(tx, {
             membershipId: membership.id,
             businessId: membership.businessId,
             now
-          }),
-        LOYALTY_TRANSACTION_OPTIONS
+          })
       );
 
       if (result.transactionsCreated > 0) {
@@ -943,10 +933,12 @@ export async function recalculateMembershipTiers(): Promise<RecalcTiersResult> {
         const correctTierId = correctTier?.id ?? null;
 
         if (membership.tierId !== correctTierId) {
-          await prisma.membership.update({
-            where: { id: membership.id },
-            data: { tierId: correctTierId }
-          });
+          await withBusinessScope(membership.businessId, (tx) =>
+            tx.membership.update({
+              where: { id: membership.id },
+              data: { tierId: correctTierId }
+            })
+          );
           fixed += 1;
         }
       } catch (err) {

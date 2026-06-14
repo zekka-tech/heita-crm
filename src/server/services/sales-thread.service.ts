@@ -1,13 +1,12 @@
 import { MessageChannel, Prisma, SalesThreadStatus, StaffRole } from "@prisma/client";
 
 import { isE164, normalizeZaPhone } from "@/lib/phone";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { isPaidBusinessPlan, getEffectivePlan, requirePaidBusinessPlan } from "@/server/services/billing.service";
 import { requireRole } from "@/lib/staff";
 import { ACTIVE_FOLLOW_UP_STATUSES, cancelActiveFollowUps, scheduleFollowUp } from "@/server/services/follow-up.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
-const TX_OPTIONS = { maxWait: 5_000, timeout: 15_000 };
 const DEFAULT_STAGE_KEY = "ENQUIRY";
 
 function normalizeContactPhone(phone: string) {
@@ -24,20 +23,24 @@ function followUpDueAt(hours: number | null | undefined, now = new Date()) {
 }
 
 async function getStageByKey(businessId: string, key: string) {
-  return prisma.pipelineStage.findUniqueOrThrow({
-    where: { businessId_key: { businessId, key } }
-  });
+  return withBusinessScope(businessId, (tx) =>
+    tx.pipelineStage.findUniqueOrThrow({
+      where: { businessId_key: { businessId, key } }
+    })
+  );
 }
 
 async function nextNonTerminalStage(input: { businessId: string; order: number }) {
-  return prisma.pipelineStage.findFirst({
-    where: {
-      businessId: input.businessId,
-      order: { gt: input.order },
-      isTerminal: false
-    },
-    orderBy: { order: "asc" }
-  });
+  return withBusinessScope(input.businessId, (tx) =>
+    tx.pipelineStage.findFirst({
+      where: {
+        businessId: input.businessId,
+        order: { gt: input.order },
+        isTerminal: false
+      },
+      orderBy: { order: "asc" }
+    })
+  );
 }
 
 export async function createSalesThread(input: {
@@ -56,11 +59,14 @@ export async function createSalesThread(input: {
   const title = input.title.trim();
   if (!title) throw new Error("Sales thread title is required.");
 
-  const membership = input.membershipId
-    ? await prisma.membership.findFirst({
-        where: { id: input.membershipId, businessId: input.businessId, isActive: true },
-        include: { user: { select: { id: true, phone: true } } }
-      })
+  const membershipId = input.membershipId ?? null;
+  const membership = membershipId
+    ? await withBusinessScope(input.businessId, (tx) =>
+        tx.membership.findFirst({
+          where: { id: membershipId, businessId: input.businessId, isActive: true },
+          include: { user: { select: { id: true, phone: true } } }
+        })
+      )
     : null;
 
   const contactPhone = membership?.user.phone ?? (input.contactPhone ? normalizeContactPhone(input.contactPhone) : null);
@@ -71,7 +77,7 @@ export async function createSalesThread(input: {
   const stage = await getStageByKey(input.businessId, input.stageKey || DEFAULT_STAGE_KEY);
   const dueAt = followUpDueAt(stage.defaultFollowUpHours);
 
-  return prisma.$transaction(async (tx) => {
+  return withBusinessScope(input.businessId, async (tx) => {
     const thread = await tx.salesThread.create({
       data: {
         businessId: input.businessId,
@@ -98,7 +104,7 @@ export async function createSalesThread(input: {
     }, tx);
 
     return thread;
-  }, TX_OPTIONS);
+  });
 }
 
 export async function advanceStage(input: {
@@ -112,7 +118,7 @@ export async function advanceStage(input: {
   const stage = await getStageByKey(input.businessId, input.toStageKey);
   const dueAt = followUpDueAt(stage.defaultFollowUpHours);
 
-  const thread = await prisma.$transaction(async (tx) => {
+  const thread = await withBusinessScope(input.businessId, async (tx) => {
     const updated = await tx.salesThread.update({
       where: { id: input.threadId, businessId: input.businessId },
       data: {
@@ -134,7 +140,7 @@ export async function advanceStage(input: {
     }, tx);
 
     return updated;
-  }, TX_OPTIONS);
+  });
 
   await cancelActiveFollowUps({ businessId: input.businessId, threadId: input.threadId, reason: "stage_advanced" });
   if (dueAt && thread.status === SalesThreadStatus.OPEN) {
@@ -160,7 +166,7 @@ export async function setThreadStatus(input: {
   await requireRole({ businessId: input.businessId, userId: input.actorUserId, allowedRoles: [StaffRole.STAFF] });
   await requirePaidBusinessPlan(input.businessId, "Sales pipeline");
   const closed = input.status === SalesThreadStatus.WON || input.status === SalesThreadStatus.LOST || input.status === SalesThreadStatus.ARCHIVED;
-  const thread = await prisma.$transaction(async (tx) => {
+  const thread = await withBusinessScope(input.businessId, async (tx) => {
     const updated = await tx.salesThread.update({
       where: { id: input.threadId, businessId: input.businessId },
       data: { status: input.status, closedAt: closed ? new Date() : null, nextFollowUpAt: closed ? null : undefined }
@@ -174,7 +180,7 @@ export async function setThreadStatus(input: {
       metadata: { status: input.status }
     }, tx);
     return updated;
-  }, TX_OPTIONS);
+  });
   if (closed) {
     await cancelActiveFollowUps({ businessId: input.businessId, threadId: input.threadId, reason: "thread_closed" });
   }
@@ -189,15 +195,17 @@ export async function markCustomerResponded(input: {
   at?: Date;
 }) {
   const at = input.at ?? new Date();
-  const thread = await prisma.salesThread.findFirst({
-    where: {
-      businessId: input.businessId,
-      status: SalesThreadStatus.OPEN,
-      ...(input.threadId ? { id: input.threadId } : { contactPhone: input.contactPhone ?? undefined })
-    },
-    include: { stage: true },
-    orderBy: { updatedAt: "desc" }
-  });
+  const thread = await withBusinessScope(input.businessId, (tx) =>
+    tx.salesThread.findFirst({
+      where: {
+        businessId: input.businessId,
+        status: SalesThreadStatus.OPEN,
+        ...(input.threadId ? { id: input.threadId } : { contactPhone: input.contactPhone ?? undefined })
+      },
+      include: { stage: true },
+      orderBy: { updatedAt: "desc" }
+    })
+  );
 
   if (!thread) return null;
 
@@ -211,62 +219,72 @@ export async function markCustomerResponded(input: {
     ? await nextNonTerminalStage({ businessId: input.businessId, order: thread.stage.order })
     : null;
 
-  const updated = await prisma.salesThread.update({
-    where: { id: thread.id },
-    data: {
-      lastCustomerReplyAt: at,
-      nextFollowUpAt: null,
-      ...(nextStage ? { stageId: nextStage.id } : {})
-    },
-    include: { stage: true }
-  });
-
-  if (input.messageId) {
-    await prisma.message.updateMany({
-      where: { id: input.messageId, businessId: input.businessId, salesThreadId: null },
-      data: { salesThreadId: thread.id }
+  const updated = await withBusinessScope(input.businessId, async (tx) => {
+    const result = await tx.salesThread.update({
+      where: { id: thread.id },
+      data: {
+        lastCustomerReplyAt: at,
+        nextFollowUpAt: null,
+        ...(nextStage ? { stageId: nextStage.id } : {})
+      },
+      include: { stage: true }
     });
-  }
+
+    if (input.messageId) {
+      await tx.message.updateMany({
+        where: { id: input.messageId, businessId: input.businessId, salesThreadId: null },
+        data: { salesThreadId: thread.id }
+      });
+    }
+
+    return result;
+  });
 
   return updated;
 }
 
 export async function listThreads(input: { businessId: string; stageId?: string | null; status?: SalesThreadStatus | null }) {
   await requirePaidBusinessPlan(input.businessId, "Sales pipeline");
-  return prisma.salesThread.findMany({
-    where: {
-      businessId: input.businessId,
-      stageId: input.stageId ?? undefined,
-      status: input.status ?? undefined
-    },
-    include: {
-      stage: true,
-      membership: { include: { user: { select: { id: true, name: true, phone: true, email: true } } } },
-      followUpTasks: {
-        where: { status: { in: ACTIVE_FOLLOW_UP_STATUSES } },
-        orderBy: { dueAt: "asc" },
-        take: 1
-      }
-    },
-    orderBy: { updatedAt: "desc" }
-  });
+  return withBusinessScope(input.businessId, (tx) =>
+    tx.salesThread.findMany({
+      where: {
+        businessId: input.businessId,
+        stageId: input.stageId ?? undefined,
+        status: input.status ?? undefined
+      },
+      include: {
+        stage: true,
+        membership: { include: { user: { select: { id: true, name: true, phone: true, email: true } } } },
+        followUpTasks: {
+          where: { status: { in: ACTIVE_FOLLOW_UP_STATUSES } },
+          orderBy: { dueAt: "asc" },
+          take: 1
+        }
+      },
+      orderBy: { updatedAt: "desc" }
+    })
+  );
 }
 
 export async function getThreadDetail(input: { businessId: string; threadId: string }) {
   await requirePaidBusinessPlan(input.businessId, "Sales pipeline");
-  return prisma.salesThread.findFirstOrThrow({
-    where: { id: input.threadId, businessId: input.businessId },
-    include: {
-      stage: true,
-      documents: { orderBy: { createdAt: "desc" } },
-      membership: { include: { user: { select: { id: true, name: true, phone: true, email: true } }, tier: true } },
-      messages: { include: { attachments: true }, orderBy: { createdAt: "asc" }, take: 200 },
-      followUpTasks: { orderBy: { createdAt: "desc" }, take: 10 }
-    }
-  });
+  return withBusinessScope(input.businessId, (tx) =>
+    tx.salesThread.findFirstOrThrow({
+      where: { id: input.threadId, businessId: input.businessId },
+      include: {
+        stage: true,
+        documents: { orderBy: { createdAt: "desc" } },
+        membership: { include: { user: { select: { id: true, name: true, phone: true, email: true } }, tier: true } },
+        messages: { include: { attachments: true }, orderBy: { createdAt: "asc" }, take: 200 },
+        followUpTasks: { orderBy: { createdAt: "desc" }, take: 10 }
+      }
+    })
+  );
 }
 
 export async function listPipelineStages(businessId: string) {
   await requirePaidBusinessPlan(businessId, "Sales pipeline");
-  return prisma.pipelineStage.findMany({ where: { businessId }, orderBy: { order: "asc" } });
+  return withBusinessScope(businessId, (tx) =>
+    tx.pipelineStage.findMany({ where: { businessId }, orderBy: { order: "asc" } })
+  );
 }

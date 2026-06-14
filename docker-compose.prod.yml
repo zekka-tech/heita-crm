@@ -18,6 +18,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      clamav:
+        condition: service_healthy
     env_file:
       - .env.production
     # Bound to loopback only — never expose the app directly. Public traffic
@@ -51,6 +53,45 @@ services:
         max-size: "100m"
         max-file: "5"
 
+  # BullMQ background job worker. Runs from the same signed image as the app,
+  # processing document ingestion, customer imports, web crawls, and follow-ups.
+  # Requires both heita_internal (DB, Redis) and heita_edge (outbound calls).
+  worker:
+    image: ghcr.io/zekka-tech/heita-crm:${HEITA_IMAGE_TAG:-latest}
+    container_name: heita_worker
+    restart: unless-stopped
+    networks:
+      - heita_internal
+      - heita_edge
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env.production
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    command: ["node", "dist/worker.mjs"]
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
   # One-shot migration runner. The app's standalone runtime image has `prisma`
   # pruned (it is a devDependency), so migrations run from a clean Node image
   # with the prisma/ folder mounted. Not started by `up` — it lives behind the
@@ -72,8 +113,18 @@ services:
       - .env.production
     volumes:
       - ./prisma:/app/prisma:ro
-    # DATABASE_URL must resolve to the `postgres` service over heita_internal,
-    # e.g. postgresql://heita:...@postgres:5432/heita
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    # The migrate service connects as the owner role so it can run DDL (CREATE
+    # TABLE, ALTER, etc.). MIGRATION_DATABASE_URL overrides DATABASE_URL here so
+    # that the app runtime (heita_app / NOBYPASSRLS) is never used for migrations.
+    environment:
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:-${DATABASE_URL}}
     command: ["npx", "--yes", "prisma@7", "migrate", "deploy", "--schema=prisma/schema.prisma"]
 
   # TLS-terminating reverse proxy. Sits on heita_edge and forwards to app:3000.
@@ -96,6 +147,18 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:exec
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -125,6 +188,13 @@ services:
       - ./docker/vector/vector.yaml:/etc/vector/vector.yaml:ro
     env_file:
       - .env.production
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
     deploy:
       resources:
         limits:
@@ -134,6 +204,44 @@ services:
       driver: "json-file"
       options:
         max-size: "10m"
+        max-file: "3"
+
+  # Malware scanner for uploaded documents/logos. The app connects over
+  # heita_internal; heita_edge gives FreshClam outbound access for signatures.
+  clamav:
+    image: clamav/clamav:stable
+    container_name: heita_clamav
+    restart: unless-stopped
+    networks:
+      - heita_internal
+      - heita_edge
+    volumes:
+      - clamav_data:/var/lib/clamav
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan --ping 1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512m
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
         max-file: "3"
 
   postgres:
@@ -208,12 +316,13 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  clamav_data:
   caddy_data:
   caddy_config:
 
 networks:
-  # Isolated data plane — postgres, redis, app, migrate. No route to the
-  # internet, so the database and cache are unreachable from outside the host.
+  # Isolated data plane — postgres, redis, app, migrate, clamav. No route to
+  # the internet, so the database and cache are unreachable from outside the host.
   heita_internal:
     driver: bridge
     internal: true

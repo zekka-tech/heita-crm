@@ -8,6 +8,7 @@ import { Input, Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Breadcrumb } from "@/components/shared/breadcrumb";
 import { formatEnumLabel, provinces } from "@/lib/business";
+import { serializeJsonLd } from "@/lib/json-ld";
 import { discoverBusinesses } from "@/server/services/discovery.service";
 
 type CategoryPageProps = {
@@ -101,7 +102,7 @@ export default async function CategoryPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: serializeJsonLd({
             "@context": "https://schema.org",
             "@type": "ItemList",
             name: `${label} businesses on Heita`,

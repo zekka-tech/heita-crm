@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import posthog from "posthog-js";
 
+import { TELEMETRY_EVENTS } from "@/lib/telemetry-events";
+
 /**
  * Client-side onboarding telemetry via posthog-js.
  *
@@ -19,7 +21,7 @@ export function OnboardTracker() {
   useEffect(() => {
     if (tracked.current || !posthog.__loaded) return;
     tracked.current = true;
-    posthog.capture("onboarding_page_viewed");
+    posthog.capture(TELEMETRY_EVENTS.onboardingPageViewed);
   }, []);
 
   return null;
@@ -28,17 +30,17 @@ export function OnboardTracker() {
 /** Call from form step transitions to track multi-step onboarding progress. */
 export function trackOnboardStep(step: string, properties?: Record<string, unknown>) {
   if (!posthog.__loaded) return;
-  posthog.capture("onboarding_step", { step, ...properties });
+  posthog.capture(TELEMETRY_EVENTS.onboardingStep, { step, ...properties });
 }
 
 /** Called from the client when the form submission is initiated. */
 export function trackOnboardComplete(businessName: string) {
   if (!posthog.__loaded) return;
-  posthog.capture("onboarding_completed", { businessName });
+  posthog.capture(TELEMETRY_EVENTS.onboardingCompleted, { businessName });
 }
 
 /** Called from the client when a form error is surfaced. */
 export function trackOnboardError(error: string, step: string) {
   if (!posthog.__loaded) return;
-  posthog.capture("onboarding_error", { error, step });
+  posthog.capture(TELEMETRY_EVENTS.onboardingError, { error, step });
 }

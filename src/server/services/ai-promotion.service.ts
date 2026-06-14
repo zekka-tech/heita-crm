@@ -1,7 +1,7 @@
 import { TransactionType } from "@prisma/client";
 
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 
 export type PromotionSuggestion = {
   name: string;
@@ -23,46 +23,50 @@ export type PromotionSuggestion = {
 export async function generatePromotionSuggestions(
   businessId: string
 ): Promise<PromotionSuggestion[]> {
-  const [topRedemptions, recentEarnings, activePromotions] = await Promise.all([
-    prisma.loyaltyTransaction.findMany({
-      where: {
-        membership: { businessId },
-        type: TransactionType.REDEEM,
-        createdAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) }
-      },
-      select: {
-        pointsDelta: true,
-        createdAt: true,
-        membership: {
-          select: { tier: { select: { name: true } } }
-        }
-      },
-      orderBy: { createdAt: "desc" },
-      take: 50
-    }),
-    prisma.loyaltyTransaction.findMany({
-      where: {
-        membership: { businessId },
-        type: TransactionType.EARN,
-        createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-      },
-      select: {
-        pointsDelta: true,
-        createdAt: true
-      },
-      orderBy: { createdAt: "desc" },
-      take: 100
-    }),
-    prisma.promotion.findMany({
-      where: {
-        businessId,
-        isActive: true,
-        endsAt: { gte: new Date() }
-      },
-      select: { title: true, type: true },
-      take: 10
-    })
-  ]);
+  const [topRedemptions, recentEarnings, activePromotions] = await withBusinessScope(
+    businessId,
+    (tx) =>
+      Promise.all([
+        tx.loyaltyTransaction.findMany({
+          where: {
+            membership: { businessId },
+            type: TransactionType.REDEEM,
+            createdAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) }
+          },
+          select: {
+            pointsDelta: true,
+            createdAt: true,
+            membership: {
+              select: { tier: { select: { name: true } } }
+            }
+          },
+          orderBy: { createdAt: "desc" },
+          take: 50
+        }),
+        tx.loyaltyTransaction.findMany({
+          where: {
+            membership: { businessId },
+            type: TransactionType.EARN,
+            createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+          },
+          select: {
+            pointsDelta: true,
+            createdAt: true
+          },
+          orderBy: { createdAt: "desc" },
+          take: 100
+        }),
+        tx.promotion.findMany({
+          where: {
+            businessId,
+            isActive: true,
+            endsAt: { gte: new Date() }
+          },
+          select: { title: true, type: true },
+          take: 10
+        })
+      ])
+  );
 
   const suggestions: PromotionSuggestion[] = [];
 

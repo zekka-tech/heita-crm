@@ -2,7 +2,7 @@ import { MessageChannel, MessageStatus } from "@prisma/client";
 
 import { sendEmail } from "@/lib/email";
 import { shouldDeliverNotificationChannel } from "@/lib/notification-preferences";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 import { sendSms } from "@/lib/sms";
 import { createPresignedDownload, getStoredObjectBuffer } from "@/lib/storage";
 import {
@@ -82,33 +82,35 @@ async function createMessage(input: {
   metadata?: Record<string, unknown>;
   document?: DispatchDocument;
 }) {
-  return prisma.message.create({
-    data: {
-      businessId: input.businessId,
-      userId: input.userId,
-      contactPhone: input.contactPhone,
-      channel: input.channel,
-      direction: "OUTBOUND",
-      externalId: input.externalId,
-      status: MessageStatus.SENT,
-      body: input.body,
-      salesThreadId: input.salesThreadId,
-      sentAt: new Date(),
-      metadata: input.metadata,
-      attachments: input.document
-        ? {
-            create: {
-              mediaType: "document",
-              mimeType: input.document.mimeType,
-              fileName: input.document.fileName,
-              byteSize: input.document.byteSize,
-              storageKey: input.document.storageKey
+  return withBusinessScope(input.businessId, (tx) =>
+    tx.message.create({
+      data: {
+        businessId: input.businessId,
+        userId: input.userId,
+        contactPhone: input.contactPhone,
+        channel: input.channel,
+        direction: "OUTBOUND",
+        externalId: input.externalId,
+        status: MessageStatus.SENT,
+        body: input.body,
+        salesThreadId: input.salesThreadId,
+        sentAt: new Date(),
+        metadata: input.metadata,
+        attachments: input.document
+          ? {
+              create: {
+                mediaType: "document",
+                mimeType: input.document.mimeType,
+                fileName: input.document.fileName,
+                byteSize: input.document.byteSize,
+                storageKey: input.document.storageKey
+              }
             }
-          }
-        : undefined
-    },
-    select: { id: true }
-  });
+          : undefined
+      },
+      select: { id: true }
+    })
+  );
 }
 
 async function documentUrl(document: DispatchDocument) {

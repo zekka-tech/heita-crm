@@ -4,7 +4,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Bell, Home, User, Wallet } from "lucide-react";
+import { Bell, Home, MessageCircle, User, Wallet } from "lucide-react";
 
 import { useTRPC } from "@/components/providers/trpc-provider";
 import { useQuery } from "@tanstack/react-query";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 const items: { href: Route; labelKey: string; icon: typeof Home; showBadge?: boolean }[] = [
   { href: "/home", labelKey: "home", icon: Home },
   { href: "/wallet", labelKey: "wallet", icon: Wallet },
+  { href: "/connect", labelKey: "connect", icon: MessageCircle },
   { href: "/notifications", labelKey: "alerts", icon: Bell, showBadge: true },
   { href: "/profile", labelKey: "profile", icon: User }
 ];

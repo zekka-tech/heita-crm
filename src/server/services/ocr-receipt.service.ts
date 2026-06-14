@@ -1,6 +1,6 @@
 import { appendTraceHeaders } from "@/lib/tracing";
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { recalculateTier } from "@/server/services/loyalty.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
@@ -259,17 +259,19 @@ export async function submitOcrReceipt(input: {
       ? Math.round(ocrResult.total * POINTS_PER_RAND)
       : null;
 
-  const receipt = await prisma.ocrReceipt.create({
-    data: {
-      businessId,
-      userId,
-      imageUrl,
-      rawOcrText: ocrResult.rawText,
-      parsedTotal: ocrResult.total,
-      parsedBusiness: ocrResult.businessName,
-      pointsToAward,
-      status: "PENDING_REVIEW"
-    }
+  const receipt = await withBusinessScope(businessId, (tx) => {
+    return tx.ocrReceipt.create({
+      data: {
+        businessId,
+        userId,
+        imageUrl,
+        rawOcrText: ocrResult.rawText,
+        parsedTotal: ocrResult.total,
+        parsedBusiness: ocrResult.businessName,
+        pointsToAward,
+        status: "PENDING_REVIEW"
+      }
+    });
   });
 
   logger.info(
@@ -295,9 +297,11 @@ export async function approveOcrReceipt(
       : undefined;
 
   // Pre-flight check to avoid acquiring a tx for obviously invalid calls.
-  const preCheck = await prisma.ocrReceipt.findUnique({
-    where: { id: receiptId },
-    select: { id: true, status: true, businessId: true }
+  const preCheck = await withBusinessScope(businessId, (tx) => {
+    return tx.ocrReceipt.findUnique({
+      where: { id: receiptId, businessId },
+      select: { id: true, status: true, businessId: true }
+    });
   });
 
   if (!preCheck) throw new Error("Receipt not found.");
@@ -307,10 +311,10 @@ export async function approveOcrReceipt(
     throw new Error(`Cannot approve receipt in status: ${preCheck.status}`);
   }
 
-  await prisma.$transaction(async (tx) => {
+  await withBusinessScope(businessId, async (tx) => {
     // Re-fetch inside the transaction for authoritative, serialised status check.
     const receipt = await tx.ocrReceipt.findUnique({
-      where: { id: receiptId },
+      where: { id: receiptId, businessId },
       select: {
         id: true, businessId: true, userId: true, pointsToAward: true, status: true
       }
@@ -347,7 +351,7 @@ export async function approveOcrReceipt(
         // Transaction already created for this receipt — just update the
         // receipt status to reflect it was approved.
         await tx.ocrReceipt.update({
-          where: { id: receiptId },
+          where: { id: receiptId, businessId },
           data: {
             status: "APPROVED",
             reviewedAt: new Date(),
@@ -356,6 +360,16 @@ export async function approveOcrReceipt(
             transactionId: existing.id
           }
         });
+        await recordStaffAuditLog(
+          {
+            businessId,
+            actorUserId: staffUserId,
+            action: "OCR_RECEIPT_APPROVED",
+            targetType: "OcrReceipt",
+            targetId: receiptId
+          },
+          tx
+        );
         return;
       }
 
@@ -379,7 +393,7 @@ export async function approveOcrReceipt(
     }
 
     await tx.ocrReceipt.update({
-      where: { id: receiptId },
+      where: { id: receiptId, businessId },
       data: {
         status: "APPROVED",
         reviewedAt: new Date(),
@@ -388,61 +402,59 @@ export async function approveOcrReceipt(
         transactionId: transaction?.id ?? null
       }
     });
-  }, { maxWait: 5_000, timeout: 20_000 });
+    await recordStaffAuditLog(
+      {
+        businessId,
+        actorUserId: staffUserId,
+        action: "OCR_RECEIPT_APPROVED",
+        targetType: "OcrReceipt",
+        targetId: receiptId
+      },
+      tx
+    );
+  });
 
   logger.info({ receiptId, staffUserId }, "ocr.receipt.approved");
-
-  const approved = await prisma.ocrReceipt.findUnique({
-    where: { id: receiptId },
-    select: { businessId: true }
-  });
-  if (approved) {
-    await recordStaffAuditLog({
-      businessId: approved.businessId,
-      actorUserId: staffUserId,
-      action: "OCR_RECEIPT_APPROVED",
-      targetType: "OcrReceipt",
-      targetId: receiptId
-    });
-  }
 }
 
 export async function rejectOcrReceipt(receiptId: string, staffUserId: string, businessId: string) {
-  const receipt = await prisma.ocrReceipt.findUnique({
-    where: { id: receiptId },
-    select: { id: true, businessId: true, status: true }
-  });
-  if (!receipt) throw new Error("Receipt not found.");
-  if (receipt.businessId !== businessId) throw new Error("Receipt not found.");
-  if (receipt.status !== "PENDING_REVIEW") {
-    throw new Error(`Cannot reject receipt in status: ${receipt.status}`);
-  }
-
-  await prisma.ocrReceipt.update({
-    where: { id: receiptId },
-    data: { status: "REJECTED", reviewedAt: new Date(), reviewedBy: staffUserId }
-  });
-  logger.info({ receiptId, staffUserId }, "ocr.receipt.rejected");
-
-  const rejected = await prisma.ocrReceipt.findUnique({
-    where: { id: receiptId },
-    select: { businessId: true }
-  });
-  if (rejected) {
-    await recordStaffAuditLog({
-      businessId: rejected.businessId,
-      actorUserId: staffUserId,
-      action: "OCR_RECEIPT_REJECTED",
-      targetType: "OcrReceipt",
-      targetId: receiptId
+  await withBusinessScope(businessId, async (tx) => {
+    const receipt = await tx.ocrReceipt.findUnique({
+      where: { id: receiptId, businessId },
+      select: { id: true, businessId: true, status: true }
     });
-  }
+    if (!receipt) throw new Error("Receipt not found.");
+    if (receipt.businessId !== businessId) throw new Error("Receipt not found.");
+    if (receipt.status !== "PENDING_REVIEW") {
+      throw new Error(`Cannot reject receipt in status: ${receipt.status}`);
+    }
+
+    await tx.ocrReceipt.update({
+      where: { id: receiptId, businessId },
+      data: { status: "REJECTED", reviewedAt: new Date(), reviewedBy: staffUserId }
+    });
+
+    await recordStaffAuditLog(
+      {
+        businessId,
+        actorUserId: staffUserId,
+        action: "OCR_RECEIPT_REJECTED",
+        targetType: "OcrReceipt",
+        targetId: receiptId
+      },
+      tx
+    );
+  });
+
+  logger.info({ receiptId, staffUserId }, "ocr.receipt.rejected");
 }
 
 export async function listPendingOcrReceipts(businessId: string) {
-  return prisma.ocrReceipt.findMany({
-    where: { businessId, status: "PENDING_REVIEW" },
-    orderBy: { createdAt: "asc" },
-    take: 50
+  return withBusinessScope(businessId, (tx) => {
+    return tx.ocrReceipt.findMany({
+      where: { businessId, status: "PENDING_REVIEW" },
+      orderBy: { createdAt: "asc" },
+      take: 50
+    });
   });
 }

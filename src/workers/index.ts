@@ -1,6 +1,7 @@
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
+import { startReceiptBatchWorker } from "@/lib/receipt-batch-queue";
 import { registerShutdownHandler } from "@/lib/shutdown";
 import { startCustomerImportWorker } from "@/workers/customer-import.worker";
 import { startDocumentIngestionWorker } from "@/workers/ingest-document.worker";
@@ -12,6 +13,7 @@ export async function startWorkers() {
   const customerImportWorker = startCustomerImportWorker();
   const webCrawlWorker = startWebCrawlWorker();
   const followUpWorker = startFollowUpWorker();
+  const receiptBatchWorker = startReceiptBatchWorker();
 
   // Phase: workers — drain in-flight jobs before disconnecting DB/Redis
   registerShutdownHandler(async () => {
@@ -26,6 +28,9 @@ export async function startWorkers() {
     }
     if (followUpWorker) {
       await followUpWorker.close().catch(() => undefined);
+    }
+    if (receiptBatchWorker) {
+      await receiptBatchWorker.close().catch(() => undefined);
     }
   }, "workers");
 
@@ -49,11 +54,13 @@ export async function startWorkers() {
   }, "infra");
 
   return {
-    status: documentWorker || customerImportWorker || webCrawlWorker || followUpWorker ? "running" : "idle"
+    status: documentWorker || customerImportWorker || webCrawlWorker || followUpWorker || receiptBatchWorker ? "running" : "idle"
   };
 }
 
-if (import.meta.main) {
+const isMainModule = process.argv[1]?.endsWith("worker.mjs") ?? false;
+
+if (isMainModule) {
   startWorkers()
     .then((result) => {
       logger.info({ status: result.status }, "workers.started");

@@ -1,7 +1,7 @@
 import { MessageChannel } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 
 type ConversationParticipant = {
   userId: string | null;
@@ -38,21 +38,23 @@ export async function listBusinessConversations(input: { businessId: string }) {
   // Fetch the most recent message per unique contactPhone using distinct.
   // This avoids the earlier approach of fetching 300 messages and grouping
   // client-side, which silently dropped threads beyond the first 300 rows.
-  const latestMessages = await prisma.message.findMany({
-    where: {
-      businessId: input.businessId,
-      channel: MessageChannel.WHATSAPP,
-      contactPhone: { not: null }
-    },
-    distinct: ["contactPhone"],
-    include: {
-      user: {
-        select: { id: true, name: true, phone: true }
-      }
-    },
-    orderBy: { createdAt: "desc" },
-    take: 200
-  });
+  const latestMessages = await withBusinessScope(input.businessId, (tx) =>
+    tx.message.findMany({
+      where: {
+        businessId: input.businessId,
+        channel: MessageChannel.WHATSAPP,
+        contactPhone: { not: null }
+      },
+      distinct: ["contactPhone"],
+      include: {
+        user: {
+          select: { id: true, name: true, phone: true }
+        }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200
+    })
+  );
 
   const phones = latestMessages.map((m) => m.contactPhone!).filter(Boolean);
 
@@ -111,51 +113,55 @@ export async function getBusinessConversationThread(input: {
   businessId: string;
   contactPhone: string;
 }) {
-  return prisma.message.findMany({
-    where: {
-      businessId: input.businessId,
-      channel: MessageChannel.WHATSAPP,
-      contactPhone: input.contactPhone
-    },
-    include: {
-      attachments: {
-        orderBy: {
-          createdAt: "asc"
+  return withBusinessScope(input.businessId, (tx) =>
+    tx.message.findMany({
+      where: {
+        businessId: input.businessId,
+        channel: MessageChannel.WHATSAPP,
+        contactPhone: input.contactPhone
+      },
+      include: {
+        attachments: {
+          orderBy: {
+            createdAt: "asc"
+          }
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            phone: true
+          }
         }
       },
-      user: {
-        select: {
-          id: true,
-          name: true,
-          phone: true
-        }
-      }
-    },
-    orderBy: {
-      createdAt: "asc"
-    },
-    take: 200
-  });
+      orderBy: {
+        createdAt: "asc"
+      },
+      take: 200
+    })
+  );
 }
 
 export async function getWhatsappCustomerServiceWindowStatus(input: {
   businessId: string;
   contactPhone: string;
 }) {
-  const lastInboundMessage = await prisma.message.findFirst({
-    where: {
-      businessId: input.businessId,
-      channel: MessageChannel.WHATSAPP,
-      contactPhone: input.contactPhone,
-      direction: "INBOUND"
-    },
-    orderBy: {
-      createdAt: "desc"
-    },
-    select: {
-      createdAt: true
-    }
-  });
+  const lastInboundMessage = await withBusinessScope(input.businessId, (tx) =>
+    tx.message.findFirst({
+      where: {
+        businessId: input.businessId,
+        channel: MessageChannel.WHATSAPP,
+        contactPhone: input.contactPhone,
+        direction: "INBOUND"
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      select: {
+        createdAt: true
+      }
+    })
+  );
 
   return computeCustomerServiceWindow(lastInboundMessage?.createdAt ?? null);
 }

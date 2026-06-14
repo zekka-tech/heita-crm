@@ -1,0 +1,121 @@
+name: Synthetic Probe
+
+# External availability checks against the production environment.
+# Runs every 15 minutes and on demand. Fires a Slack alert if set.
+# See docs/runbooks/synthetic-probe-failure.md for investigation steps.
+
+on:
+  schedule:
+    # Every 15 minutes, UTC
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Override base URL (leave blank to use vars.PROD_BASE_URL)'
+        required: false
+        type: string
+
+concurrency:
+  # Only one probe run at a time; newer run cancels the in-flight one.
+  group: synthetic-probe
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: HTTP Probes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      # Prefer the manual override; fall back to the repo variable.
+      BASE_URL: ${{ inputs.base_url || vars.PROD_BASE_URL }}
+
+    steps:
+      - name: Validate BASE_URL
+        run: |
+          if [ -z "$BASE_URL" ]; then
+            echo "::error::BASE_URL is empty. Set the PROD_BASE_URL repository variable or pass base_url via workflow_dispatch."
+            exit 1
+          fi
+          echo "Probing: $BASE_URL"
+
+      # ── Check 1: Readiness endpoint ──────────────────────────────────────────
+      - name: Check /api/health/ready (200)
+        id: health_ready
+        run: |
+          echo "--- GET ${BASE_URL}/api/health/ready ---"
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            --write-out "\nHTTP %{http_code}" \
+            "${BASE_URL}/api/health/ready"
+
+      # ── Check 2: Public business page ────────────────────────────────────────
+      - name: Check /b/<slug> reachability (200 + non-empty body)
+        id: business_page
+        run: |
+          echo "--- GET ${BASE_URL}/b/${{ vars.PROBE_BUSINESS_SLUG }} ---"
+          BODY=$(curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            "${BASE_URL}/b/${{ vars.PROBE_BUSINESS_SLUG }}")
+          echo "$BODY" | head -c 200
+          # Confirm response is non-empty (basic reachability; no content assertion)
+          if [ -z "$BODY" ]; then
+            echo "::error::Empty response body from /b/${{ vars.PROBE_BUSINESS_SLUG }}"
+            exit 1
+          fi
+
+      # ── Check 3: Metrics endpoint (bearer-authenticated) ─────────────────────
+      - name: Check /api/metrics (200 with auth)
+        id: metrics
+        run: |
+          echo "--- GET ${BASE_URL}/api/metrics ---"
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            --header "Authorization: Bearer ${{ secrets.METRICS_TOKEN }}" \
+            --write-out "\nHTTP %{http_code}" \
+            "${BASE_URL}/api/metrics"
+
+      # ── Slack alert (optional, only when SLACK_WEBHOOK_URL is set) ───────────
+      - name: Notify Slack on failure
+        if: failure() && vars.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_SECRET: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          # Use secret if set, otherwise fall back to the repo variable.
+          WEBHOOK="${SLACK_WEBHOOK_SECRET:-$SLACK_WEBHOOK_URL}"
+          if [ -z "$WEBHOOK" ]; then
+            echo "No Slack webhook configured — skipping notification."
+            exit 0
+          fi
+
+          FAILED_STEPS=""
+          [ "${{ steps.health_ready.outcome }}" = "failure" ] && \
+            FAILED_STEPS="$FAILED_STEPS\n• \`/api/health/ready\`"
+          [ "${{ steps.business_page.outcome }}" = "failure" ] && \
+            FAILED_STEPS="$FAILED_STEPS\n• \`/b/${{ vars.PROBE_BUSINESS_SLUG }}\`"
+          [ "${{ steps.metrics.outcome }}" = "failure" ] && \
+            FAILED_STEPS="$FAILED_STEPS\n• \`/api/metrics\`"
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            --header "Content-Type: application/json" \
+            --data "{
+              \"text\": \":rotating_light: *Heita synthetic probe FAILED*\nFailed checks:${FAILED_STEPS}\nEnvironment: \`${BASE_URL}\`\nWorkflow: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>\"
+            }" \
+            "$WEBHOOK"

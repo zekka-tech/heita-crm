@@ -12,6 +12,8 @@ import {
   DashboardBottomNav,
   DashboardSidebarNav
 } from "@/components/dashboard/dashboard-bottom-nav";
+import { DashboardSWRegister } from "@/components/layout/dashboard-sw-register";
+import { OfflineBanner } from "@/components/offline-banner";
 import { auth } from "@/lib/auth";
 import { getEffectivePlan, isPaidBusinessPlan } from "@/server/services/billing.service";
 import { prisma } from "@/lib/prisma";
@@ -69,9 +71,11 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen">
+      <DashboardSWRegister />
       <DashboardSidebarNav businessId={businessId} isFranchiseHQ={isFranchiseHQ} hasSalesAccess={hasSalesAccess} />
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <OfflineBanner />
         {businesses.length > 1 ? (
           <div className="border-b border-line px-4 py-3 sm:px-8">
             <BusinessSwitcher
