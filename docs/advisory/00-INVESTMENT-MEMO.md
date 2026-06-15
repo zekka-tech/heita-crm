@@ -158,7 +158,7 @@
 
 **Why this is the right structure:** it ties capital release to the two things that convert this from a strong story into a defensible asset — *proven* tenant isolation and *measured* acquisition economics — while funding the moat (RAG + franchise + loyalty lock-in) to outrun the one existential threat (Meta) inside the 18–24-month window.
 
-**Bottom line: a fundable, unusually well-engineered, honestly-mid-7 asset in an empty and timely quadrant. Underwrite the moat, gate on the RLS proof, and measure the CAC — and the asymmetry is real.**
+**Bottom line: a fundable, unusually well-engineered, honestly-mid-8 asset in an empty and timely quadrant. Underwrite the moat, gate on the RLS proof, and measure the CAC — and the asymmetry is real.**
 
 ---
 
