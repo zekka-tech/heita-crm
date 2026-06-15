@@ -8,15 +8,36 @@ const prisma = {
     update: vi.fn()
   },
   membership: {
+    findMany: vi.fn(),
     updateMany: vi.fn()
   },
+  loyaltyTransaction: {
+    findMany: vi.fn()
+  },
+  message: {
+    findMany: vi.fn()
+  },
+  aiChatSession: {
+    findMany: vi.fn()
+  },
+  aiChatMessage: {
+    findMany: vi.fn()
+  },
+  notification: {
+    findMany: vi.fn()
+  },
   userConsent: {
+    findMany: vi.fn(),
     updateMany: vi.fn()
   },
   $transaction: vi.fn()
 };
 
-vi.mock("@/lib/prisma", () => ({ prisma }));
+vi.mock("@/lib/prisma", () => ({
+  prisma,
+  withUserScope: vi.fn(async (_userId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma)),
+  withSystemScope: vi.fn(async (fn: (tx: typeof prisma) => unknown) => fn(prisma))
+}));
 vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 }));
@@ -24,7 +45,7 @@ vi.mock("@/lib/email", () => ({
   sendEmail: vi.fn().mockResolvedValue(undefined)
 }));
 
-const { initiateEmailChange, confirmEmailChange, softDeleteAccount } = await import(
+const { exportAccountData, initiateEmailChange, confirmEmailChange, softDeleteAccount } = await import(
   "@/server/services/account.service"
 );
 
@@ -33,6 +54,41 @@ const { sendEmail } = await import("@/lib/email");
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.AUTH_SECRET = "test-secret-for-email-verify";
+});
+
+describe("exportAccountData", () => {
+  it("returns the scoped account export payload", async () => {
+    prisma.user.findUniqueOrThrow.mockResolvedValue({
+      id: "user_1",
+      name: "Alice",
+      email: "alice@example.com",
+      phone: "+27820000000",
+      image: null,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-02T00:00:00Z"),
+      notificationPreferences: { push: true },
+      accounts: [{ provider: "google", type: "oauth" }],
+      pushSubscriptions: [{ endpoint: "https://push.test/sub", createdAt: new Date("2026-01-03T00:00:00Z") }]
+    });
+    prisma.membership.findMany.mockResolvedValue([{ id: "mem_1", business: { id: "biz_1" }, tier: null }]);
+    prisma.loyaltyTransaction.findMany.mockResolvedValue([{ id: "ltx_1" }]);
+    prisma.message.findMany.mockResolvedValue([{ id: "msg_1" }]);
+    prisma.aiChatSession.findMany.mockResolvedValue([{ id: "sess_1", title: "Support" }]);
+    prisma.aiChatMessage.findMany.mockResolvedValue([{ id: "chat_1", sessionId: "sess_1", content: "Hi" }]);
+    prisma.notification.findMany.mockResolvedValue([{ id: "notif_1" }]);
+    prisma.userConsent.findMany.mockResolvedValue([{ id: "consent_1" }]);
+
+    const result = await exportAccountData("user_1");
+
+    expect(prisma.membership.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: "user_1" } }));
+    expect(prisma.aiChatSession.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: "user_1" } }));
+    expect(prisma.aiChatMessage.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { sessionId: { in: ["sess_1"] } } }));
+    expect(result.user.id).toBe("user_1");
+    expect(result.memberships).toHaveLength(1);
+    expect(result.aiChatMessages[0]).toEqual(expect.objectContaining({ id: "chat_1", session: expect.objectContaining({ id: "sess_1" }) }));
+    expect(result.notifications).toHaveLength(1);
+    expect(result.consents).toHaveLength(1);
+  });
 });
 
 describe("initiateEmailChange", () => {

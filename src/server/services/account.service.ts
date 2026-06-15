@@ -8,7 +8,7 @@ import {
   normalizeNotificationPreferences,
   type NotificationPreferences
 } from "@/lib/notification-preferences";
-import { prisma } from "@/lib/prisma";
+import { prisma, withSystemScope, withUserScope } from "@/lib/prisma";
 
 export async function recordConsent(input: {
   userId: string;
@@ -34,25 +34,26 @@ export async function recordConsent(input: {
 const EXPORT_ROW_CAP = 10_000;
 
 export async function exportAccountData(userId: string) {
-  const [user, memberships, loyaltyTransactions, aiChatMessages, messages, notifications, consents] =
-    await Promise.all([
-      prisma.user.findUniqueOrThrow({
-        where: { id: userId },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-          image: true,
-          createdAt: true,
-          updatedAt: true,
-          notificationPreferences: true,
-          // Expose only provider name — never access/refresh tokens
-          accounts: { select: { provider: true, type: true } },
-          pushSubscriptions: { select: { endpoint: true, createdAt: true } }
-        }
-      }),
-      prisma.membership.findMany({
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      image: true,
+      createdAt: true,
+      updatedAt: true,
+      notificationPreferences: true,
+      // Expose only provider name — never access/refresh tokens
+      accounts: { select: { provider: true, type: true } },
+      pushSubscriptions: { select: { endpoint: true, createdAt: true } }
+    }
+  });
+
+  const scoped = await withUserScope(userId, async (tx) => {
+    const [memberships, loyaltyTransactions, messages, aiChatSessions] = await Promise.all([
+      tx.membership.findMany({
         where: { userId },
         include: {
           business: true,
@@ -61,7 +62,7 @@ export async function exportAccountData(userId: string) {
         orderBy: { joinedAt: "asc" },
         take: EXPORT_ROW_CAP
       }),
-      prisma.loyaltyTransaction.findMany({
+      tx.loyaltyTransaction.findMany({
         where: {
           OR: [
             { userId },
@@ -71,36 +72,64 @@ export async function exportAccountData(userId: string) {
         orderBy: { createdAt: "asc" },
         take: EXPORT_ROW_CAP
       }),
-      prisma.aiChatMessage.findMany({
-        where: { session: { userId } },
-        include: { session: true },
-        orderBy: { createdAt: "asc" },
-        take: EXPORT_ROW_CAP
-      }),
-      prisma.message.findMany({
+      tx.message.findMany({
         where: { userId },
         orderBy: { createdAt: "asc" },
         take: EXPORT_ROW_CAP
       }),
-      prisma.notification.findMany({
+      tx.aiChatSession.findMany({
         where: { userId },
+        select: {
+          id: true,
+          businessId: true,
+          workspaceId: true,
+          userId: true,
+          title: true,
+          createdAt: true,
+          updatedAt: true
+        },
         orderBy: { createdAt: "asc" },
         take: EXPORT_ROW_CAP
-      }),
-      prisma.userConsent.findMany({
-        where: { userId },
-        include: { business: true },
-        orderBy: { grantedAt: "asc" }
       })
     ]);
+
+    return { memberships, loyaltyTransactions, messages, aiChatSessions };
+  });
+
+  const aiChatMessages = scoped.aiChatSessions.length > 0
+    ? await prisma.aiChatMessage.findMany({
+        where: { sessionId: { in: scoped.aiChatSessions.map((session) => session.id) } },
+        orderBy: { createdAt: "asc" },
+        take: EXPORT_ROW_CAP
+      }).then((rows) => {
+        const sessionsById = new Map(scoped.aiChatSessions.map((session) => [session.id, session]));
+        return rows.map((row) => ({
+          ...row,
+          session: sessionsById.get(row.sessionId) ?? null
+        }));
+      })
+    : [];
+
+  const [notifications, consents] = await Promise.all([
+    prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+      take: EXPORT_ROW_CAP
+    }),
+    prisma.userConsent.findMany({
+      where: { userId },
+      include: { business: true },
+      orderBy: { grantedAt: "asc" }
+    })
+  ]);
 
   return {
     exportedAt: new Date().toISOString(),
     user,
-    memberships,
-    loyaltyTransactions,
+    memberships: scoped.memberships,
+    loyaltyTransactions: scoped.loyaltyTransactions,
     aiChatMessages,
-    messages,
+    messages: scoped.messages,
     notifications,
     consents
   };
@@ -257,7 +286,7 @@ export async function softDeleteAccount(userId: string) {
     }
   });
 
-  const user = await prisma.$transaction(async (tx) => {
+  const user = await withSystemScope(async (tx) => {
     const updatedUser = await tx.user.update({
       where: { id: userId },
       data: {
@@ -286,7 +315,7 @@ export async function softDeleteAccount(userId: string) {
     });
 
     return updatedUser;
-  }, { maxWait: 5000, timeout: 10000 });
+  });
 
   if (existingUser.email) {
     await sendEmail({

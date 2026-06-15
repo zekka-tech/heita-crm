@@ -9,7 +9,7 @@ import {
 } from "@/lib/loyalty";
 import { runIdempotentOperation } from "@/lib/idempotency";
 import { logger } from "@/lib/logger";
-import { prisma, withBusinessScope, type PrismaTransactionClient } from "@/lib/prisma";
+import { prisma, withBusinessScope, withSystemScope, type PrismaTransactionClient } from "@/lib/prisma";
 import { withSpan } from "@/lib/tracing";
 import { sendNotification } from "@/server/services/notification.service";
 import { applyReferralRewardIfEligible } from "@/server/services/referral.service";
@@ -739,34 +739,36 @@ export async function sendPointsExpiryWarnings(
   );
 
   const nowForQuery = now;
-  const expiringTransactions = await prisma.loyaltyTransaction.findMany({
-    where: {
-      type: "EARN",
-      expiresAt: {
-        gt: nowForQuery,
-        lte: warningThreshold
+  const expiringTransactions = await withSystemScope((tx) =>
+    tx.loyaltyTransaction.findMany({
+      where: {
+        type: "EARN",
+        expiresAt: {
+          gt: nowForQuery,
+          lte: warningThreshold
+        },
+        expiryTarget: null,
+        refundTarget: null
       },
-      expiryTarget: null,
-      refundTarget: null
-    },
-    select: {
-      id: true,
-      pointsDelta: true,
-      expiresAt: true,
-      membership: {
-        select: {
-          id: true,
-          userId: true,
-          businessId: true,
-          pointsBalance: true,
-          business: {
-            select: { name: true }
+      select: {
+        id: true,
+        pointsDelta: true,
+        expiresAt: true,
+        membership: {
+          select: {
+            id: true,
+            userId: true,
+            businessId: true,
+            pointsBalance: true,
+            business: {
+              select: { name: true }
+            }
           }
         }
-      }
-    },
-    orderBy: { expiresAt: "asc" }
-  });
+      },
+      orderBy: { expiresAt: "asc" }
+    })
+  );
 
   const byMembership = new Map<
     string,
@@ -846,12 +848,14 @@ export async function expireEligiblePoints(now = new Date()): Promise<ExpirePoin
   let pointsExpired = 0;
 
   while (true) {
-    const memberships = await prisma.membership.findMany({
-      where: EXPIRE_WHERE(now),
-      select: { id: true, businessId: true },
-      take: EXPIRE_PAGE_SIZE,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
-    });
+    const memberships = await withSystemScope((tx) =>
+      tx.membership.findMany({
+        where: EXPIRE_WHERE(now),
+        select: { id: true, businessId: true },
+        take: EXPIRE_PAGE_SIZE,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+      })
+    );
 
     if (memberships.length === 0) break;
 
@@ -894,12 +898,14 @@ export async function recalculateMembershipTiers(): Promise<RecalcTiersResult> {
   let fixed = 0;
 
   while (true) {
-    const memberships = await prisma.membership.findMany({
-      where: { isActive: true, business: { deletedAt: null, isActive: true } },
-      select: { id: true, businessId: true, pointsBalance: true, tierId: true },
-      take: PAGE_SIZE,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
-    });
+    const memberships = await withSystemScope((tx) =>
+      tx.membership.findMany({
+        where: { isActive: true, business: { deletedAt: null, isActive: true } },
+        select: { id: true, businessId: true, pointsBalance: true, tierId: true },
+        take: PAGE_SIZE,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+      })
+    );
 
     if (memberships.length === 0) break;
 
@@ -908,10 +914,12 @@ export async function recalculateMembershipTiers(): Promise<RecalcTiersResult> {
     total += memberships.length;
 
     const businessIds = [...new Set(memberships.map((m) => m.businessId))];
-    const tiersByBusiness = await prisma.loyaltyTier.findMany({
-      where: { businessId: { in: businessIds } },
-      orderBy: { minPoints: "asc" }
-    });
+    const tiersByBusiness = await withSystemScope((tx) =>
+      tx.loyaltyTier.findMany({
+        where: { businessId: { in: businessIds } },
+        orderBy: { minPoints: "asc" }
+      })
+    );
 
     const tierMap = new Map<string, typeof tiersByBusiness>();
     for (const tier of tiersByBusiness) {

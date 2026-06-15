@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/prisma", () => {
+  const prisma = {
     loyaltyTransaction: {
       findMany: vi.fn(),
     },
-  },
-}));
+  };
+
+  return {
+    prisma,
+    withSystemScope: vi.fn(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),
+  };
+});
 
 vi.mock("@/server/services/notification.service", () => ({
   sendNotification: vi.fn(),

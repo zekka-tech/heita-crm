@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { withSystemScope } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
 type AnonymisedBasketRow = {
@@ -16,28 +16,30 @@ export async function generateAnonymisedBasketReport(
 ): Promise<AnonymisedBasketRow[]> {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-  const transactions = await prisma.loyaltyTransaction.findMany({
-    where: {
-      createdAt: { gte: since },
-      type: { in: ["EARN", "REDEEM"] }
-    },
-    select: {
-      type: true,
-      pointsDelta: true,
-      createdAt: true,
-      membership: {
-        select: {
-          business: {
-            select: {
-              province: true,
-              category: true
+  const transactions = await withSystemScope((tx) =>
+    tx.loyaltyTransaction.findMany({
+      where: {
+        createdAt: { gte: since },
+        type: { in: ["EARN", "REDEEM"] }
+      },
+      select: {
+        type: true,
+        pointsDelta: true,
+        createdAt: true,
+        membership: {
+          select: {
+            business: {
+              select: {
+                province: true,
+                category: true
+              }
             }
           }
         }
-      }
-    },
-    orderBy: { createdAt: "desc" }
-  });
+      },
+      orderBy: { createdAt: "desc" }
+    })
+  );
 
   const buckets = new Map<string, {
     province: string;

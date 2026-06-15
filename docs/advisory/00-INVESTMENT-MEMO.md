@@ -14,7 +14,7 @@
 
 **Heita CRM is a genuine category-creation play occupying an empty quadrant of the SMB software map — WhatsApp × loyalty × per-tenant AI co-worker × PWA × franchise multi-tenancy × ZAR-native — built to a standard well above the typical seed-stage codebase.** It is a 53,000-LOC TypeScript monorepo: 425 source files, 46 Prisma models, 42 migrations, 40 API routes, ~670 unit cases across 88 test files, 11 Playwright E2E flows, and a real SLO/error-budget/runbook operating layer. Across 53k LOC there is **1 TODO, 3 type-escapes, and 0 production npm vulnerabilities.** This is not a prototype.
 
-**Corrected production-readiness score: 8.3/10** — well short of the prior 9.5/10 internal claim but improved from 8.0 with the closure of the public ISR gap, SSRF TOCTOU/robots redirect hardening, and the second wave of service scoping. The largest remaining gap is that tenant isolation is only **partially verified end-to-end** despite now covering 10+ services plus self-service user-scoped reads. The code provisions `heita_app` in CI with a live RLS smoke test, and public-surface ISR conversion (including `b/[slug]/events`) is complete. The remaining work is proving the broader app green under the runtime role.
+**Corrected production-readiness score: 8.3/10** — well short of the prior 9.5/10 internal claim but improved from 8.0 with the closure of the public ISR gap, SSRF TOCTOU/robots redirect hardening, explicit system-scope support for cross-tenant jobs, and the second wave of service scoping. The largest remaining gap is that tenant isolation is only **partially verified end-to-end** despite now covering the main scoped runtime services, self-service user-scoped reads, and explicit cross-tenant cron/export/account paths. The code provisions `heita_app` in CI with a live RLS smoke test, and public-surface ISR conversion (including `b/[slug]/events`) is complete. The remaining work is proving the broader app green under the runtime role.
 
 **The investment case is real, asymmetric, and time-boxed.** The window in which (a) WhatsApp Business API is cheap, (b) Meta has not shipped native SMB loyalty/AI, (c) no global SaaS has stitched per-tenant RAG into the emerging-market SMB stack, and (d) POPIA/SADC/AfCFTA create a procurement moat — is **18–24 months**. The durable moat is **not** WhatsApp-nativeness (a commodity Meta gates) nor data-residency (protects only the SCALE tier); it is **per-tenant RAG institutional memory compounding with franchise switching cost and loyalty-point liability.**
 
@@ -33,7 +33,7 @@
 | AI co-worker | Per-tenant pgvector(1024) + HNSW; hybrid FTS+vector fused via RRF; query rewriting; reranking; BYOM (Anthropic/OpenAI/Gemini/DeepSeek/Ollama) with BYOK→Ollama→Anthropic fallback; token accounting | Production |
 | Receipt OCR | In-browser Tesseract.js (PWA-friendly) + DeepSeek vision fallback; staff review queue; batch import (Growth/Scale) | Production |
 | Sales pipeline | Custom stages, BullMQ follow-ups, AI-drafted (staff-approved) replies, outbound documents | Production |
-| Multi-tenant | `businessId` scoping; FORCE RLS migration + two-role DB design; CI static IDOR gate + live RLS smoke test | **Architected, partially verified (§3)** |
+| Multi-tenant | `businessId` scoping; FORCE RLS migration + two-role DB design; `withBusinessScope` + `withUserScope` + `withSystemScope`; CI static IDOR gate + live RLS smoke test | **Architected, partially verified (§3)** |
 | Franchise | Parent/child hierarchy; role enum incl. `FRANCHISE_ADMIN` | Production |
 | Billing | 4 tiers (FREE/STARTER R499/GROWTH R1,499/SCALE R4,999) × Yoco/Stripe/PayFast registry | Production |
 | PWA / offline | Installable customer shell; service-worker offline outbox (IndexedDB + Background Sync) | Production |
@@ -75,7 +75,7 @@
 | Documentation honesty | 7/10 | Strong docs; recurring docs-vs-reality over-claims (the 9.5/10 RLS claim; prior force-dynamic gap) |
 | **Overall** | **8.3/10** | Honest mid-8; SSRF and ISR gaps are closed, hard-cap docs are honest again, and there is a clear path to 8.5–9 once the runtime-role rollout is proven app-wide |
 
-**Top 5 technical risks:** (1) **Critical** — partial/incomplete RLS runtime-role rollout despite 10+ services plus self-service reads now scoped (med effort); (2) **High** — single-maintainer bus factor (all commits one author); (3) **Medium** — AI overage price exists in plan metadata but is not a live billed path; collateral must stay on strict hard-cap semantics unless billing is truly shipped; (4) **Low** — SSRF hardening complete (socket pinning, robots redirect); (5) **Medium** — single-Postgres scaling ceiling at 10–100×.
+**Top 5 technical risks:** (1) **Critical** — partial/incomplete RLS runtime-role verification despite scoped runtime helpers and explicit system-scope admin paths now landing (med effort); (2) **High** — single-maintainer bus factor (all commits one author); (3) **Medium** — AI overage price exists in plan metadata but is not a live billed path; collateral must stay on strict hard-cap semantics unless billing is truly shipped; (4) **Low** — SSRF hardening complete (socket pinning, robots redirect); (5) **Medium** — single-Postgres scaling ceiling at 10–100×.
 
 ---
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { withSystemScope } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { generateAnonymisedBasketReport } from "@/server/services/analytics-export.service";
 
@@ -59,12 +59,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    const businessCount = await prisma.business.count({
-      where: { deletedAt: null, isActive: true }
-    });
+    const { businessCount, memberCount } = await withSystemScope(async (tx) => {
+      const [businessCount, memberCount] = await Promise.all([
+        tx.business.count({ where: { deletedAt: null, isActive: true } }),
+        tx.membership.count({ where: { isActive: true } })
+      ]);
 
-    const memberCount = await prisma.membership.count({
-      where: { isActive: true }
+      return { businessCount, memberCount };
     });
 
     return NextResponse.json({

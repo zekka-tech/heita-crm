@@ -174,9 +174,24 @@ export async function withUserScope<T>(
   }, BUSINESS_SCOPE_TX_OPTIONS);
 }
 
+export async function withSystemScope<T>(
+  fn: (tx: PrismaTransactionClient) => Promise<T>
+): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    const g = globalThis as { _rlsScopeDepth?: number };
+    g._rlsScopeDepth = (g._rlsScopeDepth ?? 0) + 1;
+    try {
+      await tx.$executeRaw`SELECT set_config('app.system_scope', 'on', true)`;
+      return await fn(tx);
+    } finally {
+      g._rlsScopeDepth = (g._rlsScopeDepth ?? 1) - 1;
+    }
+  }, BUSINESS_SCOPE_TX_OPTIONS);
+}
+
 // Dev-only guard: log a [RLS-WARN] when a query targets a business-scoped
-// model but runs outside a withBusinessScope transaction. This never throws
-// and has zero effect in production.
+// model but runs outside a scope transaction. This never throws and has zero
+// effect in production.
 if (env.NODE_ENV !== "production") {
   try {
     (prisma as unknown as { $on: (event: string, cb: (e: { model?: string }) => void) => void }).$on(
@@ -190,8 +205,9 @@ if (env.NODE_ENV !== "production") {
           !(g._rlsScopeDepth && g._rlsScopeDepth > 0)
         ) {
           console.warn(
-            `[RLS-WARN] Query on business-scoped model "${event.model}" ran outside withBusinessScope. ` +
-            `With FORCE RLS active this will return 0 rows or error in production.`
+            `[RLS-WARN] Query on business-scoped model "${event.model}" ran outside ` +
+            `withBusinessScope/withSystemScope/withUserScope. With FORCE RLS active this ` +
+            `will return 0 rows or error in production.`
           );
         }
       }

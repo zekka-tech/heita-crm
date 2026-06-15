@@ -32,9 +32,12 @@ vi.mock("@/lib/prisma", () => ({
     },
     $transaction: mockExpireTx
   },
-  // withBusinessScope delegates to mockExpireTx so tests preserve existing behaviour.
+  // Scoped helpers delegate to mockExpireTx so tests preserve existing behaviour.
   withBusinessScope: vi.fn().mockImplementation(
     async (_businessId: string, fn: (tx: unknown) => Promise<unknown>) => mockExpireTx(fn)
+  ),
+  withSystemScope: vi.fn().mockImplementation(
+    async (fn: (tx: unknown) => Promise<unknown>) => fn((await import("@/lib/prisma")).prisma)
   )
 }));
 

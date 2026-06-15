@@ -1,12 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/prisma", () => {
+  const prisma = {
     otpCode: { deleteMany: vi.fn().mockResolvedValue({ count: 3 }) },
     userConsent: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
     user: { findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn().mockResolvedValue({ count: 0 }) }
-  }
-}));
+  };
+
+  return {
+    prisma,
+    withSystemScope: vi.fn(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),
+  };
+});
 
 vi.mock("@/lib/redis", () => ({
   getRedis: () => ({

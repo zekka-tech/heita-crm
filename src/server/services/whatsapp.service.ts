@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { logger } from "@/lib/logger";
-import { prisma, withBusinessScope } from "@/lib/prisma";
+import { prisma, withBusinessScope, withSystemScope } from "@/lib/prisma";
 import { isUnixTimestampWithinSkew } from "@/lib/security";
 import { putStoredObject, storageConfigured } from "@/lib/storage";
 import {
@@ -316,16 +316,18 @@ async function persistStatusUpdates(
       continue;
     }
 
-    await prisma.message.updateMany({
-      where: { externalId: status.id },
-      data: {
-        status: status.status as MessageStatus,
-        metadata: {
-          status: status.status,
-          updatedAt: status.timestamp
+    await withSystemScope((tx) =>
+      tx.message.updateMany({
+        where: { externalId: status.id },
+        data: {
+          status: status.status as MessageStatus,
+          metadata: {
+            status: status.status,
+            updatedAt: status.timestamp
+          }
         }
-      }
-    });
+      })
+    );
   }
 }
 
@@ -450,15 +452,17 @@ export async function handleWhatsappInboundPayload(payload: unknown): Promise<vo
 }
 
 async function routeInboundToBusiness(input: RouteInput): Promise<void> {
-  const existingMessage = await prisma.message.findFirst({
-    where: {
-      channel: MessageChannel.WHATSAPP,
-      externalId: input.externalId
-    },
-    select: {
-      id: true
-    }
-  });
+  const existingMessage = await withBusinessScope(input.businessId, (tx) =>
+    tx.message.findFirst({
+      where: {
+        channel: MessageChannel.WHATSAPP,
+        externalId: input.externalId
+      },
+      select: {
+        id: true
+      }
+    })
+  );
 
   if (existingMessage) {
     logger.info({ externalId: input.externalId }, "whatsapp.payload.duplicate_ignored");
@@ -562,20 +566,22 @@ async function routeInboundToBusiness(input: RouteInput): Promise<void> {
     return;
   }
 
-  await prisma.aiChatSession.upsert({
-    where: { id: `wa_${membership.id}` },
-    update: {},
-    create: {
-      id: `wa_${membership.id}`,
-      businessId: input.businessId,
-      workspaceId: (
-        await prisma.aiWorkspace.findUniqueOrThrow({
-          where: { businessId: input.businessId }
-        })
-      ).id,
-      userId: existingUser.id,
-      title: `WhatsApp · ${input.fromPhone.slice(-4)}`
-    }
+  await withBusinessScope(input.businessId, async (tx) => {
+    const workspace = await tx.aiWorkspace.findUniqueOrThrow({
+      where: { businessId: input.businessId }
+    });
+
+    await tx.aiChatSession.upsert({
+      where: { id: `wa_${membership.id}` },
+      update: {},
+      create: {
+        id: `wa_${membership.id}`,
+        businessId: input.businessId,
+        workspaceId: workspace.id,
+        userId: existingUser.id,
+        title: `WhatsApp · ${input.fromPhone.slice(-4)}`
+      }
+    });
   });
 }
 

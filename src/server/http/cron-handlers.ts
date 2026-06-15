@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { prisma, withSystemScope } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
 import { constantTimeEqual } from "@/lib/security";
 import { withSpan } from "@/lib/tracing";
@@ -174,22 +174,19 @@ export async function handleHardDeleteExpiredUsers(request: Request) {
 
     for (const { id: userId } of batch) {
       try {
-        await prisma.$transaction(
-          async (tx) => {
-            // Delete child rows first for tables that may not have cascade rules.
-            await tx.otpCode.deleteMany({ where: { userId } });
-            await tx.pushSubscription.deleteMany({ where: { userId } });
-            await tx.userConsent.deleteMany({ where: { userId } });
-            await tx.notification.deleteMany({ where: { userId } });
+        await withSystemScope(async (tx) => {
+          // Delete child rows first for tables that may not have cascade rules.
+          await tx.otpCode.deleteMany({ where: { userId } });
+          await tx.pushSubscription.deleteMany({ where: { userId } });
+          await tx.userConsent.deleteMany({ where: { userId } });
+          await tx.notification.deleteMany({ where: { userId } });
 
-            // AiChatSession → AiChatMessage has Cascade on sessionId; deleting
-            // sessions removes their messages automatically.
-            await tx.aiChatSession.deleteMany({ where: { userId } });
+          // AiChatSession → AiChatMessage has Cascade on sessionId; deleting
+          // sessions removes their messages automatically.
+          await tx.aiChatSession.deleteMany({ where: { userId } });
 
-            await tx.user.delete({ where: { id: userId } });
-          },
-          { maxWait: 10_000, timeout: 30_000 }
-        );
+          await tx.user.delete({ where: { id: userId } });
+        });
         deleted += 1;
       } catch (err) {
         logger.error({ userId, err }, "cron.hard_delete_users.row_error");
@@ -229,20 +226,24 @@ export async function handlePurgeWhatsappMessagesCron(request: Request) {
   let cursor: string | undefined;
 
   do {
-    const batch = await prisma.message.findMany({
-      where: {
-        channel: "WHATSAPP",
-        createdAt: { lt: cutoff }
-      },
-      select: { id: true },
-      take: HARD_DELETE_BATCH,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
-    });
+    const batch = await withSystemScope((tx) =>
+      tx.message.findMany({
+        where: {
+          channel: "WHATSAPP",
+          createdAt: { lt: cutoff }
+        },
+        select: { id: true },
+        take: HARD_DELETE_BATCH,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+      })
+    );
 
     if (batch.length === 0) break;
 
     const ids = batch.map((m) => m.id);
-    const { count } = await prisma.message.deleteMany({ where: { id: { in: ids } } });
+    const { count } = await withSystemScope((tx) =>
+      tx.message.deleteMany({ where: { id: { in: ids } } })
+    );
     totalDeleted += count;
     cursor = batch[batch.length - 1]?.id;
   } while (true);
@@ -263,14 +264,16 @@ export async function handleBroadcastPromotionsCron(request: Request) {
 
   return withSpan("cron.broadcast_promotions", { job: "broadcast-promotions" }, async () => {
     const now = new Date();
-    const due = await prisma.promotion.findMany({
-      where: {
-        isActive: true,
-        broadcastAt: null,
-        startsAt: { lte: now }
-      },
-      select: { id: true, businessId: true }
-    });
+    const due = await withSystemScope((tx) =>
+      tx.promotion.findMany({
+        where: {
+          isActive: true,
+          broadcastAt: null,
+          startsAt: { lte: now }
+        },
+        select: { id: true, businessId: true }
+      })
+    );
 
     let succeeded = 0;
     let failed = 0;
@@ -278,10 +281,12 @@ export async function handleBroadcastPromotionsCron(request: Request) {
     for (const promotion of due) {
       try {
         // Atomic claim: updateMany where broadcastAt IS NULL prevents double-send
-        const claimed = await prisma.promotion.updateMany({
-          where: { id: promotion.id, broadcastAt: null },
-          data: { broadcastAt: now }
-        });
+        const claimed = await withSystemScope((tx) =>
+          tx.promotion.updateMany({
+            where: { id: promotion.id, broadcastAt: null },
+            data: { broadcastAt: now }
+          })
+        );
         if (claimed.count === 0) {
           // Already broadcast by another concurrent invocation
           continue;
@@ -314,17 +319,19 @@ export async function handlePurgeConnectMessagesCron(request: Request) {
   let cursor: string | undefined;
 
   do {
-    const batch = await prisma.message.findMany({
-      where: { channel: "IN_APP", createdAt: { lt: cutoff } },
-      select: { id: true },
-      take: HARD_DELETE_BATCH,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
-    });
+    const batch = await withSystemScope((tx) =>
+      tx.message.findMany({
+        where: { channel: "IN_APP", createdAt: { lt: cutoff } },
+        select: { id: true },
+        take: HARD_DELETE_BATCH,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+      })
+    );
 
     if (batch.length === 0) break;
 
     const ids = batch.map((m) => m.id);
-    await prisma.message.deleteMany({ where: { id: { in: ids } } });
+    await withSystemScope((tx) => tx.message.deleteMany({ where: { id: { in: ids } } }));
     totalDeleted += ids.length;
     cursor = ids[ids.length - 1];
   } while (true);

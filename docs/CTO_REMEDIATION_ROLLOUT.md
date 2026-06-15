@@ -27,7 +27,7 @@
 
 | Memo ref | Concern | Workstream | Baseline state | Current status |
 |---|---|---|---|---|
-| §6.2.1 | Enable Postgres RLS end-to-end | **W1** | policies + two-role model landed; CI provisions `heita_app` and runs live policy smoke test; scoped services now include: analytics, AI provider, vector, usage, staff-invite, ai-workspace, customer-import, inbound-address, web-source, segment | PARTIAL |
+| §6.2.1 | Enable Postgres RLS end-to-end | **W1** | policies + two-role model landed; CI provisions `heita_app` and runs live policy smoke test; scoped runtime helpers now include `withBusinessScope`, `withUserScope`, and explicit `withSystemScope` for cross-tenant cron/export/account paths; scoped services now include analytics, AI provider, vector, usage, staff-invite, ai-workspace, customer-import, inbound-address, web-source, segment, loyalty expiry jobs, analytics export, WhatsApp status updates, and account export/delete | PARTIAL |
 | §6.2.2, §6.1 §1.3 | Convert `force-dynamic` public surface | **W2** | **done** — audit + CI done; `/discover`, `b/[slug]`, and `b/[slug]/events` all converted to ISR (events now ISR with revalidate=60 after locale split) | DONE |
 | §6.2.3, §6.3.1-2 | SLO dashboards + per-alert runbooks | **W3** | **done** — CI-enforced, 20 runbooks, Grafana exports | DONE |
 | §6.2.4 | PostHog + RUM end-to-end | **W3** | **done** — consent-gated, PII-scrubbed, funnel taxonomy live, CAC dashboard | DONE |
@@ -86,8 +86,8 @@ This workstream *verifies and finishes the enforcement* so price maps to capabil
 
 **This remains the #1 critical gap.** Migration `0040_enable_business_rls` enables `FORCE ROW LEVEL
 SECURITY` with `current_setting('app.current_business_id')` policies and CI now provisions the
-`heita_app` runtime role plus a live smoke test. The remaining work is broader service-by-service
-reconciliation under the real app role: several high-value analytics/AI paths are now scoped, but the
+`heita_app` runtime role plus a live smoke test. Migration `0044_add_system_scope_and_ai_chat_user_rls` adds an explicit `app.system_scope` path for legitimate cross-tenant cron/export/account workflows and a user-read policy for `AiChatSession`. The remaining work is broader service-by-service
+reconciliation under the real app role: several high-value analytics/AI paths are now scoped, and global admin jobs are now explicit rather than accidental, but the
 whole app has not yet been proven green under `heita_app`.
 
 1. **Runtime DB role audit.** Confirm the app connects as a **non-BYPASSRLS** role in prod (migrations
@@ -298,7 +298,7 @@ the squash-PR workflow. I coordinate, review each PR's diff, and resolve cross-w
 
 ## Acceptance gate for the whole rollout (maps to memo §6.2 "8–12 weeks to 9/10")
 
-- [x] RLS migration + two-role model + live CI smoke test landed (§6.2.1) — PARTIAL (full app-role rollout and remaining service sweep still open)
+- [x] RLS migration + two-role model + live CI smoke test landed (§6.2.1) — PARTIAL (explicit system-scope cron/export/account paths now landed; full app-role verification and remaining edge-service sweep still open)
 - [x] Public surface audit closed: `/discover`, `b/[slug]`, and `b/[slug]/events` all on ISR (§6.2.2) — DONE
 - [x] Every alert has a runbook (CI-enforced); error-budget gate wired with live Prometheus query (§6.2.3, §6.3.5) — DONE
 - [x] PostHog funnel + named paid-CAC dashboard live (§6.2.4, §9.1.4)
