@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { ChatWindow } from "@/components/connect/chat-window";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withUserScope } from "@/lib/prisma";
 
 export const metadata = { title: "Messages" };
 export const dynamic = "force-dynamic";
@@ -22,17 +22,19 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
 
-  const memberships = await prisma.membership.findMany({
-    where: { userId: session.user.id },
-    select: {
-      businessId: true,
-      business: {
-        select: { id: true, name: true }
-      }
-    },
-    orderBy: { joinedAt: "desc" },
-    take: 10
-  });
+  const memberships = await withUserScope(session.user.id, (tx) =>
+    tx.membership.findMany({
+      where: { userId: session.user.id },
+      select: {
+        businessId: true,
+        business: {
+          select: { id: true, name: true }
+        }
+      },
+      orderBy: { joinedAt: "desc" },
+      take: 10
+    })
+  );
 
   const activeBusinessId = resolvedSearchParams.businessId ?? memberships[0]?.businessId;
 
@@ -48,33 +50,35 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
   }> = [];
 
   if (activeBusinessId) {
-    const convs = await prisma.conversation.findMany({
-      where: {
-        customerId: session.user.id,
-        businessId: activeBusinessId
-      },
-      include: {
-        participants: {
-          include: {
-            user: {
-              select: { id: true, name: true }
+    const convs = await withUserScope(session.user.id, (tx) =>
+      tx.conversation.findMany({
+        where: {
+          customerId: session.user.id,
+          businessId: activeBusinessId
+        },
+        include: {
+          participants: {
+            include: {
+              user: {
+                select: { id: true, name: true }
+              }
+            }
+          },
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: {
+              id: true,
+              body: true,
+              direction: true,
+              createdAt: true
             }
           }
         },
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            id: true,
-            body: true,
-            direction: true,
-            createdAt: true
-          }
-        }
-      },
-      orderBy: { lastMessageAt: "desc" },
-      take: 20
-    });
+        orderBy: { lastMessageAt: "desc" },
+        take: 20
+      })
+    );
 
     conversations = convs.map((conv) => {
       const convAny = conv as { participants: Array<{ userId: string; user: { name: string | null } }>; messages: Array<{ body: string; direction: string; createdAt: Date }> };

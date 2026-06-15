@@ -29,13 +29,16 @@ const mockDoc = {
   fileName: "test.pdf"
 };
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    businessDocument: {
-      findUnique: vi.fn(),
-      update: vi.fn().mockResolvedValue(mockDoc)
-    }
+const prisma = {
+  businessDocument: {
+    findUnique: vi.fn(),
+    update: vi.fn().mockResolvedValue(mockDoc)
   }
+};
+
+vi.mock("@/lib/prisma", () => ({
+  prisma,
+  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma))
 }));
 
 vi.mock("@/server/services/ai-workspace.service", () => ({
@@ -51,7 +54,7 @@ vi.mock("@/server/services/ai-workspace.service", () => ({
 const { handleCompleteUpload } = await import("@/server/http/upload-handler");
 
 function makeRequest() {
-  return new Request("http://localhost/api/upload/doc_1/complete", {
+  return new Request("http://localhost/api/upload/doc_1/complete?businessId=biz_1", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -86,7 +89,7 @@ describe("handleCompleteUpload", () => {
     expect(res.status).toBe(202);
     const { requestDocumentIngestion } = await import("@/server/services/ai-workspace.service");
     expect(requestDocumentIngestion).toHaveBeenCalledOnce();
-    expect(requestDocumentIngestion).toHaveBeenCalledWith("doc_1", "usr_1");
+    expect(requestDocumentIngestion).toHaveBeenCalledWith("doc_1", "biz_1", "usr_1");
   });
 
   it("returns 404 when document does not exist", async () => {

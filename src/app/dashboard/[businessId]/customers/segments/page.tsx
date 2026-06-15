@@ -2,7 +2,7 @@ import { StaffRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withUserScope } from "@/lib/prisma";
 import { hasStaffRoleAccess } from "@/lib/staff";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -60,10 +60,12 @@ export default async function SegmentsPage({
     redirect("/sign-in");
   }
 
-  const staffRecord = await prisma.staffMember.findUnique({
-    where: { businessId_userId: { businessId, userId: session.user.id } },
-    select: { role: true }
-  });
+  const staffRecord = await withUserScope(session.user.id, (tx) =>
+    tx.staffMember.findUnique({
+      where: { businessId_userId: { businessId, userId: session.user.id } },
+      select: { role: true }
+    })
+  );
   const canManage = staffRecord
     ? hasStaffRoleAccess(staffRecord.role, [StaffRole.OWNER, StaffRole.MANAGER])
     : false;

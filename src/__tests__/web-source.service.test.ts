@@ -16,7 +16,10 @@ const { prisma, enqueueWebCrawlJob, assertPublicHttpUrl, recordStaffAuditLog } =
   recordStaffAuditLog: vi.fn()
 }));
 
-vi.mock("@/lib/prisma", () => ({ prisma }));
+vi.mock("@/lib/prisma", () => ({
+  prisma,
+  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma))
+}));
 vi.mock("@/lib/ai/web-crawl-queue", () => ({ enqueueWebCrawlJob }));
 vi.mock("@/lib/security", () => ({ assertPublicHttpUrl }));
 vi.mock("@/server/services/staff-audit.service", () => ({ recordStaffAuditLog }));
@@ -53,7 +56,7 @@ describe("createWebSource", () => {
     expect(created.maxPages).toBe(50); // MAX_CRAWL_PAGES
     expect(created.refreshIntervalDays).toBe(7);
     expect(created.domain).toBe("acme.co.za");
-    expect(enqueueWebCrawlJob).toHaveBeenCalledWith("src_1");
+    expect(enqueueWebCrawlJob).toHaveBeenCalledWith("src_1", "biz_1");
     expect(source.id).toBe("src_1");
   });
 
@@ -111,6 +114,6 @@ describe("deleteWebSource / refreshWebSource", () => {
     prisma.webSource.findUnique.mockResolvedValue({ id: "src_1", businessId: "biz_1" });
     prisma.webSource.update.mockResolvedValue({ id: "src_1", status: "PENDING" });
     await refreshWebSource({ id: "src_1", businessId: "biz_1" });
-    expect(enqueueWebCrawlJob).toHaveBeenCalledWith("src_1");
+    expect(enqueueWebCrawlJob).toHaveBeenCalledWith("src_1", "biz_1");
   });
 });

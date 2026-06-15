@@ -40,6 +40,7 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       AUTH_SECRET: "ci-only-secret"
       DATABASE_URL: "postgresql://heita:heita@localhost:5432/heita"
+      APP_DATABASE_URL: "postgresql://heita_app:heita_app@localhost:5432/heita"
       NODE_ENV: "production"
     steps:
       - uses: actions/checkout@v6
@@ -59,6 +60,30 @@ jobs:
 
       - name: Apply migrations
         run: npx prisma migrate deploy
+
+      - name: Configure RLS app role for live policy tests
+        run: |
+          PGPASSWORD=heita psql -h localhost -U heita -d heita <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'heita_app') THEN
+              CREATE ROLE heita_app WITH
+                LOGIN
+                NOSUPERUSER
+                NOCREATEDB
+                NOCREATEROLE
+                NOINHERIT
+                NOBYPASSRLS
+                PASSWORD 'heita_app';
+            END IF;
+          END
+          $$;
+
+          GRANT CONNECT ON DATABASE heita TO heita_app;
+          GRANT USAGE ON SCHEMA public TO heita_app;
+          GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO heita_app;
+          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO heita_app;
+          SQL
 
       - name: Migration drift check
         run: |

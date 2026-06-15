@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { observeHttpRoute, incrementPosMetric } from "@/lib/metrics";
 import { normalizeZaPhone } from "@/lib/phone";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { constantTimeEqual, getClientIp, hmacSha256 } from "@/lib/security";
 import { withSpan } from "@/lib/tracing";
@@ -174,14 +174,16 @@ export async function handlePosTransaction(request: Request) {
     );
   }
 
-  const membership = await prisma.membership.findUnique({
-    where: {
-      businessId_userId: {
-        businessId: business.id,
-        userId: user.id
+  const membership = await withBusinessScope(business.id, (tx) =>
+    tx.membership.findUnique({
+      where: {
+        businessId_userId: {
+          businessId: business.id,
+          userId: user.id
+        }
       }
-    }
-  });
+    })
+  );
   if (!membership) {
     incrementPosMetric("unknown_membership", business.id);
     observeHttpRoute({

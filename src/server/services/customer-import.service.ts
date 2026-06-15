@@ -2,7 +2,7 @@ import { parse } from "csv-parse/sync";
 import { ImportStatus, JoinChannel, Prisma, TransactionType } from "@prisma/client";
 
 import { normalizeZaPhone } from "@/lib/phone";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 type ImportRow = {
@@ -14,10 +14,6 @@ type ImportRow = {
 
 const MAX_IMPORT_ROWS = 2000;
 const MAX_CSV_BYTES = 10 * 1024 * 1024; // 10 MB
-const CUSTOMER_IMPORT_TRANSACTION_OPTIONS = {
-  maxWait: 5_000,
-  timeout: 30_000
-};
 
 function parseImportRows(sourceCsv: string): ImportRow[] {
   if (Buffer.byteLength(sourceCsv, "utf8") > MAX_CSV_BYTES) {
@@ -77,19 +73,28 @@ export async function createCustomerImportRun(input: {
     throw new Error(`Imports are limited to ${MAX_IMPORT_ROWS} rows at a time.`);
   }
 
-  return prisma.customerImportRun.create({
-    data: {
-      businessId: input.businessId,
-      actorUserId: input.actorUserId,
-      fileName: input.fileName,
-      sourceCsv: input.sourceCsv,
-      totalRows: rows.length
-    }
-  });
+  return withBusinessScope(input.businessId, (tx) =>
+    tx.customerImportRun.create({
+      data: {
+        businessId: input.businessId,
+        actorUserId: input.actorUserId,
+        fileName: input.fileName,
+        sourceCsv: input.sourceCsv,
+        totalRows: rows.length
+      }
+    })
+  );
 }
 
 export async function processCustomerImportRun(importRunId: string) {
-  return prisma.$transaction(async (tx) => {
+  // Look up the import run outside the RLS scope to obtain the businessId
+  // for tenant scoping. The caller is already authenticated via middleware;
+  // this read is a prerequisite for RLS enforcement, not a data-access bypass.
+  const importRunMeta = await prisma.customerImportRun.findUniqueOrThrow({
+    where: { id: importRunId }
+  });
+
+  return withBusinessScope(importRunMeta.businessId, async (tx) => {
     const importRun = await tx.customerImportRun.update({
       where: { id: importRunId },
       data: { status: ImportStatus.PROCESSING }
@@ -223,5 +228,5 @@ export async function processCustomerImportRun(importRunId: string) {
     );
 
     return updatedRun;
-  }, CUSTOMER_IMPORT_TRANSACTION_OPTIONS);
+  });
 }

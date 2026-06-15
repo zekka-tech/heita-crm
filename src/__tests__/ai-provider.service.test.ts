@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { decryptSecret } from "@/lib/secret-crypto";
 
-const { prisma, requireRole, recordStaffAuditLog, assertPublicHttpUrl, probeByokConnection } =
-  vi.hoisted(() => ({
-    prisma: {
+const { prisma, withBusinessScope, requireRole, recordStaffAuditLog, assertPublicHttpUrl, probeByokConnection } =
+  vi.hoisted(() => {
+    const prisma = {
       aiWorkspace: { upsert: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
       aiProviderConnection: {
         count: vi.fn(),
@@ -15,14 +15,19 @@ const { prisma, requireRole, recordStaffAuditLog, assertPublicHttpUrl, probeByok
         deleteMany: vi.fn()
       },
       $transaction: vi.fn()
-    },
-    requireRole: vi.fn(),
-    recordStaffAuditLog: vi.fn(),
-    assertPublicHttpUrl: vi.fn(),
-    probeByokConnection: vi.fn()
-  }));
+    };
 
-vi.mock("@/lib/prisma", () => ({ prisma }));
+    return {
+      prisma,
+      withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma)),
+      requireRole: vi.fn(),
+      recordStaffAuditLog: vi.fn(),
+      assertPublicHttpUrl: vi.fn(),
+      probeByokConnection: vi.fn()
+    };
+  });
+
+vi.mock("@/lib/prisma", () => ({ prisma, withBusinessScope }));
 vi.mock("@/lib/staff", () => ({ requireRole }));
 vi.mock("@/server/services/staff-audit.service", () => ({ recordStaffAuditLog }));
 vi.mock("@/lib/security", () => ({ assertPublicHttpUrl }));
@@ -45,6 +50,7 @@ process.env.AI_CREDENTIALS_SECRET = "test-credentials-secret";
 beforeEach(() => {
   vi.clearAllMocks();
   requireRole.mockResolvedValue({ role: "OWNER" });
+  withBusinessScope.mockImplementation(async (_businessId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma));
   assertPublicHttpUrl.mockResolvedValue(["93.184.216.34"]);
   probeByokConnection.mockResolvedValue(null);
   prisma.aiWorkspace.upsert.mockResolvedValue({ id: "ws_1", activeConnectionId: null });

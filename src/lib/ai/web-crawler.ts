@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import https from "node:https";
+import http from "node:http";
 
 import { logger } from "@/lib/logger";
 import { assertPublicHttpUrl } from "@/lib/security";
@@ -46,6 +48,72 @@ function normalizeForVisit(url: string): string {
   } catch {
     return url;
   }
+}
+
+/**
+ * Fetch a URL using a pinned connection that bypasses DNS resolution and
+ * connects directly to the already-validated IP addresses. This closes the
+ * DNS-rebinding TOCTOU window: even if a malicious DNS server changes its
+ * response between validation and fetch, the connection is pinned to the
+ * previously-resolved public IPs.
+ */
+function fetchWithPinnedIp(
+  url: string,
+  resolvedIps: string[],
+  opts: {
+    method?: string;
+    headers?: Record<string, string>;
+    signal?: AbortSignal;
+  }
+): Promise<{ status: number; headers: Headers; text: () => Promise<string> }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const isHttps = parsed.protocol === "https:";
+    const port = parsed.port ? parseInt(parsed.port, 10) : (isHttps ? 443 : 80);
+
+    const ip = resolvedIps[0];
+    if (!ip) {
+      reject(new Error("No resolved IPs available for pinned connection"));
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pinnedLookup = (_hostname: string, _opts: any, cb: (err: Error | null, address: string, family: number) => void) => {
+      cb(null, ip, ip.includes(":") ? 6 : 4);
+    };
+
+    const agent = isHttps
+      ? new https.Agent({ lookup: pinnedLookup })
+      : new http.Agent({ lookup: pinnedLookup });
+
+    const mod = isHttps ? https : http;
+    const requestOpts: https.RequestOptions | http.RequestOptions = {
+      hostname: parsed.hostname,
+      port,
+      path: parsed.pathname + parsed.search,
+      method: opts.method ?? "GET",
+      headers: { ...opts.headers, host: parsed.hostname },
+      agent,
+      signal: opts.signal
+    };
+    if (isHttps) {
+      (requestOpts as https.RequestOptions).rejectUnauthorized = true;
+    }
+    const req = mod.request(requestOpts, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => {
+        const body = Buffer.concat(chunks).toString("utf8");
+        resolve({
+          status: res.statusCode ?? 0,
+          headers: new Headers(res.headers as Record<string, string>),
+          text: async () => body
+        });
+      });
+      res.on("error", reject);
+    });
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 /** Minimal robots.txt matcher for our User-Agent (falls back to `*`). */
@@ -98,22 +166,40 @@ class RobotsRules {
 
 async function fetchRobots(origin: string): Promise<RobotsRules> {
   try {
-    const robotsUrl = `${origin}/robots.txt`;
-    await assertPublicHttpUrl(robotsUrl);
-    const res = await fetch(robotsUrl, {
-      headers: { "User-Agent": CRAWLER_USER_AGENT, Accept: "text/plain" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(PER_FETCH_TIMEOUT_MS)
-    });
-    if (!res.ok) return RobotsRules.parse("");
-    return RobotsRules.parse(await res.text());
+    let url: string | null = `${origin}/robots.txt`;
+    const fetcher = __fetcherImpl ?? fetchWithPinnedIp;
+
+    for (let hop = 0; hop <= 5 && url; hop += 1) {
+      const resolvedIps = await assertPublicHttpUrl(url);
+      const res = await fetcher(url, resolvedIps, {
+        headers: { "User-Agent": CRAWLER_USER_AGENT, Accept: "text/plain" },
+        signal: AbortSignal.timeout(PER_FETCH_TIMEOUT_MS)
+      });
+
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get("location");
+        url = location ? new URL(location, url).toString() : null;
+        continue;
+      }
+
+      if (res.status < 200 || res.status >= 300) return RobotsRules.parse("");
+      return RobotsRules.parse(await res.text());
+    }
+    return RobotsRules.parse("");
   } catch {
-    // No robots.txt / unreachable → allow everything (standard behaviour).
     return RobotsRules.parse("");
   }
 }
 
 type FetchedHtml = { finalUrl: string; html: string } | null;
+
+// Test-only hook: allows unit tests to swap out the low-level pinned-IP fetcher
+// without hitting real network. Not part of the public API.
+let __fetcherImpl: typeof fetchWithPinnedIp | null = null;
+
+export function __swapFetcherForTesting(fn: typeof fetchWithPinnedIp | null): void {
+  __fetcherImpl = fn;
+}
 
 /**
  * Fetch an HTML page with SSRF re-validation on every hop, manual redirect
@@ -122,13 +208,14 @@ type FetchedHtml = { finalUrl: string; html: string } | null;
  */
 async function fetchHtml(startUrl: string): Promise<FetchedHtml> {
   let url = startUrl;
+  const fetcher = __fetcherImpl ?? fetchWithPinnedIp;
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    await assertPublicHttpUrl(url); // re-checked each hop — defends redirect SSRF
+    // Resolve + validate IPs, then pin the connection to prevent DNS-rebinding TOCTOU.
+    const resolvedIps = await assertPublicHttpUrl(url);
 
-    const res = await fetch(url, {
+    const res = await fetcher(url, resolvedIps, {
       headers: { "User-Agent": CRAWLER_USER_AGENT, Accept: "text/html,application/xhtml+xml" },
-      redirect: "manual",
       signal: AbortSignal.timeout(PER_FETCH_TIMEOUT_MS)
     });
 
@@ -139,7 +226,7 @@ async function fetchHtml(startUrl: string): Promise<FetchedHtml> {
       continue;
     }
 
-    if (!res.ok) return null;
+    if (res.status < 200 || res.status >= 300) return null;
 
     const contentType = res.headers.get("content-type") ?? "";
     if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) return null;
@@ -147,35 +234,12 @@ async function fetchHtml(startUrl: string): Promise<FetchedHtml> {
     const declaredLength = Number(res.headers.get("content-length") ?? "0");
     if (declaredLength > MAX_BODY_BYTES) return null;
 
-    const buffer = await readCapped(res, MAX_BODY_BYTES);
-    if (buffer === null) return null;
-    return { finalUrl: url, html: buffer };
+    const body = await res.text();
+    if (Buffer.byteLength(body) > MAX_BODY_BYTES) return null;
+    return { finalUrl: url, html: body };
   }
 
   return null; // too many redirects
-}
-
-async function readCapped(res: Response, maxBytes: number): Promise<string | null> {
-  if (!res.body) {
-    const text = await res.text();
-    return Buffer.byteLength(text) > maxBytes ? null : text;
-  }
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) {
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel();
-        return null;
-      }
-      chunks.push(value);
-    }
-  }
-  return Buffer.concat(chunks.map((c) => Buffer.from(c))).toString("utf8");
 }
 
 /**

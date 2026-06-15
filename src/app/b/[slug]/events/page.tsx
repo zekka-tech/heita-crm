@@ -9,9 +9,8 @@ import { Chip } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/shared/breadcrumb";
 import { prisma } from "@/lib/prisma";
 
-// ISR: revalidate every 60 s. Locale-sensitive date formatting is deferred to
-// the client (EventDate component) so the static shell has no request-time
-// cookie/header reads.
+// ISR: revalidate every 60 s. Dates use a fixed en-ZA locale on the server so
+// the static shell has no request-time cookie/header reads.
 export const revalidate = 60;
 
 type BusinessEventsPageProps = {

@@ -6,7 +6,7 @@ import { Chip } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withUserScope } from "@/lib/prisma";
 import { hasStaffRoleAccess } from "@/lib/staff";
 import { listBusinessFeatureFlags } from "@/server/services/feature-flag.service";
 
@@ -31,17 +31,19 @@ export default async function FeatureFlagsPage({
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/settings/feature-flags`);
   }
 
-  const staffRecord = await prisma.staffMember.findUnique({
-    where: {
-      businessId_userId: {
-        businessId,
-        userId: session.user.id
+  const staffRecord = await withUserScope(session.user.id, (tx) =>
+    tx.staffMember.findUnique({
+      where: {
+        businessId_userId: {
+          businessId,
+          userId: session.user.id
+        }
+      },
+      include: {
+        business: { select: { name: true } }
       }
-    },
-    include: {
-      business: { select: { name: true } }
-    }
-  });
+    })
+  );
 
   if (!staffRecord) notFound();
 

@@ -3,13 +3,20 @@ import { NextResponse } from "next/server";
 
 import { enqueueWebCrawlJob } from "@/lib/ai/web-crawl-queue";
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 import { constantTimeEqual } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_PER_RUN = 50;
+
+type Candidate = {
+  id: string;
+  businessId: string;
+  refreshIntervalDays: number;
+  lastCrawledAt: Date | null;
+};
 
 function isAuthorized(request: Request): boolean {
   const provided =
@@ -20,39 +27,54 @@ function isAuthorized(request: Request): boolean {
   return constantTimeEqual(provided, expected);
 }
 
-/**
- * Re-crawl web sources whose refresh interval has elapsed. Unchanged pages are
- * skipped during the crawl (contentHash), so re-runs are cheap. Idempotent:
- * sources already CRAWLING are excluded.
- */
 export async function POST(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const now = Date.now();
-  const candidates = await prisma.webSource.findMany({
-    where: {
-      refreshIntervalDays: { gt: 0 },
-      status: { not: WebSourceStatus.CRAWLING }
-    },
-    select: { id: true, refreshIntervalDays: true, lastCrawledAt: true },
-    orderBy: { lastCrawledAt: { sort: "asc", nulls: "first" } },
-    take: 200
+  const businesses = await prisma.business.findMany({
+    where: { deletedAt: null, isActive: true },
+    select: { id: true },
+    take: 500
   });
 
-  const due = candidates.filter((source) => {
-    if (!source.lastCrawledAt) return true;
-    return now - source.lastCrawledAt.getTime() >= source.refreshIntervalDays * DAY_MS;
+  const due: Candidate[] = [];
+  for (const business of businesses) {
+    const candidates = await withBusinessScope(business.id, (tx) =>
+      tx.webSource.findMany({
+        where: {
+          businessId: business.id,
+          refreshIntervalDays: { gt: 0 },
+          status: { not: WebSourceStatus.CRAWLING }
+        },
+        select: { id: true, businessId: true, refreshIntervalDays: true, lastCrawledAt: true },
+        orderBy: { lastCrawledAt: { sort: "asc", nulls: "first" } },
+        take: MAX_PER_RUN
+      })
+    );
+
+    for (const source of candidates) {
+      if (!source.lastCrawledAt || now - source.lastCrawledAt.getTime() >= source.refreshIntervalDays * DAY_MS) {
+        due.push(source);
+      }
+    }
+  }
+
+  due.sort((a, b) => {
+    if (!a.lastCrawledAt && !b.lastCrawledAt) return 0;
+    if (!a.lastCrawledAt) return -1;
+    if (!b.lastCrawledAt) return 1;
+    return a.lastCrawledAt.getTime() - b.lastCrawledAt.getTime();
   });
 
   let enqueued = 0;
   for (const source of due.slice(0, MAX_PER_RUN)) {
     try {
-      await enqueueWebCrawlJob(source.id);
+      await enqueueWebCrawlJob(source.id, source.businessId);
       enqueued += 1;
     } catch (error) {
-      logger.error({ err: error, webSourceId: source.id }, "cron.refresh_web_sources.enqueue_failed");
+      logger.error({ err: error, webSourceId: source.id, businessId: source.businessId }, "cron.refresh_web_sources.enqueue_failed");
     }
   }
 

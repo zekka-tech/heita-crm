@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
-import { prisma } from "@/lib/prisma";
+import { withUserScope } from "@/lib/prisma";
 import {
   createStaffInvite,
   removeStaffMember,
@@ -14,10 +14,12 @@ import {
 } from "@/server/services/staff-invite.service";
 
 async function requireStaffAccess(userId: string, businessId: string) {
-  const member = await prisma.staffMember.findUnique({
-    where: { businessId_userId: { businessId, userId } },
-    select: { role: true }
-  });
+  const member = await withUserScope(userId, (tx) =>
+    tx.staffMember.findUnique({
+      where: { businessId_userId: { businessId, userId } },
+      select: { role: true }
+    })
+  );
   if (!member) throw new Error("Access denied.");
   return member;
 }

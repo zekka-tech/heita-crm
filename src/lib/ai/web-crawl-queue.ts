@@ -9,6 +9,7 @@ export const WEB_CRAWL_DLQ = "web-crawl-dlq";
 
 type WebCrawlJob = {
   webSourceId: string;
+  businessId: string;
 };
 
 declare global {
@@ -55,27 +56,26 @@ export function getWebCrawlDlq() {
   return global.__heitaWebCrawlDlq__;
 }
 
-export async function enqueueWebCrawlJob(webSourceId: string) {
+export async function enqueueWebCrawlJob(webSourceId: string, businessId: string) {
   const queue = getWebCrawlQueue();
 
-  // No Redis (dev/test) or explicit inline mode → crawl synchronously.
   if (!queue || process.env.AI_INGEST_INLINE === "1") {
-    const result = await runWebSourceCrawl(webSourceId);
-    return { enqueued: false, mode: "inline" as const, webSourceId, result };
+    const result = await runWebSourceCrawl({ webSourceId, businessId });
+    return { enqueued: false, mode: "inline" as const, webSourceId, businessId, result };
   }
 
   const job = await queue.add(
     "crawl-web-source",
-    { webSourceId },
+    { webSourceId, businessId },
     { jobId: `web-source:${webSourceId}` }
   );
 
-  return { enqueued: true, mode: "queue" as const, webSourceId, jobId: job.id };
+  return { enqueued: true, mode: "queue" as const, webSourceId, businessId, jobId: job.id };
 }
 
 export async function handleWebCrawlJob(job: Job<WebCrawlJob>) {
-  logger.info({ jobId: job.id, webSourceId: job.data.webSourceId }, "crawler.job_start");
-  return runWebSourceCrawl(job.data.webSourceId);
+  logger.info({ jobId: job.id, webSourceId: job.data.webSourceId, businessId: job.data.businessId }, "crawler.job_start");
+  return runWebSourceCrawl(job.data);
 }
 
 export async function moveWebCrawlJobToDlq(job: Job<WebCrawlJob>, err: Error): Promise<void> {

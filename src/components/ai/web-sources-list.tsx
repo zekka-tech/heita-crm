@@ -10,6 +10,7 @@ import { appendCsrfHeader } from "@/lib/csrf";
 
 export type WebSourceListItem = {
   id: string;
+  businessId: string;
   rootUrl: string;
   domain: string;
   status: "PENDING" | "CRAWLING" | "READY" | "FAILED";
@@ -34,11 +35,12 @@ export function WebSourcesList({ sources }: { sources: WebSourceListItem[] }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
-  const mutate = (id: string, action: "refresh" | "delete") => {
+  const mutate = (id: string, businessId: string, action: "refresh" | "delete") => {
     setBusyId(id);
     startTransition(async () => {
       try {
-        const url = action === "refresh" ? `/api/ai/web-sources/${id}/refresh` : `/api/ai/web-sources/${id}`;
+        const base = action === "refresh" ? `/api/ai/web-sources/${id}/refresh` : `/api/ai/web-sources/${id}`;
+        const url = `${base}?businessId=${encodeURIComponent(businessId)}`;
         await fetch(url, {
           method: action === "refresh" ? "POST" : "DELETE",
           headers: appendCsrfHeader(undefined, csrfToken)
@@ -88,7 +90,7 @@ export function WebSourcesList({ sources }: { sources: WebSourceListItem[] }) {
             </Chip>
             <button
               type="button"
-              onClick={() => mutate(source.id, "refresh")}
+              onClick={() => mutate(source.id, source.businessId, "refresh")}
               disabled={busyId === source.id || !csrfToken || source.status === "CRAWLING"}
               className="rounded-lg p-2 text-ink-muted transition-colors hover:bg-surface hover:text-ink disabled:opacity-50"
               aria-label={`Refresh ${source.domain}`}
@@ -101,7 +103,7 @@ export function WebSourcesList({ sources }: { sources: WebSourceListItem[] }) {
             </button>
             <button
               type="button"
-              onClick={() => mutate(source.id, "delete")}
+              onClick={() => mutate(source.id, source.businessId, "delete")}
               disabled={busyId === source.id || !csrfToken}
               className="rounded-lg p-2 text-ink-muted transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
               aria-label={`Delete ${source.domain}`}

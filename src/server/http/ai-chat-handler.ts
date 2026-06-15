@@ -4,7 +4,7 @@ import { z } from "zod";
 import { streamRagAnswer } from "@/lib/ai/rag";
 import { logger } from "@/lib/logger";
 import { incrementAiChatMetric, observeHttpRoute } from "@/lib/metrics";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { authenticateRequestUser } from "@/lib/request-auth";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
@@ -94,10 +94,19 @@ export async function handleAiChatRequest(request: Request) {
       slug: parsed.data.businessSlug,
       deletedAt: null
     },
-    include: { aiWorkspace: true }
+    select: { id: true, isActive: true }
   });
 
-  if (!business || !business.isActive || !business.aiWorkspace) {
+  const workspace = business
+    ? await withBusinessScope(business.id, (tx) =>
+        tx.aiWorkspace.findUnique({
+          where: { businessId: business.id },
+          select: { id: true }
+        })
+      )
+    : null;
+
+  if (!business || !business.isActive || !workspace) {
     observeHttpRoute({
       route: "/api/ai/chat",
       method: "POST",
@@ -112,41 +121,49 @@ export async function handleAiChatRequest(request: Request) {
 
   const aiSession =
     parsed.data.sessionId
-      ? await prisma.aiChatSession.findFirst({
-          where: {
-            id: parsed.data.sessionId,
-            businessId: business.id,
-            ...(userId ? { userId } : {})
-          }
-        })
+      ? await withBusinessScope(business.id, (tx) =>
+          tx.aiChatSession.findFirst({
+            where: {
+              id: parsed.data.sessionId,
+              businessId: business.id,
+              ...(userId ? { userId } : {})
+            }
+          })
+        )
       : null;
 
   const activeSession =
     aiSession ??
-    (await prisma.aiChatSession.create({
+    (await withBusinessScope(business.id, (tx) =>
+      tx.aiChatSession.create({
+        data: {
+          businessId: business.id,
+          workspaceId: workspace.id,
+          userId,
+          title: buildSessionTitle(parsed.data.message)
+        }
+      })
+    ));
+
+  await withBusinessScope(business.id, (tx) =>
+    tx.aiChatMessage.create({
       data: {
-        businessId: business.id,
-        workspaceId: business.aiWorkspace.id,
-        userId,
-        title: buildSessionTitle(parsed.data.message)
+        sessionId: activeSession.id,
+        role: "user",
+        content: parsed.data.message
       }
-    }));
+    })
+  );
 
-  await prisma.aiChatMessage.create({
-    data: {
-      sessionId: activeSession.id,
-      role: "user",
-      content: parsed.data.message
-    }
-  });
-
-  const history = await prisma.aiChatMessage.findMany({
-    where: {
-      sessionId: activeSession.id
-    },
-    orderBy: { createdAt: "asc" },
-    take: 20
-  });
+  const history = await withBusinessScope(business.id, (tx) =>
+    tx.aiChatMessage.findMany({
+      where: {
+        sessionId: activeSession.id
+      },
+      orderBy: { createdAt: "asc" },
+      take: 20
+    })
+  );
 
   const encoder = new TextEncoder();
   const streamStartedAt = Date.now();
@@ -225,22 +242,25 @@ export async function handleAiChatRequest(request: Request) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ chunk })}\n\n`));
         }
 
-        await prisma.aiChatMessage.create({
-          data: {
-            sessionId: activeSession.id,
-            role: "assistant",
-            content: assistantContent.trim(),
-            model: result.model ?? result.runtime,
-            latencyMs: Date.now() - streamStartedAt,
-            metadata: {
-              citations: result.citations
+        await withBusinessScope(business.id, (tx) =>
+          tx.aiChatMessage.create({
+            data: {
+              sessionId: activeSession.id,
+              role: "assistant",
+              content: assistantContent.trim(),
+              model: result.model ?? result.runtime,
+              latencyMs: Date.now() - streamStartedAt,
+              metadata: {
+                citations: result.citations
+              }
             }
-          }
-        });
+          })
+        );
 
         if (usageReservationId && result.runtime !== "fallback") {
           const completionTokens = estimateTokenCount(assistantContent);
           await finalizeAiTokenUsage({
+            businessId: business.id,
             usageId: usageReservationId,
             sessionId: activeSession.id,
             userId,
@@ -252,7 +272,7 @@ export async function handleAiChatRequest(request: Request) {
           });
           usageReservationId = null;
         } else if (usageReservationId) {
-          await releaseAiTokenUsage(usageReservationId).catch(() => undefined);
+          await releaseAiTokenUsage({ businessId: business.id, usageId: usageReservationId }).catch(() => undefined);
           usageReservationId = null;
         }
         incrementAiChatMetric(result.runtime, "success");
@@ -262,7 +282,7 @@ export async function handleAiChatRequest(request: Request) {
       } catch (error) {
         incrementAiChatMetric("unknown", "error");
         if (usageReservationId) {
-          await releaseAiTokenUsage(usageReservationId).catch(() => undefined);
+          await releaseAiTokenUsage({ businessId: business.id, usageId: usageReservationId }).catch(() => undefined);
           usageReservationId = null;
         }
         logger.error(
@@ -276,15 +296,17 @@ export async function handleAiChatRequest(request: Request) {
         );
 
         if (assistantContent) {
-          await prisma.aiChatMessage.create({
-            data: {
-              sessionId: activeSession.id,
-              role: "assistant",
-              content: assistantContent,
-              model: "partial",
-              latencyMs: Date.now() - streamStartedAt
-            }
-          });
+          await withBusinessScope(business.id, (tx) =>
+            tx.aiChatMessage.create({
+              data: {
+                sessionId: activeSession.id,
+                role: "assistant",
+                content: assistantContent,
+                model: "partial",
+                latencyMs: Date.now() - streamStartedAt
+              }
+            })
+          );
         }
 
         controller.enqueue(

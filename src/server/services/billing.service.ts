@@ -4,7 +4,7 @@ import {
   type PaymentProvider,
 } from "@prisma/client";
 
-import { getBusinessPlan } from "@/lib/billing";
+import { getBusinessPlan, getPlanQuota } from "@/lib/billing";
 import { logger } from "@/lib/logger";
 import { withBusinessScope } from "@/lib/prisma";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
@@ -514,5 +514,58 @@ export async function listInvoices(businessId: string) {
       orderBy: { issuedAt: "desc" },
       take: 24,
     });
+  });
+}
+
+/**
+ * Bill overage charges for AI messages consumed beyond the plan limit.
+ * Only applies to paid plans (STARTER, GROWTH, SCALE) with aiOveragePriceZar > 0.
+ * Creates a PENDING invoice for the total overage charges this month.
+ *
+ * NOTE: Schema currently uses BusinessPlanId enum (no "OVERAGE" value) and
+ * PaymentProvider enum (no "MANUAL" value). The invoice uses the effective
+ * plan ID and defaults provider to YOCO. A future migration should add
+ * OVERAGE/MANUAL enum values for cleaner invoice categorization.
+ */
+export async function billAiOverageCharges(businessId: string) {
+  return withBusinessScope(businessId, async (tx) => {
+    const planId = await getEffectivePlan(businessId);
+    const planQuota = getPlanQuota(planId);
+    if (!planQuota || planQuota.aiOveragePriceZar <= 0) return null;
+
+    const monthStart = startOfMonth();
+
+    // Sum all isOverage=true usage this month
+    const overageCount = await tx.aiTokenUsage.count({
+      where: {
+        businessId,
+        isOverage: true,
+        createdAt: { gte: monthStart }
+      }
+    });
+
+    if (overageCount === 0) return null;
+
+    const amountZar = Math.round(
+      overageCount * planQuota.aiOveragePriceZar
+    );
+
+    if (amountZar <= 0) return null;
+
+    // Create an invoice for overage charges.
+    // provider defaults to YOCO per schema; planId uses effective plan
+    // since the Prisma enum does not currently include "OVERAGE".
+    const invoice = await tx.businessInvoice.create({
+      data: {
+        businessId,
+        planId,
+        amountZar,
+        status: "PENDING",
+        periodStart: monthStart,
+        periodEnd: new Date()
+      }
+    });
+
+    return { overageCount, amountZar, invoiceId: invoice.id };
   });
 }

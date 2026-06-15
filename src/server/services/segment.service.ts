@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import type { SegmentRules } from "@/lib/segments";
 
 export type { SegmentRule, SegmentRules } from "@/lib/segments";
@@ -53,17 +53,19 @@ function buildSegmentConditions(rules: SegmentRules): Prisma.Sql[] {
 }
 
 export async function listSegments(businessId: string) {
-  return prisma.customerSegment.findMany({
-    where: { businessId, isActive: true },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      rules: true,
-      createdAt: true
-    }
-  });
+  return withBusinessScope(businessId, (tx) =>
+    tx.customerSegment.findMany({
+      where: { businessId, isActive: true },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        rules: true,
+        createdAt: true
+      }
+    })
+  );
 }
 
 export async function getSegmentMemberCount(
@@ -76,14 +78,16 @@ export async function getSegmentMemberCount(
       ? Prisma.sql`TRUE`
       : Prisma.join(conditions, rules.matchAll ? " AND " : " OR ");
 
-  const result = await prisma.$queryRaw<{ count: bigint }[]>`
-    SELECT COUNT(DISTINCT m."id")::bigint as count
-    FROM "Membership" m
-    JOIN "Business" b ON b."id" = m."businessId"
-    LEFT JOIN "LoyaltyTier" t ON t."id" = m."tierId"
-    WHERE m."businessId" = ${businessId}
-      AND m."isActive" = true
-      AND (${whereClause})`;
+  const result = await withBusinessScope(businessId, async (tx) => {
+    return tx.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(DISTINCT m."id")::bigint as count
+      FROM "Membership" m
+      JOIN "Business" b ON b."id" = m."businessId"
+      LEFT JOIN "LoyaltyTier" t ON t."id" = m."tierId"
+      WHERE m."businessId" = ${businessId}
+        AND m."isActive" = true
+        AND (${whereClause})`;
+  });
 
   return Number(result[0]?.count ?? 0);
 }
@@ -94,19 +98,23 @@ export async function createSegment(input: {
   description?: string;
   rules: SegmentRules;
 }) {
-  return prisma.customerSegment.create({
-    data: {
-      businessId: input.businessId,
-      name: input.name,
-      description: input.description ?? null,
-      rules: input.rules as unknown as Record<string, unknown>
-    }
-  });
+  return withBusinessScope(input.businessId, (tx) =>
+    tx.customerSegment.create({
+      data: {
+        businessId: input.businessId,
+        name: input.name,
+        description: input.description ?? null,
+        rules: input.rules as unknown as Record<string, unknown>
+      }
+    })
+  );
 }
 
 export async function deleteSegment(segmentId: string, businessId: string) {
-  return prisma.customerSegment.updateMany({
-    where: { id: segmentId, businessId },
-    data: { isActive: false }
-  });
+  return withBusinessScope(businessId, (tx) =>
+    tx.customerSegment.updateMany({
+      where: { id: segmentId, businessId },
+      data: { isActive: false }
+    })
+  );
 }

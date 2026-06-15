@@ -16,7 +16,7 @@ import { DashboardSWRegister } from "@/components/layout/dashboard-sw-register";
 import { OfflineBanner } from "@/components/offline-banner";
 import { auth } from "@/lib/auth";
 import { getEffectivePlan, isPaidBusinessPlan } from "@/server/services/billing.service";
-import { prisma } from "@/lib/prisma";
+import { prisma, withUserScope } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -36,16 +36,18 @@ export default async function DashboardLayout({
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}`);
   }
 
-  const staffMemberships = await prisma.staffMember.findMany({
-    where: { userId: session.user.id },
-    select: {
-      role: true,
-      business: {
-        select: { id: true, name: true, deletedAt: true }
-      }
-    },
-    orderBy: { joinedAt: "asc" }
-  });
+  const staffMemberships = await withUserScope(session.user.id, (tx) =>
+    tx.staffMember.findMany({
+      where: { userId: session.user.id },
+      select: {
+        role: true,
+        business: {
+          select: { id: true, name: true, deletedAt: true }
+        }
+      },
+      orderBy: { joinedAt: "asc" }
+    })
+  );
 
   const businesses = staffMemberships
     .filter((membership) => membership.business.deletedAt === null)

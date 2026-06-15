@@ -20,7 +20,8 @@ const enqueueDocumentIngestion = vi.fn();
 const scanStoredObjectForMalware = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
-  prisma
+  prisma,
+  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma))
 }));
 
 vi.mock("@/lib/ai/document-processor", () => ({
@@ -159,7 +160,7 @@ describe("ai workspace service", () => {
       fileName: "document_123.pdf"
     });
 
-    const result = await requestDocumentIngestion("document_123");
+    const result = await requestDocumentIngestion("document_123", "business_123");
 
     expect(result).toEqual({
       status: "processing",
@@ -185,7 +186,7 @@ describe("ai workspace service", () => {
       jobId: "job_123"
     });
 
-    const result = await requestDocumentIngestion("document_123");
+    const result = await requestDocumentIngestion("document_123", "business_123");
 
     expect(prisma.businessDocument.update).toHaveBeenCalledWith({
       where: { id: "document_123" },
@@ -198,7 +199,7 @@ describe("ai workspace service", () => {
       storageKey: "documents/document_123.pdf",
       fileName: "document_123.pdf"
     });
-    expect(enqueueDocumentIngestion).toHaveBeenCalledWith("document_123");
+    expect(enqueueDocumentIngestion).toHaveBeenCalledWith("document_123", "business_123");
     expect(result).toEqual({
       status: "accepted",
       documentId: "document_123",
@@ -226,7 +227,7 @@ describe("ai workspace service", () => {
       jobId: "job_123"
     });
 
-    await requestDocumentIngestion("document_123", "staff_123");
+    await requestDocumentIngestion("document_123", "business_123", "staff_123");
 
     expect(prisma.staffAuditLog.create).toHaveBeenCalledWith({
       data: {
@@ -256,7 +257,7 @@ describe("ai workspace service", () => {
       details: "stream: Eicar-Test-Signature FOUND"
     });
 
-    await expect(requestDocumentIngestion("document_123")).rejects.toMatchObject({
+    await expect(requestDocumentIngestion("document_123", "business_123")).rejects.toMatchObject({
       status: 422,
       code: "DOCUMENT_INFECTED"
     });

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { generatePromotionSuggestions } from "@/server/services/ai-promotion.service";
 
@@ -58,10 +58,12 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
   }
 
-  const staffMember = await prisma.staffMember.findUnique({
-    where: { businessId_userId: { businessId, userId } },
-    select: { id: true }
-  });
+  const staffMember = await withBusinessScope(businessId, (tx) =>
+    tx.staffMember.findUnique({
+      where: { businessId_userId: { businessId, userId } },
+      select: { id: true }
+    })
+  );
 
   if (!staffMember) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

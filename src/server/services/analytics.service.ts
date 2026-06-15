@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { withAnalyticsCache } from "@/lib/data-cache";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 
 type WeeklyBucket = {
   label: string;
@@ -69,8 +69,10 @@ async function _getBusinessDashboardAnalytics(input: {
   // on (businessId, joinedAt) / (businessId, createdAt) / (businessId, direction, createdAt).
   const last90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
-  const [joinRows, txRows, msgRows, txKpi, msgKpi, memberStats, topRewards] = await Promise.all([
-    prisma.$queryRaw<JoinRow[]>(Prisma.sql`
+  const [joinRows, txRows, msgRows, txKpi, msgKpi, memberStats, topRewards] = await withBusinessScope(
+    businessId,
+    (tx) => Promise.all([
+      tx.$queryRaw<JoinRow[]>(Prisma.sql`
       SELECT
         date_trunc('week', "joinedAt") AS week,
         COUNT(*) AS joins
@@ -80,7 +82,7 @@ async function _getBusinessDashboardAnalytics(input: {
       GROUP BY 1
     `),
 
-    prisma.$queryRaw<TxRow[]>(Prisma.sql`
+      tx.$queryRaw<TxRow[]>(Prisma.sql`
       SELECT
         date_trunc('week', "createdAt") AS week,
         SUM(
@@ -98,7 +100,7 @@ async function _getBusinessDashboardAnalytics(input: {
       GROUP BY 1
     `),
 
-    prisma.$queryRaw<MsgRow[]>(Prisma.sql`
+      tx.$queryRaw<MsgRow[]>(Prisma.sql`
       SELECT
         date_trunc('week', "createdAt") AS week,
         COUNT(*) FILTER (WHERE direction = 'INBOUND')  AS inbound,
@@ -109,7 +111,7 @@ async function _getBusinessDashboardAnalytics(input: {
       GROUP BY 1
     `),
 
-    prisma.$queryRaw<TxKpi[]>(Prisma.sql`
+      tx.$queryRaw<TxKpi[]>(Prisma.sql`
       SELECT
         SUM(
           CASE WHEN type IN ('EARN','SIGNUP_BONUS','ADJUSTMENT','REFUND')
@@ -125,7 +127,7 @@ async function _getBusinessDashboardAnalytics(input: {
         AND "createdAt" >= ${last30}
     `),
 
-    prisma.$queryRaw<MsgKpi[]>(Prisma.sql`
+      tx.$queryRaw<MsgKpi[]>(Prisma.sql`
       SELECT
         COUNT(*) FILTER (WHERE direction = 'INBOUND')  AS inbound,
         COUNT(*) FILTER (WHERE direction = 'OUTBOUND') AS outbound
@@ -135,7 +137,7 @@ async function _getBusinessDashboardAnalytics(input: {
     `),
 
     // Member stats: total count, active in last 90d (any transaction), points liability.
-    prisma.$queryRaw<MemberStatsRow[]>(Prisma.sql`
+      tx.$queryRaw<MemberStatsRow[]>(Prisma.sql`
       SELECT
         COUNT(*) AS "totalMembers",
         COUNT(*) FILTER (WHERE id IN (
@@ -150,7 +152,7 @@ async function _getBusinessDashboardAnalytics(input: {
     `),
 
     // Top 5 rewards by redemption count, derived from transaction metadata JSON.
-    prisma.$queryRaw<TopRewardRow[]>(Prisma.sql`
+      tx.$queryRaw<TopRewardRow[]>(Prisma.sql`
       SELECT
         lt.metadata->>'rewardId' AS "rewardId",
         MIN(r.title)             AS title,
@@ -163,8 +165,9 @@ async function _getBusinessDashboardAnalytics(input: {
       GROUP BY 1
       ORDER BY redemptions DESC
       LIMIT 5
-    `),
-  ]);
+      `),
+    ])
+  );
 
   // Build the ordered bucket map (one entry per week, including empty weeks).
   const bucketMap = new Map<string, WeeklyBucket>();

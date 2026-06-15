@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 
 type MembershipCtaProps = {
   slug: string;
@@ -28,20 +28,22 @@ export async function MembershipCta({
   const session = await auth();
   const userId = session?.user?.id ?? null;
 
-  const [membership, staffMember] = await Promise.all([
-    userId
-      ? prisma.membership.findUnique({
-          where: { businessId_userId: { businessId, userId } },
-          include: { tier: true }
-        })
-      : null,
-    userId
-      ? prisma.staffMember.findUnique({
-          where: { businessId_userId: { businessId, userId } },
-          select: { id: true }
-        })
-      : null
-  ]);
+  const [membership, staffMember] = userId
+    ? await Promise.all([
+        withBusinessScope(businessId, (tx) =>
+          tx.membership.findUnique({
+            where: { businessId_userId: { businessId, userId } },
+            include: { tier: true }
+          })
+        ),
+        withBusinessScope(businessId, (tx) =>
+          tx.staffMember.findUnique({
+            where: { businessId_userId: { businessId, userId } },
+            select: { id: true }
+          })
+        )
+      ])
+    : [null, null];
 
   const isStaff = Boolean(staffMember);
 
@@ -90,10 +92,12 @@ export async function MembershipCard({
   const userId = session?.user?.id ?? null;
 
   const membership = userId
-    ? await prisma.membership.findUnique({
-        where: { businessId_userId: { businessId, userId } },
-        include: { tier: true }
-      })
+    ? await withBusinessScope(businessId, (tx) =>
+        tx.membership.findUnique({
+          where: { businessId_userId: { businessId, userId } },
+          include: { tier: true }
+        })
+      )
     : null;
 
   if (membership) {
@@ -105,7 +109,7 @@ export async function MembershipCard({
         </p>
         <p className="metric-label">{t("pointsLabel")}</p>
         <p className="mt-4 text-sm text-ink-muted">
-          {t("currentTier")}{" "}
+          {t("currentTier")} {" "}
           <span className="font-semibold text-ink">
             {membership.tier?.name ?? t("unranked")}
           </span>

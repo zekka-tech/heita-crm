@@ -1,6 +1,6 @@
 import { cache } from "react";
 
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope, withUserScope } from "@/lib/prisma";
 
 /**
  * Request-scoped memoisation using React.cache().
@@ -54,33 +54,39 @@ export const getBusinessBySlug = cache(async (slug: string) => {
 });
 
 export const getStaffRole = cache(async (businessId: string, userId: string) => {
-  const member = await prisma.staffMember.findUnique({
-    where: { businessId_userId: { businessId, userId } },
-    select: { role: true }
-  });
+  const member = await withBusinessScope(businessId, (tx) =>
+    tx.staffMember.findUnique({
+      where: { businessId_userId: { businessId, userId } },
+      select: { role: true }
+    })
+  );
   return member?.role ?? null;
 });
 
 export const getLoyaltyTiers = cache(async (businessId: string) => {
-  return prisma.loyaltyTier.findMany({
-    where: { businessId },
-    select: { id: true, name: true, minPoints: true, rank: true, colorHex: true, perks: true },
-    orderBy: { rank: "asc" }
-  });
+  return withBusinessScope(businessId, (tx) =>
+    tx.loyaltyTier.findMany({
+      where: { businessId },
+      select: { id: true, name: true, minPoints: true, rank: true, colorHex: true, perks: true },
+      orderBy: { rank: "asc" }
+    })
+  );
 });
 
 export const getUserMemberships = cache(async (userId: string) => {
-  return prisma.membership.findMany({
-    where: { userId, isActive: true },
-    select: {
-      id: true,
-      pointsBalance: true,
-      businessId: true,
-      business: {
-        select: { name: true, slug: true, category: true, logoUrl: true }
+  return withUserScope(userId, (tx) =>
+    tx.membership.findMany({
+      where: { userId, isActive: true },
+      select: {
+        id: true,
+        pointsBalance: true,
+        businessId: true,
+        business: {
+          select: { name: true, slug: true, category: true, logoUrl: true }
+        },
+        tier: { select: { name: true } }
       },
-      tier: { select: { name: true } }
-    },
-    orderBy: { joinedAt: "desc" }
-  });
+      orderBy: { joinedAt: "desc" }
+    })
+  );
 });

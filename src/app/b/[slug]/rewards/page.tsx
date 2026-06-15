@@ -29,7 +29,7 @@ export default async function BusinessRewardsPage({
     return <main className="px-4 pb-24 pt-6 sm:px-8" />;
   }
 
-  const [{ auth }, { prisma }, { getOrCreateReferralCode }] = await Promise.all([
+  const [{ auth }, { prisma, withBusinessScope }, { getOrCreateReferralCode }] = await Promise.all([
     import("@/lib/auth"),
     import("@/lib/prisma"),
     import("@/server/services/referral.service")
@@ -37,30 +37,34 @@ export default async function BusinessRewardsPage({
   const session = await auth();
 
   const business = await prisma.business.findFirst({
-    where: { slug, deletedAt: null },
-    include: {
-      rewards: {
-        where: { isActive: true },
-        orderBy: { pointsCost: "asc" }
-      }
-    }
+    where: { slug, deletedAt: null }
   }).catch(() => null);
 
   if (!business) {
     notFound();
   }
 
-  const membership = session?.user?.id
-    ? await prisma.membership.findUnique({
-        where: {
-          businessId_userId: {
-            businessId: business.id,
-            userId: session.user.id
-          }
-        },
-        include: { tier: true }
+  const [rewards, membership] = await Promise.all([
+    withBusinessScope(business.id, (tx) =>
+      tx.reward.findMany({
+        where: { businessId: business.id, isActive: true },
+        orderBy: { pointsCost: "asc" }
       })
-    : null;
+    ),
+    session?.user?.id
+      ? withBusinessScope(business.id, (tx) =>
+          tx.membership.findUnique({
+            where: {
+              businessId_userId: {
+                businessId: business.id,
+                userId: session.user.id
+              }
+            },
+            include: { tier: true }
+          })
+        )
+      : null
+  ]);
   const referralCode =
     membership && session?.user?.id
       ? await getOrCreateReferralCode({
@@ -68,7 +72,6 @@ export default async function BusinessRewardsPage({
           ownerUserId: session.user.id
         })
       : null;
-
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
@@ -122,8 +125,8 @@ export default async function BusinessRewardsPage({
       ) : null}
 
       <section className="mt-6 grid gap-4 md:grid-cols-2">
-        {business.rewards.length ? (
-          business.rewards.map((reward) => {
+        {rewards.length ? (
+          rewards.map((reward) => {
             const stockOK =
               reward.stock === null || reward.stock === undefined
                 ? true

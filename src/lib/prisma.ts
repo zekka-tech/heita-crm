@@ -113,6 +113,12 @@ function assertBusinessScopeId(businessId: string) {
   }
 }
 
+function assertUserScopeId(userId: string) {
+  if (!userId.trim()) {
+    throw new Error("userId is required for a scoped Prisma transaction.");
+  }
+}
+
 const globalForPrisma = globalThis as {
   prisma?: ExtendedPrismaClient;
   _rlsScopeDepth?: number;
@@ -143,6 +149,24 @@ export async function withBusinessScope<T>(
     g._rlsScopeDepth = (g._rlsScopeDepth ?? 0) + 1;
     try {
       await tx.$executeRaw`SELECT set_config('app.current_business_id', ${businessId}, true)`;
+      return await fn(tx);
+    } finally {
+      g._rlsScopeDepth = (g._rlsScopeDepth ?? 1) - 1;
+    }
+  }, BUSINESS_SCOPE_TX_OPTIONS);
+}
+
+export async function withUserScope<T>(
+  userId: string,
+  fn: (tx: PrismaTransactionClient) => Promise<T>
+): Promise<T> {
+  assertUserScopeId(userId);
+
+  return prisma.$transaction(async (tx) => {
+    const g = globalThis as { _rlsScopeDepth?: number };
+    g._rlsScopeDepth = (g._rlsScopeDepth ?? 0) + 1;
+    try {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${userId}, true)`;
       return await fn(tx);
     } finally {
       g._rlsScopeDepth = (g._rlsScopeDepth ?? 1) - 1;

@@ -13,7 +13,7 @@ import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 import { getClientIp } from "@/lib/security";
 import { createPresignedUpload, getStoredObjectUrl, storageConfigured } from "@/lib/storage";
 import { requireRole } from "@/lib/staff";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import {
   createDocumentRecord,
   isAiWorkspaceServiceError,
@@ -271,9 +271,25 @@ export async function handleCompleteUpload(request: Request, documentId: string)
     );
   }
 
-  const document = await prisma.businessDocument.findUnique({
-    where: { id: documentId }
-  });
+  const businessId = new URL(request.url).searchParams.get("businessId")?.trim() ?? "";
+  if (!businessId) {
+    observeHttpRoute({
+      route: "/api/upload/[documentId]/complete",
+      method: "POST",
+      status: 400,
+      durationMs: Date.now() - startedAt
+    });
+    return NextResponse.json(
+      { error: "businessId is required." },
+      { status: 400, headers: { [requestIdHeader]: requestId } }
+    );
+  }
+
+  const document = await withBusinessScope(businessId, (tx) =>
+    tx.businessDocument.findUnique({
+      where: { id: documentId }
+    })
+  );
 
   if (!document) {
     observeHttpRoute({
@@ -296,7 +312,7 @@ export async function handleCompleteUpload(request: Request, documentId: string)
 
   let result;
   try {
-    result = await requestDocumentIngestion(documentId, session.userId);
+    result = await requestDocumentIngestion(documentId, businessId, session.userId);
   } catch (error) {
     if (isAiWorkspaceServiceError(error)) {
       observeHttpRoute({

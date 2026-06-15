@@ -1,5 +1,5 @@
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { withUserScope } from "@/lib/prisma";
 import { publishEvent } from "@/lib/redis-pubsub";
 import { getRedis } from "@/lib/redis";
 
@@ -48,10 +48,12 @@ export async function setTyping(
   try {
     await redis.set(typingKey(conversationId, userId), "1", "EX", TYPING_TTL_SECONDS);
 
-    const participants = await prisma.conversationParticipant.findMany({
-      where: { conversationId },
-      select: { userId: true }
-    });
+    const participants = await withUserScope(userId, (tx) =>
+      tx.conversationParticipant.findMany({
+        where: { conversationId },
+        select: { userId: true }
+      })
+    );
 
     for (const p of participants) {
       if (p.userId === userId) continue;
@@ -77,10 +79,12 @@ export async function clearTyping(
   try {
     await redis.del(typingKey(conversationId, userId));
 
-    const participants = await prisma.conversationParticipant.findMany({
-      where: { conversationId },
-      select: { userId: true }
-    });
+    const participants = await withUserScope(userId, (tx) =>
+      tx.conversationParticipant.findMany({
+        where: { conversationId },
+        select: { userId: true }
+      })
+    );
 
     for (const p of participants) {
       if (p.userId === userId) continue;

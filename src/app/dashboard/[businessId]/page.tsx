@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { getBusinessDashboardAnalytics } from "@/server/services/analytics.service";
 
 export const dynamic = "force-dynamic";
@@ -42,54 +42,58 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
   const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const [business, recentMembers, pointsAgg] = await Promise.all([
-    prisma.business.findFirst({
-      where: {
-        id: businessId,
-        deletedAt: null,
-        staffMembers: { some: { userId: session.user.id } }
-      },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        whatsappPhoneNumber: true,
-        qrCodes: {
-          select: { token: true },
-          orderBy: { createdAt: "asc" },
-          take: 1
+    withBusinessScope(businessId, (tx) =>
+      tx.business.findFirst({
+        where: {
+          id: businessId,
+          deletedAt: null,
+          staffMembers: { some: { userId: session.user.id } }
         },
-        joinLinks: {
-          select: { token: true },
-          orderBy: { createdAt: "asc" },
-          take: 1
-        },
-        events: {
-          select: { id: true, title: true, startsAt: true },
-          where: { startsAt: { gte: new Date() } },
-          orderBy: { startsAt: "asc" },
-          take: 3
-        },
-        _count: {
-          select: {
-            memberships: true,
-            messages: true,
-            rewards: true,
-            loyaltyTransactions: true,
-            staffMembers: true,
-            documents: true
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          whatsappPhoneNumber: true,
+          qrCodes: {
+            select: { token: true },
+            orderBy: { createdAt: "asc" },
+            take: 1
+          },
+          joinLinks: {
+            select: { token: true },
+            orderBy: { createdAt: "asc" },
+            take: 1
+          },
+          events: {
+            select: { id: true, title: true, startsAt: true },
+            where: { startsAt: { gte: new Date() } },
+            orderBy: { startsAt: "asc" },
+            take: 3
+          },
+          _count: {
+            select: {
+              memberships: true,
+              messages: true,
+              rewards: true,
+              loyaltyTransactions: true,
+              staffMembers: true,
+              documents: true
+            }
           }
         }
-      }
-    }),
-    // Members who joined in the last 30 days — avoids loading all membership rows.
-    prisma.membership.count({
-      where: { businessId, joinedAt: { gte: last30 } }
-    }),
-    // Current outstanding points balance (sum across all members).
-    prisma.membership.aggregate({
-      where: { businessId },
-      _sum: { pointsBalance: true }
-    }),
+      })
+    ),
+    withBusinessScope(businessId, (tx) =>
+      tx.membership.count({
+        where: { businessId, joinedAt: { gte: last30 } }
+      })
+    ),
+    withBusinessScope(businessId, (tx) =>
+      tx.membership.aggregate({
+        where: { businessId },
+        _sum: { pointsBalance: true }
+      })
+    )
   ]);
 
   if (!business) {

@@ -7,7 +7,7 @@ import { WebSourcesList } from "@/components/ai/web-sources-list";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope, withUserScope } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -23,38 +23,50 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/ai-workspace`);
   }
 
-  const business = await prisma.business.findFirst({
-    where: {
-      id: businessId,
-      deletedAt: null,
-      staffMembers: { some: { userId: session.user.id } }
-    },
-    include: {
-      aiWorkspace: { include: { activeConnection: true } },
-      aiChatSessions: {
-        where: {
+  const staffMembership = await withUserScope(session.user.id, (tx) =>
+    tx.staffMember.findUnique({
+      where: {
+        businessId_userId: {
+          businessId,
           userId: session.user.id
-        },
-        orderBy: { updatedAt: "desc" },
-        take: 1,
-        include: {
-          messages: {
-            orderBy: { createdAt: "asc" },
-            take: 20
-          }
         }
       },
-      documents: {
-        where: { sourceType: "FILE" },
-        orderBy: { createdAt: "desc" },
-        take: 10
-      },
-      webSources: {
-        orderBy: { createdAt: "desc" },
-        take: 10
+      select: { id: true }
+    })
+  );
+
+  if (!staffMembership) notFound();
+
+  const business = await withBusinessScope(businessId, (tx) =>
+    tx.business.findUnique({
+      where: { id: businessId },
+      include: {
+        aiWorkspace: { include: { activeConnection: true } },
+        aiChatSessions: {
+          where: {
+            userId: session.user.id
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+          include: {
+            messages: {
+              orderBy: { createdAt: "asc" },
+              take: 20
+            }
+          }
+        },
+        documents: {
+          where: { sourceType: "FILE" },
+          orderBy: { createdAt: "desc" },
+          take: 10
+        },
+        webSources: {
+          orderBy: { createdAt: "desc" },
+          take: 10
+        }
       }
-    }
-  });
+    })
+  );
 
   if (!business) notFound();
 
@@ -62,6 +74,7 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
   const ready = docs.filter((doc) => doc.status === "READY").length;
   const webSources = business.webSources.map((source) => ({
     id: source.id,
+    businessId: business.id,
     rootUrl: source.rootUrl,
     domain: source.domain,
     status: source.status,
@@ -118,7 +131,7 @@ export default async function AiWorkspacePage({ params }: AiWorkspacePageProps) 
                       <div>
                         <p className="font-medium text-ink">{doc.title}</p>
                         <p className="text-xs text-ink-subtle">
-                          {(doc.sizeBytes / 1024).toFixed(1)} KB ·{" "}
+                          {(doc.sizeBytes / 1024).toFixed(1)} KB · {" "}
                           {doc.createdAt.toLocaleDateString("en-ZA")}
                         </p>
                         {doc.errorMessage ? (

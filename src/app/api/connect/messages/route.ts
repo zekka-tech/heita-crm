@@ -40,10 +40,12 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   try {
-    const participant = await prisma.conversationParticipant.findFirst({
-      where: { conversationId, userId },
-      select: { id: true }
-    });
+    const participant = await withBusinessScope(businessId, (tx) =>
+      tx.conversationParticipant.findFirst({
+        where: { conversationId, userId },
+        select: { id: true }
+      })
+    );
 
     if (!participant) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -210,10 +212,12 @@ export async function POST(request: NextRequest): Promise<Response> {
       return messageBase;
     });
 
-    const recipients = await prisma.conversationParticipant.findMany({
-      where: { conversationId: message.conversationId! },
-      select: { userId: true }
-    });
+    const recipients = await withBusinessScope(businessId, (tx) =>
+      tx.conversationParticipant.findMany({
+        where: { conversationId: message.conversationId! },
+        select: { userId: true }
+      })
+    );
 
     for (const recipient of recipients) {
       await publishEvent(`user:${recipient.userId}:events`, {

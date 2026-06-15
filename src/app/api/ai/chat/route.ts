@@ -8,7 +8,7 @@ import { getCachedSummary, generateAndCacheSummary } from "@/lib/ai/summarizer";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 import { captureEvent } from "@/lib/telemetry";
 import {
   AiUsageQuotaExceededError,
@@ -109,10 +109,12 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   // Only staff members of this business may use its AI workspace
-  const staffMember = await prisma.staffMember.findUnique({
-    where: { businessId_userId: { businessId: business.id, userId } },
-    select: { id: true }
-  });
+  const staffMember = await withBusinessScope(business.id, (tx) =>
+    tx.staffMember.findUnique({
+      where: { businessId_userId: { businessId: business.id, userId } },
+      select: { id: true }
+    })
+  );
   if (!staffMember) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -125,26 +127,30 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   try {
     // Ensure workspace exists (upsert)
-    const workspace = await prisma.aiWorkspace.upsert({
-      where: { businessId },
-      create: { businessId },
-      update: {}
-    });
+    const workspace = await withBusinessScope(businessId, (tx) =>
+      tx.aiWorkspace.upsert({
+        where: { businessId },
+        create: { businessId },
+        update: {}
+      })
+    );
 
     if (sessionId) {
       const MAX_HISTORY = 12;
       // Load MAX_HISTORY + 1 to detect whether older turns exist without
       // fetching the full history (which could be hundreds of messages).
-      const existingSession = await prisma.aiChatSession.findFirst({
-        where: { id: sessionId, businessId },
-        include: {
-          messages: {
-            orderBy: { createdAt: "desc" },
-            take: MAX_HISTORY + 1,
-            select: { role: true, content: true }
+      const existingSession = await withBusinessScope(businessId, (tx) =>
+        tx.aiChatSession.findFirst({
+          where: { id: sessionId, businessId },
+          include: {
+            messages: {
+              orderBy: { createdAt: "desc" },
+              take: MAX_HISTORY + 1,
+              select: { role: true, content: true }
+            }
           }
-        }
-      });
+        })
+      );
 
       if (existingSession) {
         resolvedSessionId = existingSession.id;
@@ -166,12 +172,14 @@ export async function POST(request: NextRequest): Promise<Response> {
             priorMessages = recent.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
             // Fire-and-forget: load all older turns and generate/cache summary
             // asynchronously so it's available on the next turn.
-            prisma.aiChatMessage.findMany({
-              where: { sessionId: resolvedSessionId },
-              orderBy: { createdAt: "asc" },
-              take: allLoaded.length - MAX_HISTORY,
-              select: { role: true, content: true }
-            }).then((older) => {
+            withBusinessScope(businessId, (tx) =>
+              tx.aiChatMessage.findMany({
+                where: { sessionId: resolvedSessionId },
+                orderBy: { createdAt: "asc" },
+                take: allLoaded.length - MAX_HISTORY,
+                select: { role: true, content: true }
+              })
+            ).then((older) => {
               const olderTurns = older.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
               generateAndCacheSummary(resolvedSessionId, olderTurns).catch(() => undefined);
             }).catch(() => undefined);
@@ -184,44 +192,48 @@ export async function POST(request: NextRequest): Promise<Response> {
         }
       } else {
         // Session not found or wrong business — create a new one
-        const newSession = await prisma.aiChatSession.create({
+        const newSession = await withBusinessScope(businessId, (tx) =>
+          tx.aiChatSession.create({
+            data: {
+              workspaceId: workspace.id,
+              businessId,
+              userId
+            }
+          })
+        );
+        resolvedSessionId = newSession.id;
+      }
+    } else {
+      const newSession = await withBusinessScope(businessId, (tx) =>
+        tx.aiChatSession.create({
           data: {
             workspaceId: workspace.id,
             businessId,
             userId
           }
-        });
-        resolvedSessionId = newSession.id;
-      }
-    } else {
-      const newSession = await prisma.aiChatSession.create({
-        data: {
-          workspaceId: workspace.id,
-          businessId,
-          userId
-        }
-      });
+        })
+      );
       resolvedSessionId = newSession.id;
     }
 
     // Persist the user message
-    await prisma.aiChatMessage.create({
-      data: {
-        sessionId: resolvedSessionId,
-        role: "user",
-        content: message.trim()
-      }
-    });
+    await withBusinessScope(businessId, (tx) =>
+      tx.aiChatMessage.create({
+        data: {
+          sessionId: resolvedSessionId,
+          role: "user",
+          content: message.trim()
+        }
+      })
+    );
   } catch (err) {
     logger.error({ err }, "ai.chat.session_setup_error");
     return NextResponse.json({ error: "Internal server error." }, { status: 500 });
   }
 
   // Check plan quota before touching the model. When the plan limit is reached,
-  // stream a graceful SSE error frame so the client can render a friendly message
-  // rather than receiving a hard HTTP error code mid-stream. This satisfies §1.3/§5
-  // of the CTO advisory memo: "AI provider cost is not enforced (token budget is a
-  // metric, not a hard cap)."
+  // stream a graceful SSE error frame so the client can render a friendly
+  // message rather than receiving a hard HTTP error code mid-stream.
   const allowance = await checkAiMessageAllowance(businessId).catch((err: unknown) => {
     logger.error({ err }, "ai.chat.allowance_check_error");
     return null;
@@ -235,10 +247,10 @@ export async function POST(request: NextRequest): Promise<Response> {
           encoder.encode(
             `event: limit_exceeded\ndata: ${JSON.stringify({
               type: "limit_exceeded",
-              tier: "STARTER",
+              tier: "PLAN",
               limit: allowance.limit,
               used: allowance.used,
-              overagePrice: 0.20
+              overagePrice: allowance.overagePriceZar
             })}\n\n`
           )
         );
@@ -276,10 +288,10 @@ export async function POST(request: NextRequest): Promise<Response> {
             encoder.encode(
               `event: limit_exceeded\ndata: ${JSON.stringify({
                 type: "limit_exceeded",
-                tier: "STARTER",
+                tier: "PLAN",
                 limit: err.limit,
                 used: err.used,
-                overagePrice: 0.20
+                overagePrice: err.overagePriceZar
               })}\n\n`
             )
           );
@@ -351,27 +363,35 @@ export async function POST(request: NextRequest): Promise<Response> {
         // Await real token counts — the usage promise resolves in the
         // generator's finally block, so it's already settled by the time
         // we reach here.
-        const tokenUsage = await ragAnswer.usage;
+        const completedAnswer = ragAnswer;
+        if (!completedAnswer) {
+          throw new Error("RAG stream completed without an answer instance.");
+        }
+
+        const tokenUsage = await completedAnswer.usage;
         const totalTokens = tokenUsage.inputTokens + tokenUsage.outputTokens;
 
         // Persist assistant response and finalize usage record with real counts
         const latencyMs = Date.now() - startedAt;
         await Promise.all([
-          prisma.aiChatMessage.create({
-            data: {
-              sessionId: resolvedSessionId,
-              role: "assistant",
-              content: assistantContent,
-              model: ragAnswer.model ?? undefined,
-              latencyMs,
-              metadata: ragAnswer.citations.length > 0
-                ? { citations: ragAnswer.citations, runtime: ragAnswer.runtime }
-                : { runtime: ragAnswer.runtime }
-            }
-          }).catch((err: unknown) => {
+          withBusinessScope(businessId, (tx) =>
+            tx.aiChatMessage.create({
+              data: {
+                sessionId: resolvedSessionId,
+                role: "assistant",
+                content: assistantContent,
+                model: completedAnswer.model ?? undefined,
+                latencyMs,
+                metadata: completedAnswer.citations.length > 0
+                  ? { citations: completedAnswer.citations, runtime: completedAnswer.runtime }
+                  : { runtime: completedAnswer.runtime }
+              }
+            })
+          ).catch((err: unknown) => {
             logger.error({ err }, "ai.chat.persist_assistant_message_error");
           }),
           finalizeAiTokenUsage({
+            businessId,
             usageId,
             runtime: ragAnswer.runtime ?? "unknown",
             model: ragAnswer.model ?? null,
@@ -401,7 +421,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       } catch (err) {
         logger.error({ err }, "ai.chat.stream_error");
         // Release the reserved usage slot so the quota isn't burned on error
-        await releaseAiTokenUsage(usageId).catch(() => undefined);
+        await releaseAiTokenUsage({ businessId, usageId }).catch(() => undefined);
         controller.enqueue(
           encoder.encode(sseFrame("error", { message: "An error occurred while generating a response." }))
         );

@@ -23,6 +23,7 @@ vi.mock("@/lib/prisma", () => ({
       create: vi.fn(),
     },
   },
+  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma)),
 }));
 
 vi.mock("@/lib/logger", () => ({

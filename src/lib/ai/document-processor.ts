@@ -6,7 +6,7 @@ import { DocumentStatus } from "@prisma/client";
 import { embedTexts } from "@/lib/ai/embeddings";
 import { replaceDocumentChunks } from "@/lib/ai/vector-store";
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { getStoredObjectBuffer } from "@/lib/storage";
 
 const CHUNK_SIZE = 1000;
@@ -125,18 +125,25 @@ async function buildEmbeddings(chunks: ChunkRecord[]) {
   }));
 }
 
-export async function processBusinessDocument(documentId: string) {
-  const document = await prisma.businessDocument.findUniqueOrThrow({
-    where: { id: documentId }
-  });
+export async function processBusinessDocument(input: {
+  documentId: string;
+  businessId: string;
+}) {
+  const document = await withBusinessScope(input.businessId, (tx) =>
+    tx.businessDocument.findUniqueOrThrow({
+      where: { id: input.documentId }
+    })
+  );
 
-  await prisma.businessDocument.update({
-    where: { id: documentId },
-    data: {
-      status: DocumentStatus.PROCESSING,
-      errorMessage: null
-    }
-  });
+  await withBusinessScope(input.businessId, (tx) =>
+    tx.businessDocument.update({
+      where: { id: input.documentId },
+      data: {
+        status: DocumentStatus.PROCESSING,
+        errorMessage: null
+      }
+    })
+  );
 
   try {
     const buffer = await getStoredObjectBuffer(document.storageKey);
@@ -166,17 +173,19 @@ export async function processBusinessDocument(documentId: string) {
       }))
     });
 
-    await prisma.businessDocument.update({
-      where: { id: documentId },
-      data: {
-        status: DocumentStatus.READY,
-        errorMessage: null
-      }
-    });
+    await withBusinessScope(input.businessId, (tx) =>
+      tx.businessDocument.update({
+        where: { id: input.documentId },
+        data: {
+          status: DocumentStatus.READY,
+          errorMessage: null
+        }
+      })
+    );
 
     logger.info(
       {
-        documentId,
+        documentId: input.documentId,
         businessId: document.businessId,
         chunks: chunks.length
       },
@@ -191,18 +200,20 @@ export async function processBusinessDocument(documentId: string) {
     const message =
       error instanceof Error ? error.message : "Document processing failed.";
 
-    await prisma.businessDocument.update({
-      where: { id: documentId },
-      data: {
-        status: DocumentStatus.FAILED,
-        errorMessage: message
-      }
-    });
+    await withBusinessScope(input.businessId, (tx) =>
+      tx.businessDocument.update({
+        where: { id: input.documentId },
+        data: {
+          status: DocumentStatus.FAILED,
+          errorMessage: message
+        }
+      })
+    );
 
     logger.error(
       {
         err: error,
-        documentId,
+        documentId: input.documentId,
         businessId: document.businessId
       },
       "ai.document.failed"
@@ -212,7 +223,7 @@ export async function processBusinessDocument(documentId: string) {
   }
 }
 
-export async function enqueueDocumentIngestion(documentId: string) {
+export async function enqueueDocumentIngestion(documentId: string, businessId: string) {
   const { enqueueDocumentIngestionJob } = await import("@/lib/ai/ingestion-queue");
-  return enqueueDocumentIngestionJob(documentId);
+  return enqueueDocumentIngestionJob(documentId, businessId);
 }

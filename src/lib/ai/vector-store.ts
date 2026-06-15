@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { Prisma } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 
 export type StoredChunkInput = {
   chunkIndex: number;
@@ -38,44 +38,46 @@ export async function replaceDocumentChunks(input: {
   businessId: string;
   chunks: StoredChunkInput[];
 }) {
-  await prisma.documentChunk.deleteMany({
-    where: {
-      documentId: input.documentId
+  await withBusinessScope(input.businessId, async (tx) => {
+    await tx.documentChunk.deleteMany({
+      where: {
+        documentId: input.documentId
+      }
+    });
+
+    if (!input.chunks.length) {
+      return;
     }
+
+    const values = input.chunks.map((chunk) => {
+      const metadata = chunk.metadata
+        ? Prisma.sql`${JSON.stringify(chunk.metadata)}::jsonb`
+        : Prisma.sql`NULL`;
+
+      return Prisma.sql`(
+        ${randomUUID()},
+        ${input.documentId},
+        ${input.businessId},
+        ${chunk.chunkIndex},
+        ${chunk.content},
+        ${metadata},
+        ${toVectorLiteral(chunk.embedding)}::vector
+      )`;
+    });
+
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "DocumentChunk" (
+        "id",
+        "documentId",
+        "businessId",
+        "chunkIndex",
+        "content",
+        "metadata",
+        "embedding"
+      )
+      VALUES ${Prisma.join(values)}
+    `);
   });
-
-  if (!input.chunks.length) {
-    return;
-  }
-
-  const values = input.chunks.map((chunk) => {
-    const metadata = chunk.metadata
-      ? Prisma.sql`${JSON.stringify(chunk.metadata)}::jsonb`
-      : Prisma.sql`NULL`;
-
-    return Prisma.sql`(
-      ${randomUUID()},
-      ${input.documentId},
-      ${input.businessId},
-      ${chunk.chunkIndex},
-      ${chunk.content},
-      ${metadata},
-      ${toVectorLiteral(chunk.embedding)}::vector
-    )`;
-  });
-
-  await prisma.$executeRaw(Prisma.sql`
-    INSERT INTO "DocumentChunk" (
-      "id",
-      "documentId",
-      "businessId",
-      "chunkIndex",
-      "content",
-      "metadata",
-      "embedding"
-    )
-    VALUES ${Prisma.join(values)}
-  `);
 }
 
 // Default over-fetch size for the vector search before threshold + reranking.
@@ -103,7 +105,8 @@ export async function findSimilarDocumentChunks(input: {
   const threshold = input.threshold ?? DEFAULT_SIMILARITY_THRESHOLD;
   const vectorLiteral = toVectorLiteral(input.queryEmbedding);
 
-  const rows = await prisma.$queryRaw<SimilarityMatch[]>(Prisma.sql`
+  const rows = await withBusinessScope(input.businessId, (tx) =>
+    tx.$queryRaw<SimilarityMatch[]>(Prisma.sql`
     SELECT
       dc."id",
       dc."documentId",
@@ -119,7 +122,8 @@ export async function findSimilarDocumentChunks(input: {
       AND dc."embedding" IS NOT NULL
     ORDER BY dc."embedding" <=> ${vectorLiteral}::vector
     LIMIT ${limit}
-  `);
+  `)
+  );
 
   return rows.filter((r) => r.similarity >= threshold);
 }
@@ -141,7 +145,8 @@ export async function findChunksByFts(input: {
   type FtsRow = Omit<SimilarityMatch, "similarity"> & { rank: number };
 
   try {
-    const rows = await prisma.$queryRaw<FtsRow[]>(Prisma.sql`
+    const rows = await withBusinessScope(input.businessId, (tx) =>
+      tx.$queryRaw<FtsRow[]>(Prisma.sql`
       SELECT
         dc."id",
         dc."documentId",
@@ -158,7 +163,8 @@ export async function findChunksByFts(input: {
         AND to_tsvector('english', dc."content") @@ websearch_to_tsquery('english', ${query})
       ORDER BY rank DESC
       LIMIT ${limit}
-    `);
+    `)
+    );
 
     return rows.map((row) => ({ ...row, similarity: Number(row.rank) }));
   } catch {

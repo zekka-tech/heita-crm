@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { requirePaidBusinessPlan } from "@/server/services/billing.service";
 import { listPipelineStages, listThreads } from "@/server/services/sales-thread.service";
@@ -50,12 +50,14 @@ export default async function SalesPage({ params, searchParams }: SalesPageProps
   const [stages, threads, memberships] = await Promise.all([
     listPipelineStages(businessId),
     listThreads({ businessId, status: SalesThreadStatus.OPEN }),
-    prisma.membership.findMany({
-      where: { businessId, isActive: true },
-      include: { user: { select: { id: true, name: true, phone: true, email: true } } },
-      orderBy: { joinedAt: "desc" },
-      take: 100
-    })
+    withBusinessScope(businessId, (tx) =>
+      tx.membership.findMany({
+        where: { businessId, isActive: true },
+        include: { user: { select: { id: true, name: true, phone: true, email: true } } },
+        orderBy: { joinedAt: "desc" },
+        take: 100
+      })
+    )
   ]);
 
   const threadsByStage = new Map(stages.map((stage) => [stage.id, threads.filter((thread) => thread.stageId === stage.id)]));

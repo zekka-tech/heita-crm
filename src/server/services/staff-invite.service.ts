@@ -5,7 +5,7 @@ import { StaffInviteStatus, StaffRole } from "@prisma/client";
 import { sendEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
 import { normalizeZaPhone } from "@/lib/phone";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { sendOtpSms } from "@/lib/sms";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
@@ -69,7 +69,7 @@ export async function createStaffInvite(input: CreateStaffInviteInput) {
   const tokenHash = hashInviteToken(token);
   const expiresAt = new Date(Date.now() + INVITE_TTL_HOURS * 60 * 60 * 1000);
 
-  const invite = await prisma.$transaction(async (tx) => {
+  const invite = await withBusinessScope(input.businessId, async (tx) => {
     const createdInvite = await tx.staffInvite.create({
       data: {
         businessId: input.businessId,
@@ -104,7 +104,7 @@ export async function createStaffInvite(input: CreateStaffInviteInput) {
     );
 
     return createdInvite;
-  }, { maxWait: 5000, timeout: 10000 });
+  });
 
   const acceptUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/staff/accept/${token}`;
 
@@ -147,23 +147,26 @@ export async function listStaffInvites(input: { businessId: string; actorUserId:
   });
 
   const now = new Date();
-  // Eagerly mark expired invites — surfaces clean status to the UI and is
-  // cheap because StaffInvite is bounded.
-  await prisma.staffInvite.updateMany({
-    where: {
-      businessId: input.businessId,
-      status: StaffInviteStatus.PENDING,
-      expiresAt: { lt: now }
-    },
-    data: { status: StaffInviteStatus.EXPIRED }
-  });
 
-  return prisma.staffInvite.findMany({
-    where: { businessId: input.businessId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      invitedBy: { select: { id: true, name: true, email: true } }
-    }
+  return withBusinessScope(input.businessId, async (tx) => {
+    // Eagerly mark expired invites — surfaces clean status to the UI and is
+    // cheap because StaffInvite is bounded.
+    await tx.staffInvite.updateMany({
+      where: {
+        businessId: input.businessId,
+        status: StaffInviteStatus.PENDING,
+        expiresAt: { lt: now }
+      },
+      data: { status: StaffInviteStatus.EXPIRED }
+    });
+
+    return tx.staffInvite.findMany({
+      where: { businessId: input.businessId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        invitedBy: { select: { id: true, name: true, email: true } }
+      }
+    });
   });
 }
 
@@ -185,7 +188,7 @@ export async function revokeStaffInvite(input: {
     return invite;
   }
 
-  return prisma.$transaction(async (tx) => {
+  return withBusinessScope(invite.businessId, async (tx) => {
     const revokedInvite = await tx.staffInvite.update({
       where: { id: invite.id },
       data: {
@@ -229,12 +232,12 @@ export async function getInviteByToken(token: string) {
     invite.status === StaffInviteStatus.PENDING &&
     invite.expiresAt.getTime() < Date.now()
   ) {
-    await prisma.staffInvite
-      .update({
+    await withBusinessScope(invite.businessId, (tx) =>
+      tx.staffInvite.update({
         where: { id: invite.id },
         data: { status: StaffInviteStatus.EXPIRED }
       })
-      .catch(() => undefined);
+    ).catch(() => undefined);
     return { ...invite, status: StaffInviteStatus.EXPIRED };
   }
 
@@ -271,14 +274,16 @@ export async function acceptStaffInvite(input: {
   }
 
   if (inviteRecord.expiresAt.getTime() < Date.now()) {
-    await prisma.staffInvite.update({
-      where: { id: inviteRecord.id },
-      data: { status: StaffInviteStatus.EXPIRED }
-    });
+    await withBusinessScope(inviteRecord.businessId, (tx) =>
+      tx.staffInvite.update({
+        where: { id: inviteRecord.id },
+        data: { status: StaffInviteStatus.EXPIRED }
+      })
+    );
     throw new Error("This invite has expired.");
   }
 
-  return prisma.$transaction(async (tx) => {
+  return withBusinessScope(inviteRecord.businessId, async (tx) => {
     const staffMember = await tx.staffMember.upsert({
       where: {
         businessId_userId: {
@@ -326,19 +331,19 @@ export async function removeStaffMember(input: {
     throw new Error("You cannot remove yourself from the business.");
   }
 
-  const staffMember = await prisma.staffMember.findUnique({
-    where: { businessId_userId: { businessId: input.businessId, userId: input.targetUserId } }
-  });
+  return withBusinessScope(input.businessId, async (tx) => {
+    const staffMember = await tx.staffMember.findUnique({
+      where: { businessId_userId: { businessId: input.businessId, userId: input.targetUserId } }
+    });
 
-  if (!staffMember) {
-    throw new Error("Staff member not found.");
-  }
+    if (!staffMember) {
+      throw new Error("Staff member not found.");
+    }
 
-  if (staffMember.role === StaffRole.OWNER) {
-    throw new Error("Cannot remove the business owner.");
-  }
+    if (staffMember.role === StaffRole.OWNER) {
+      throw new Error("Cannot remove the business owner.");
+    }
 
-  return prisma.$transaction(async (tx) => {
     const removed = await tx.staffMember.delete({
       where: { businessId_userId: { businessId: input.businessId, userId: input.targetUserId } }
     });
@@ -356,7 +361,7 @@ export async function removeStaffMember(input: {
     );
 
     return removed;
-  }, { maxWait: 5000, timeout: 10000 });
+  });
 }
 
 export async function updateStaffRole(input: {
@@ -379,19 +384,19 @@ export async function updateStaffRole(input: {
     throw new Error("Cannot promote a member to OWNER via this action.");
   }
 
-  const staffMember = await prisma.staffMember.findUnique({
-    where: { businessId_userId: { businessId: input.businessId, userId: input.targetUserId } }
-  });
+  return withBusinessScope(input.businessId, async (tx) => {
+    const staffMember = await tx.staffMember.findUnique({
+      where: { businessId_userId: { businessId: input.businessId, userId: input.targetUserId } }
+    });
 
-  if (!staffMember) {
-    throw new Error("Staff member not found.");
-  }
+    if (!staffMember) {
+      throw new Error("Staff member not found.");
+    }
 
-  if (staffMember.role === StaffRole.OWNER) {
-    throw new Error("Cannot change the role of the business owner.");
-  }
+    if (staffMember.role === StaffRole.OWNER) {
+      throw new Error("Cannot change the role of the business owner.");
+    }
 
-  return prisma.$transaction(async (tx) => {
     const updated = await tx.staffMember.update({
       where: { businessId_userId: { businessId: input.businessId, userId: input.targetUserId } },
       data: { role: input.newRole }
@@ -410,5 +415,5 @@ export async function updateStaffRole(input: {
     );
 
     return updated;
-  }, { maxWait: 5000, timeout: 10000 });
+  });
 }

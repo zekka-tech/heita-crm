@@ -9,6 +9,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     $queryRaw: vi.fn(),
   },
+  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma)),
 }));
 
 import { getSegmentMemberCount, listSegments, createSegment, deleteSegment } from "@/server/services/segment.service";

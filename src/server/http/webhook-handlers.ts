@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 
 import { logger } from "@/lib/logger";
 import { normalizeZaPhone } from "@/lib/phone";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 import { incrementWebhookAuthFailure, observeHttpRoute } from "@/lib/metrics";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 import {
@@ -271,11 +271,13 @@ export async function handleAfricasTalkingWebhook(request: Request) {
 
     if (business) {
       const existingUser = await prisma.user.findFirst({ where: { phone: fromPhone }, select: { id: true } });
-      const existing = externalId
-        ? await prisma.message.findFirst({ where: { channel: MessageChannel.SMS, externalId }, select: { id: true } })
-        : null;
-      if (!existing) {
-        const message = await prisma.message.create({
+      const message = await withBusinessScope(business.id, async (tx) => {
+        const existing = externalId
+          ? await tx.message.findFirst({ where: { channel: MessageChannel.SMS, externalId }, select: { id: true } })
+          : null;
+        if (existing) return null;
+
+        return tx.message.create({
           data: {
             businessId: business.id,
             userId: existingUser?.id ?? null,
@@ -288,6 +290,8 @@ export async function handleAfricasTalkingWebhook(request: Request) {
             metadata: { fromPhone, toPhone, toAddress: rawToAddress }
           }
         });
+      });
+      if (message) {
         await markCustomerResponded({
           businessId: business.id,
           contactPhone: fromPhone,

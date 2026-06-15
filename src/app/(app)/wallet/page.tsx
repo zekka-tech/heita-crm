@@ -7,8 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Chip, TierBadge } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { resolveLocale } from "@/i18n/locale";
-import { prisma } from "@/lib/prisma";
 import { isBuildPhase } from "@/lib/build-phase";
+import { withUserScope } from "@/lib/prisma";
 
 export const metadata = { title: "Wallet" };
 export const dynamic = "force-dynamic";
@@ -28,31 +28,33 @@ export default async function WalletPage() {
     redirect("/sign-in?callbackUrl=/wallet");
   }
 
-  const memberships = await prisma.membership.findMany({
-    where: { userId: session.user.id, isActive: true },
-    select: {
-      id: true,
-      pointsBalance: true,
-      business: {
-        select: { name: true, slug: true, category: true }
-      },
-      tier: {
-        select: { name: true }
-      },
-      transactions: {
-        select: {
-          id: true,
-          pointsDelta: true,
-          type: true,
-          description: true,
-          createdAt: true
+  const memberships = await withUserScope(session.user.id, (tx) =>
+    tx.membership.findMany({
+      where: { userId: session.user.id, isActive: true },
+      select: {
+        id: true,
+        pointsBalance: true,
+        business: {
+          select: { name: true, slug: true, category: true }
         },
-        orderBy: { createdAt: "desc" },
-        take: 5
-      }
-    },
-    orderBy: { joinedAt: "desc" }
-  });
+        tier: {
+          select: { name: true }
+        },
+        transactions: {
+          select: {
+            id: true,
+            pointsDelta: true,
+            type: true,
+            description: true,
+            createdAt: true
+          },
+          orderBy: { createdAt: "desc" },
+          take: 5
+        }
+      },
+      orderBy: { joinedAt: "desc" }
+    })
+  );
 
   const totalPoints = memberships.reduce((sum, m) => sum + m.pointsBalance, 0);
 

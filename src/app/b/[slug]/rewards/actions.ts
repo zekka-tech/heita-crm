@@ -4,8 +4,8 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
+import { withBusinessScope } from "@/lib/prisma";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { prisma } from "@/lib/prisma";
 import { redeemPoints } from "@/server/services/loyalty.service";
 
 export async function redeemRewardAction(formData: FormData) {
@@ -31,14 +31,16 @@ export async function redeemRewardAction(formData: FormData) {
     throw new Error("Too many redemption attempts. Please wait a moment and try again.");
   }
 
-  const membership = await prisma.membership.findUnique({
-    where: {
-      businessId_userId: {
-        businessId,
-        userId
+  const membership = await withBusinessScope(businessId, (tx) =>
+    tx.membership.findUnique({
+      where: {
+        businessId_userId: {
+          businessId,
+          userId
+        }
       }
-    }
-  });
+    })
+  );
 
   if (!membership) {
     redirect(`/b/${slug}/join`);

@@ -24,6 +24,9 @@ vi.mock("@/lib/prisma", () => ({
   prisma: mocks.prisma,
   withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof mocks.prisma) => unknown) =>
     fn(mocks.prisma)
+  ),
+  withUserScope: vi.fn(async (_userId: string, fn: (tx: typeof mocks.prisma) => unknown) =>
+    fn(mocks.prisma)
   )
 }));
 

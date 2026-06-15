@@ -5,7 +5,7 @@ import { z } from "zod";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { observeHttpRoute } from "@/lib/metrics";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { authenticateRequestUser } from "@/lib/request-auth";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
@@ -128,18 +128,27 @@ export async function handleCreateWebSource(request: Request) {
   }
 }
 
-/** Shared auth + ownership for mutations on an existing source. */
 async function authorizeSourceMutation(request: Request, id: string, requestId: string) {
   const session = await authenticateRequestUser(request.headers);
   if (!session?.userId) {
     return { error: json({ error: "Authentication required" }, 401, requestId) } as const;
   }
-  const source = await prisma.webSource.findUnique({ where: { id }, select: { businessId: true } });
-  if (!source) {
+
+  const businessId = new URL(request.url).searchParams.get("businessId")?.trim() ?? "";
+  if (!businessId) {
+    return { error: json({ error: "businessId is required." }, 400, requestId) } as const;
+  }
+
+  await requireRole({ businessId, userId: session.userId, allowedRoles: ALLOWED_ROLES });
+
+  const source = await withBusinessScope(businessId, (tx) =>
+    tx.webSource.findUnique({ where: { id }, select: { businessId: true } })
+  );
+  if (!source || source.businessId !== businessId) {
     return { error: json({ error: "Web source not found." }, 404, requestId) } as const;
   }
-  await requireRole({ businessId: source.businessId, userId: session.userId, allowedRoles: ALLOWED_ROLES });
-  return { userId: session.userId, businessId: source.businessId } as const;
+
+  return { userId: session.userId, businessId } as const;
 }
 
 export async function handleDeleteWebSource(request: Request, id: string) {

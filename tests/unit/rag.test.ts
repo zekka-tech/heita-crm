@@ -4,10 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const queryRawMock = vi.fn();
 
+const withBusinessScopeMock = vi.fn(async (_businessId: string, fn: (tx: { $queryRaw: typeof queryRawMock }) => unknown) =>
+  fn({ $queryRaw: queryRawMock })
+);
+
 vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    $queryRaw: queryRawMock
-  }
+  withBusinessScope: withBusinessScopeMock
 }));
 
 // Prisma.sql tagged template produces a TemplateStringsArray-based object

@@ -1,6 +1,6 @@
 import { ConversationStatus, MessageChannel, type Prisma } from "@prisma/client";
 
-import { prisma, withBusinessScope } from "@/lib/prisma";
+import { prisma, withBusinessScope, withUserScope } from "@/lib/prisma";
 
 type ConversationResult = {
   id: string;
@@ -179,24 +179,32 @@ export async function getConversationsForUser(input: {
     where.status = input.status as ConversationStatus;
   }
 
-  const conversations = await prisma.conversation.findMany({
-    where,
-    include: CONVERSATION_INCLUDES,
-    orderBy: { lastMessageAt: "desc" },
-    take: limit + 1,
-    ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {})
-  });
+  const run = async (tx: Pick<typeof prisma, 'conversation'>) => {
+    const conversations = await tx.conversation.findMany({
+      where,
+      include: CONVERSATION_INCLUDES,
+      orderBy: { lastMessageAt: "desc" },
+      take: limit + 1,
+      ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {})
+    });
 
-  const hasMore = conversations.length > limit;
-  const results = hasMore ? conversations.slice(0, limit) : conversations;
-  const nextCursor = hasMore ? results[results.length - 1]?.id ?? null : null;
+    const hasMore = conversations.length > limit;
+    const results = hasMore ? conversations.slice(0, limit) : conversations;
+    const nextCursor = hasMore ? results[results.length - 1]?.id ?? null : null;
 
-  return {
-    conversations: results.map((c) =>
-      formatConversation(c as unknown as Record<string, unknown>)
-    ),
-    nextCursor
+    return {
+      conversations: results.map((c) =>
+        formatConversation(c as unknown as Record<string, unknown>)
+      ),
+      nextCursor
+    };
   };
+
+  if (input.businessId) {
+    return withBusinessScope(input.businessId, (tx) => run(tx));
+  }
+
+  return withUserScope(input.userId, (tx) => run(tx));
 }
 
 export async function getConversationMessages(input: {
@@ -285,13 +293,15 @@ export async function updateTypingStatus(input: {
   userId: string;
   isTyping: boolean;
 }) {
-  await prisma.conversationParticipant.updateMany({
-    where: {
-      conversationId: input.conversationId,
-      userId: input.userId
-    },
-    data: { isTyping: input.isTyping }
-  });
+  return withUserScope(input.userId, (tx) =>
+    tx.conversationParticipant.updateMany({
+      where: {
+        conversationId: input.conversationId,
+        userId: input.userId
+      },
+      data: { isTyping: input.isTyping }
+    })
+  );
 }
 
 export async function updateConversationStatus(input: {

@@ -9,6 +9,7 @@ export const DOCUMENT_INGESTION_DLQ = "document-ingestion-dlq";
 
 type DocumentIngestionJob = {
   documentId: string;
+  businessId: string;
 };
 
 declare global {
@@ -61,22 +62,23 @@ export function getIngestionDlq() {
   return global.__heitaDocumentDlq__;
 }
 
-export async function enqueueDocumentIngestionJob(documentId: string) {
+export async function enqueueDocumentIngestionJob(documentId: string, businessId: string) {
   const queue = getDocumentIngestionQueue();
 
   if (!queue || process.env.AI_INGEST_INLINE === "1") {
-    const result = await processBusinessDocument(documentId);
+    const result = await processBusinessDocument({ documentId, businessId });
     return {
       enqueued: false,
       mode: "inline" as const,
       documentId,
+      businessId,
       result
     };
   }
 
   const job = await queue.add(
     "ingest-document",
-    { documentId },
+    { documentId, businessId },
     {
       jobId: `document:${documentId}`
     }
@@ -86,6 +88,7 @@ export async function enqueueDocumentIngestionJob(documentId: string) {
     enqueued: true,
     mode: "queue" as const,
     documentId,
+    businessId,
     jobId: job.id
   };
 }
@@ -93,14 +96,10 @@ export async function enqueueDocumentIngestionJob(documentId: string) {
 export async function handleDocumentIngestionJob(
   job: Job<DocumentIngestionJob>
 ) {
-  logger.info({ jobId: job.id, documentId: job.data.documentId }, "ai.document.job_start");
-  return processBusinessDocument(job.data.documentId);
+  logger.info({ jobId: job.id, documentId: job.data.documentId, businessId: job.data.businessId }, "ai.document.job_start");
+  return processBusinessDocument(job.data);
 }
 
-/**
- * Moves a permanently-failed ingestion job to the dead-letter queue.
- * Call this from the worker's "failed" event handler after all retries are exhausted.
- */
 export async function moveIngestionJobToDlq(
   job: Job<DocumentIngestionJob>,
   err: Error

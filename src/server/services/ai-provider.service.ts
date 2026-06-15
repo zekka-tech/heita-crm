@@ -12,7 +12,7 @@ import {
 } from "@/lib/ai/providers";
 import { getProviderDefinition } from "@/lib/ai/providers/registry";
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/secret-crypto";
 import { assertPublicHttpUrl } from "@/lib/security";
 import { requireRole } from "@/lib/staff";
@@ -83,12 +83,14 @@ function toView(
 }
 
 async function getWorkspace(businessId: string) {
-  return prisma.aiWorkspace.upsert({
-    where: { businessId },
-    create: { businessId },
-    update: {},
-    select: { id: true, activeConnectionId: true }
-  });
+  return withBusinessScope(businessId, (tx) =>
+    tx.aiWorkspace.upsert({
+      where: { businessId },
+      create: { businessId },
+      update: {},
+      select: { id: true, activeConnectionId: true }
+    })
+  );
 }
 
 export async function listProviderConnections(input: {
@@ -103,10 +105,12 @@ export async function listProviderConnections(input: {
 
   const [workspace, connections] = await Promise.all([
     getWorkspace(input.businessId),
-    prisma.aiProviderConnection.findMany({
-      where: { businessId: input.businessId },
-      orderBy: { createdAt: "asc" }
-    })
+    withBusinessScope(input.businessId, (tx) =>
+      tx.aiProviderConnection.findMany({
+        where: { businessId: input.businessId },
+        orderBy: { createdAt: "asc" }
+      })
+    )
   ]);
 
   return connections.map((connection) =>
@@ -170,9 +174,11 @@ export async function createProviderConnection(input: {
     );
   }
 
-  const existingCount = await prisma.aiProviderConnection.count({
-    where: { businessId: input.businessId }
-  });
+  const existingCount = await withBusinessScope(input.businessId, (tx) =>
+    tx.aiProviderConnection.count({
+      where: { businessId: input.businessId }
+    })
+  );
   if (existingCount >= MAX_CONNECTIONS_PER_BUSINESS) {
     throw new AiProviderServiceError(
       "Connection limit reached for this business.",
@@ -183,7 +189,7 @@ export async function createProviderConnection(input: {
 
   const workspace = await getWorkspace(input.businessId);
 
-  const connection = await prisma.$transaction(async (tx) => {
+  const connection = await withBusinessScope(input.businessId, async (tx) => {
     const created = await tx.aiProviderConnection.create({
       data: {
         businessId: input.businessId,
@@ -210,15 +216,17 @@ export async function createProviderConnection(input: {
     );
 
     return created;
-  }, { maxWait: 5000, timeout: 10000 });
+  });
 
   return toView(connection, workspace.activeConnectionId);
 }
 
 async function findOwnedConnection(businessId: string, connectionId: string) {
-  const connection = await prisma.aiProviderConnection.findFirst({
-    where: { id: connectionId, businessId }
-  });
+  const connection = await withBusinessScope(businessId, (tx) =>
+    tx.aiProviderConnection.findFirst({
+      where: { id: connectionId, businessId }
+    })
+  );
   if (!connection) {
     throw new AiProviderServiceError("Connection not found.", 404, "NOT_FOUND");
   }
@@ -263,10 +271,12 @@ export async function validateProviderConnection(input: {
 
   const [workspace] = await Promise.all([
     getWorkspace(input.businessId),
-    prisma.aiProviderConnection.updateMany({
-      where: { id: connection.id, businessId: input.businessId },
-      data: update
-    })
+    withBusinessScope(input.businessId, (tx) =>
+      tx.aiProviderConnection.updateMany({
+        where: { id: connection.id, businessId: input.businessId },
+        data: update
+      })
+    )
   ]);
 
   await recordStaffAuditLog({
@@ -297,7 +307,7 @@ export async function setActiveProviderConnection(input: {
     await findOwnedConnection(input.businessId, input.connectionId);
   }
 
-  await prisma.$transaction(async (tx) => {
+  await withBusinessScope(input.businessId, async (tx) => {
     await tx.aiWorkspace.upsert({
       where: { businessId: input.businessId },
       create: { businessId: input.businessId, activeConnectionId: input.connectionId },
@@ -316,7 +326,7 @@ export async function setActiveProviderConnection(input: {
       },
       tx
     );
-  }, { maxWait: 5000, timeout: 10000 });
+  });
 }
 
 export async function deleteProviderConnection(input: {
@@ -332,7 +342,7 @@ export async function deleteProviderConnection(input: {
 
   const connection = await findOwnedConnection(input.businessId, input.connectionId);
 
-  await prisma.$transaction(async (tx) => {
+  await withBusinessScope(input.businessId, async (tx) => {
     // The FK is SetNull, but clear explicitly so the workspace never points
     // at a deleted brain even momentarily.
     await tx.aiWorkspace.updateMany({
@@ -353,7 +363,7 @@ export async function deleteProviderConnection(input: {
       },
       tx
     );
-  }, { maxWait: 5000, timeout: 10000 });
+  });
 }
 
 /**
@@ -365,10 +375,12 @@ export async function resolveActiveByokRuntime(
   businessId: string
 ): Promise<ByokRuntime | null> {
   try {
-    const workspace = await prisma.aiWorkspace.findUnique({
-      where: { businessId },
-      select: { activeConnection: true }
-    });
+    const workspace = await withBusinessScope(businessId, (tx) =>
+      tx.aiWorkspace.findUnique({
+        where: { businessId },
+        select: { activeConnection: true }
+      })
+    );
     const connection = workspace?.activeConnection;
     if (!connection) return null;
     if (connection.status === AiProviderConnectionStatus.DISABLED) return null;
@@ -396,10 +408,12 @@ export async function recordByokRuntimeError(input: {
   message: string;
 }): Promise<void> {
   try {
-    await prisma.aiProviderConnection.updateMany({
-      where: { id: input.connectionId, businessId: input.businessId },
-      data: { lastError: input.message.slice(0, 500) }
-    });
+    await withBusinessScope(input.businessId, (tx) =>
+      tx.aiProviderConnection.updateMany({
+        where: { id: input.connectionId, businessId: input.businessId },
+        data: { lastError: input.message.slice(0, 500) }
+      })
+    );
   } catch (error) {
     logger.warn(
       { err: error, connectionId: input.connectionId },

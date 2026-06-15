@@ -31,7 +31,7 @@ export default async function CustomersPage({ params, searchParams }: Props) {
     return <main className="px-4 pb-24 pt-6 sm:px-8" />;
   }
 
-  const [{ auth }, { prisma }] = await Promise.all([
+  const [{ auth }, { prisma, withBusinessScope }] = await Promise.all([
     import("@/lib/auth"),
     import("@/lib/prisma")
   ]);
@@ -74,17 +74,19 @@ export default async function CustomersPage({ params, searchParams }: Props) {
   };
 
   const [members, total] = await Promise.all([
-    prisma.membership.findMany({
-      where,
-      include: {
-        user: { select: { id: true, name: true, phone: true } },
-        tier: { select: { name: true } }
-      },
-      orderBy: { joinedAt: "desc" },
-      skip,
-      take: PAGE_SIZE
-    }),
-    prisma.membership.count({ where })
+    withBusinessScope(businessId, (tx) =>
+      tx.membership.findMany({
+        where,
+        include: {
+          user: { select: { id: true, name: true, phone: true } },
+          tier: { select: { name: true } }
+        },
+        orderBy: { joinedAt: "desc" },
+        skip,
+        take: PAGE_SIZE
+      })
+    ),
+    withBusinessScope(businessId, (tx) => tx.membership.count({ where }))
   ]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);

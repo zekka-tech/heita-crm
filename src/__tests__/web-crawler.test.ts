@@ -8,7 +8,34 @@ vi.mock("@/lib/security", () => ({
   assertPublicHttpUrl: vi.fn().mockResolvedValue(["93.184.216.34"])
 }));
 
-import { crawlSite } from "@/lib/ai/web-crawler";
+import { crawlSite, __swapFetcherForTesting } from "@/lib/ai/web-crawler";
+
+// Bridge: the HTML fetcher now uses node:https (pinned-IP), but our tests stub
+// the global `fetch`. Wire up a test fetcher that delegates to the stubbed fetch.
+function createTestFetcher() {
+  return async (
+    url: string,
+    _resolvedIps: string[],
+    opts: { method?: string; headers?: Record<string, string>; signal?: AbortSignal }
+  ): Promise<{ status: number; headers: Headers; text: () => Promise<string> }> => {
+    const res = await fetch(url, {
+      headers: opts.headers,
+      redirect: "manual",
+      signal: opts.signal
+    });
+    const body = await res.text();
+    return { status: res.status, headers: res.headers, text: async () => body };
+  };
+}
+
+beforeEach(() => {
+  __swapFetcherForTesting(createTestFetcher());
+});
+
+afterEach(() => {
+  __swapFetcherForTesting(null);
+  vi.restoreAllMocks();
+});
 
 describe("htmlToText", () => {
   it("strips scripts/styles/nav and decodes entities", () => {
@@ -64,13 +91,6 @@ describe("crawlSite", () => {
     );
   }
 
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it("crawls same-origin links up to the depth limit and skips off-origin", async () => {
     const pages: Record<string, Response> = {
       "https://site.com/": htmlPage(["/about", "/contact", "https://external.com/x"]),
@@ -97,6 +117,41 @@ describe("crawlSite", () => {
     expect(urls).toContain("https://site.com/contact");
     expect(urls).not.toContain("https://site.com/team");
     expect(urls.some((u) => u.includes("external.com"))).toBe(false);
+  });
+
+  it("follows robots.txt redirects before applying disallow rules", async () => {
+    const pages: Record<string, Response> = {
+      "https://site.com/": htmlPage(["/allowed", "/blocked"]),
+      "https://site.com/allowed": htmlPage([]),
+      "https://site.com/blocked": htmlPage([])
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url === "https://site.com/robots.txt") {
+          return new Response("", {
+            status: 302,
+            headers: { location: "/robots-rules.txt" }
+          });
+        }
+        if (url === "https://site.com/robots-rules.txt") {
+          return new Response("User-agent: *\nDisallow: /blocked", {
+            status: 200,
+            headers: { "content-type": "text/plain" }
+          });
+        }
+        return pages[url] ?? new Response("", { status: 404 });
+      })
+    );
+
+    const result = await crawlSite({ rootUrl: "https://site.com/", maxDepth: 1, maxPages: 10 });
+    const urls = result.pages.map((page) => page.url);
+
+    expect(urls).toContain("https://site.com/");
+    expect(urls).toContain("https://site.com/allowed");
+    expect(urls).not.toContain("https://site.com/blocked");
   });
 
   it("honours the maxPages cap", async () => {

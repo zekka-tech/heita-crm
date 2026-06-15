@@ -5,17 +5,11 @@ import { auth } from "@/lib/auth";
 import { csrfFailureResponse } from "@/lib/csrf";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
-import { prisma, withBusinessScope } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 export const dynamic = "force-dynamic";
 
-/**
- * POST /api/connect/report
- * Any conversation participant can report a conversation for moderation.
- * Rate-limited (3 reports per user per hour). Logged in StaffAuditLog.
- * Staff can inspect pending reports via the existing StaffAuditLog UI.
- */
 export async function POST(request: NextRequest): Promise<Response> {
   const csrfFailure = await csrfFailureResponse(request);
   if (csrfFailure) return csrfFailure;
@@ -58,11 +52,12 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   try {
-    // Verify the reporter is a participant in the conversation.
-    const participant = await prisma.conversationParticipant.findFirst({
-      where: { conversationId, userId },
-      select: { id: true }
-    });
+    const participant = await withBusinessScope(businessId, (tx) =>
+      tx.conversationParticipant.findFirst({
+        where: { conversationId, userId },
+        select: { id: true }
+      })
+    );
 
     if (!participant) {
       return NextResponse.json({ error: "Forbidden." }, { status: 403 });

@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Input, Select } from "@/components/ui/input";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope, withUserScope } from "@/lib/prisma";
 import { hasStaffRoleAccess } from "@/lib/staff";
 import {
   createInviteAction,
@@ -34,28 +34,32 @@ export default async function SettingsStaffPage({ params }: SettingsStaffPagePro
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/settings/staff`);
   }
 
-  const staffRecord = await prisma.staffMember.findUnique({
-    where: {
-      businessId_userId: {
-        businessId,
-        userId: session.user.id
+  const staffRecord = await withUserScope(session.user.id, (tx) =>
+    tx.staffMember.findUnique({
+      where: {
+        businessId_userId: {
+          businessId,
+          userId: session.user.id
+        }
+      },
+      include: {
+        business: { select: { id: true, name: true, slug: true } }
       }
-    },
-    include: {
-      business: { select: { id: true, name: true, slug: true } }
-    }
-  });
+    })
+  );
 
   if (!staffRecord) notFound();
 
   const canManage = hasStaffRoleAccess(staffRecord.role, [StaffRole.OWNER]);
 
   const [staffMembers, invites] = await Promise.all([
-    prisma.staffMember.findMany({
-      where: { businessId, user: { deletedAt: null } },
-      include: { user: { select: { id: true, name: true, email: true, phone: true } } },
-      orderBy: { joinedAt: "asc" }
-    }),
+    withBusinessScope(businessId, (tx) =>
+      tx.staffMember.findMany({
+        where: { businessId, user: { deletedAt: null } },
+        include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+        orderBy: { joinedAt: "asc" }
+      })
+    ),
     canManage
       ? listStaffInvites({ businessId, actorUserId: session.user.id })
       : Promise.resolve([])

@@ -1,6 +1,6 @@
 import { TransactionType } from "@prisma/client";
 
-import { prisma, withBusinessScope } from "@/lib/prisma";
+import { prisma, withBusinessScope, withUserScope } from "@/lib/prisma";
 
 export type ReceiptHistoryFilter = {
   businessSlug: string;
@@ -11,20 +11,31 @@ export type ReceiptHistoryFilter = {
 };
 
 export async function getReceiptHistory(input: ReceiptHistoryFilter) {
-  const membership = await prisma.membership.findFirst({
+  const business = await prisma.business.findFirst({
     where: {
-      userId: input.userId,
-      isActive: true,
-      business: {
-        slug: input.businessSlug,
-        deletedAt: null
-      }
+      slug: input.businessSlug,
+      deletedAt: null
     },
-    include: {
-      business: true,
-      tier: true
-    }
+    select: { id: true }
   });
+
+  if (!business) {
+    return null;
+  }
+
+  const membership = await withUserScope(input.userId, (tx) =>
+    tx.membership.findFirst({
+      where: {
+        userId: input.userId,
+        businessId: business.id,
+        isActive: true
+      },
+      include: {
+        business: true,
+        tier: true
+      }
+    })
+  );
 
   if (!membership) {
     return null;
@@ -87,11 +98,12 @@ export function formatReceiptHistoryCsv(input: {
       row
         .map((value) => {
           const str = String(value);
-          // Prefix formula-injection characters per OWASP CSV injection guidance
+          // Prefix formula-injection characters per OWASP CSV injection guidance.
           const safe = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
           return `"${safe.replace(/"/g, '""')}"`;
         })
         .join(",")
     )
-    .join("\n")}\n`;
+    .join("\n")}
+`;
 }

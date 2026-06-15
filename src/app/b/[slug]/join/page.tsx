@@ -30,7 +30,7 @@ export default async function BusinessJoinPage({
   }
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const [{ auth }, { prisma }] = await Promise.all([
+  const [{ auth }, { prisma, withBusinessScope }] = await Promise.all([
     import("@/lib/auth"),
     import("@/lib/prisma")
   ]);
@@ -42,14 +42,16 @@ export default async function BusinessJoinPage({
   if (!business) notFound();
 
   const membership = session?.user?.id
-    ? await prisma.membership.findUnique({
-        where: {
-          businessId_userId: {
-            businessId: business.id,
-            userId: session.user.id
+    ? await withBusinessScope(business.id, (tx) =>
+        tx.membership.findUnique({
+          where: {
+            businessId_userId: {
+              businessId: business.id,
+              userId: session.user.id
+            }
           }
-        }
-      })
+        })
+      )
     : null;
 
   const channel = Object.values(JoinChannel).includes(

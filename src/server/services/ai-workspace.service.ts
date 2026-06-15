@@ -5,7 +5,7 @@ import {
   MalwareScanError,
   scanStoredObjectForMalware
 } from "@/lib/malware-scan";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 export class AiWorkspaceServiceError extends Error {
@@ -51,20 +51,20 @@ type RequestDocumentIngestionResult =
 export async function createDocumentRecord(
   input: CreateDocumentRecordInput
 ): Promise<BusinessDocument> {
-  const workspace = await prisma.aiWorkspace.findUnique({
-    where: { businessId: input.businessId },
-    select: { id: true }
-  });
+  return withBusinessScope(input.businessId, async (tx) => {
+    const workspace = await tx.aiWorkspace.findUnique({
+      where: { businessId: input.businessId },
+      select: { id: true }
+    });
 
-  if (!workspace) {
-    throw new AiWorkspaceServiceError(
-      "AI workspace not found.",
-      404,
-      "AI_WORKSPACE_NOT_FOUND"
-    );
-  }
+    if (!workspace) {
+      throw new AiWorkspaceServiceError(
+        "AI workspace not found.",
+        404,
+        "AI_WORKSPACE_NOT_FOUND"
+      );
+    }
 
-  return prisma.$transaction(async (tx) => {
     const document = await tx.businessDocument.create({
       data: {
         workspaceId: workspace.id,
@@ -99,23 +99,26 @@ export async function createDocumentRecord(
     }
 
     return document;
-  }, { maxWait: 5000, timeout: 10000 });
+  });
 }
 
 export async function requestDocumentIngestion(
   documentId: string,
+  businessId: string,
   actorUserId?: string | null
 ): Promise<RequestDocumentIngestionResult> {
-  const document = await prisma.businessDocument.findUnique({
-    where: { id: documentId },
-    select: {
-      id: true,
-      businessId: true,
-      status: true,
-      storageKey: true,
-      fileName: true
-    }
-  });
+  const document = await withBusinessScope(businessId, (tx) =>
+    tx.businessDocument.findUnique({
+      where: { id: documentId },
+      select: {
+        id: true,
+        businessId: true,
+        status: true,
+        storageKey: true,
+        fileName: true
+      }
+    })
+  );
 
   if (!document) {
     throw new AiWorkspaceServiceError(
@@ -142,13 +145,15 @@ export async function requestDocumentIngestion(
   }
 
   if (document.status === DocumentStatus.FAILED) {
-    await prisma.businessDocument.update({
-      where: { id: document.id },
-      data: {
-        status: DocumentStatus.PENDING,
-        errorMessage: null
-      }
-    });
+    await withBusinessScope(document.businessId, (tx) =>
+      tx.businessDocument.update({
+        where: { id: document.id },
+        data: {
+          status: DocumentStatus.PENDING,
+          errorMessage: null
+        }
+      })
+    );
   }
 
   try {
@@ -158,13 +163,15 @@ export async function requestDocumentIngestion(
     });
 
     if (scanResult.verdict === "infected") {
-      await prisma.businessDocument.update({
-        where: { id: document.id },
-        data: {
-          status: DocumentStatus.FAILED,
-          errorMessage: "The document was rejected by the malware scanner."
-        }
-      });
+      await withBusinessScope(document.businessId, (tx) =>
+        tx.businessDocument.update({
+          where: { id: document.id },
+          data: {
+            status: DocumentStatus.FAILED,
+            errorMessage: "The document was rejected by the malware scanner."
+          }
+        })
+      );
 
       throw new AiWorkspaceServiceError(
         "The uploaded document was rejected by the malware scanner.",
@@ -178,13 +185,15 @@ export async function requestDocumentIngestion(
     }
 
     if (error instanceof MalwareScanError) {
-      await prisma.businessDocument.update({
-        where: { id: document.id },
-        data: {
-          status: DocumentStatus.FAILED,
-          errorMessage: error.message
-        }
-      });
+      await withBusinessScope(document.businessId, (tx) =>
+        tx.businessDocument.update({
+          where: { id: document.id },
+          data: {
+            status: DocumentStatus.FAILED,
+            errorMessage: error.message
+          }
+        })
+      );
 
       throw new AiWorkspaceServiceError(error.message, error.status, error.code);
     }
@@ -192,19 +201,21 @@ export async function requestDocumentIngestion(
     throw error;
   }
 
-  const ingestion = await enqueueDocumentIngestion(document.id);
+  const ingestion = await enqueueDocumentIngestion(document.id, document.businessId);
 
   if (actorUserId) {
-    await recordStaffAuditLog({
-      businessId: document.businessId,
-      actorUserId,
-      action: "AI_DOCUMENT_INGEST_REQUEST",
-      targetType: "BusinessDocument",
-      targetId: document.id,
-      metadata: {
-        jobId: ingestion.jobId,
-        previousStatus: document.status
-      }
+    await withBusinessScope(document.businessId, async (tx) => {
+      await recordStaffAuditLog({
+        businessId: document.businessId,
+        actorUserId,
+        action: "AI_DOCUMENT_INGEST_REQUEST",
+        targetType: "BusinessDocument",
+        targetId: document.id,
+        metadata: {
+          jobId: ingestion.jobId,
+          previousStatus: document.status
+        }
+      }, tx);
     });
   }
 

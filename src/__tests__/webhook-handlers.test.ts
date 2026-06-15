@@ -32,7 +32,10 @@ vi.mock("@/lib/circuit-breaker", () => ({
 vi.mock("@/server/services/whatsapp.service", () => ({
   handleWhatsappInboundPayload: vi.fn().mockResolvedValue(undefined)
 }));
-vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
+vi.mock("@/lib/prisma", () => ({
+  prisma: prismaMock,
+  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prismaMock) => unknown) => fn(prismaMock))
+}));
 vi.mock("@/server/services/sales-thread.service", () => salesThreadMock);
 
 const {

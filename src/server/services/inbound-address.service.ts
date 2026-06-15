@@ -1,11 +1,10 @@
 import { MessageChannel, StaffRole } from "@prisma/client";
 
 import { normalizeZaPhone } from "@/lib/phone";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
-const TX_OPTIONS = { maxWait: 5_000, timeout: 10_000 };
 const MANAGER_ROLES = [StaffRole.OWNER, StaffRole.MANAGER] as const;
 
 function normalizeEmailAddress(raw: string) {
@@ -56,7 +55,7 @@ export async function upsertBusinessInboundAddress(input: {
   const address = normalizeAddress(channel, input.address);
   const label = input.label?.trim() || null;
 
-  return prisma.$transaction(async (tx) => {
+  return withBusinessScope(input.businessId, async (tx) => {
     const existing = await tx.businessInboundAddress.findUnique({
       where: { channel_provider_address: { channel, provider, address } }
     });
@@ -98,7 +97,7 @@ export async function upsertBusinessInboundAddress(input: {
     }, tx);
 
     return row;
-  }, TX_OPTIONS);
+  });
 }
 
 export async function deleteBusinessInboundAddress(input: {
@@ -112,7 +111,7 @@ export async function deleteBusinessInboundAddress(input: {
     allowedRoles: [...MANAGER_ROLES]
   });
 
-  return prisma.$transaction(async (tx) => {
+  return withBusinessScope(input.businessId, async (tx) => {
     const update = await tx.businessInboundAddress.updateMany({
       where: { id: input.addressId, businessId: input.businessId },
       data: { isActive: false }
@@ -134,5 +133,5 @@ export async function deleteBusinessInboundAddress(input: {
     }, tx);
 
     return row;
-  }, TX_OPTIONS);
+  });
 }

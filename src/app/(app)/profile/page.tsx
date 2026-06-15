@@ -12,7 +12,7 @@ import { Chip, TierBadge } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { resolveLocale } from "@/i18n/locale";
 import { normalizeNotificationPreferences } from "@/lib/notification-preferences";
-import { prisma } from "@/lib/prisma";
+import { prisma, withUserScope } from "@/lib/prisma";
 
 export const metadata = { title: "Profile" };
 export const dynamic = "force-dynamic";
@@ -28,14 +28,18 @@ export default async function ProfilePage() {
 
   const [user, memberships, staffRoles] = await Promise.all([
     prisma.user.findUniqueOrThrow({ where: { id: session.user.id } }),
-    prisma.membership.findMany({
-      where: { userId: session.user.id, isActive: true },
-      include: { business: true, tier: true }
-    }),
-    prisma.staffMember.findMany({
-      where: { userId: session.user.id },
-      include: { business: true }
-    })
+    withUserScope(session.user.id, (tx) =>
+      tx.membership.findMany({
+        where: { userId: session.user.id, isActive: true },
+        include: { business: true, tier: true }
+      })
+    ),
+    withUserScope(session.user.id, (tx) =>
+      tx.staffMember.findMany({
+        where: { userId: session.user.id },
+        include: { business: true }
+      })
+    )
   ]);
 
   return (

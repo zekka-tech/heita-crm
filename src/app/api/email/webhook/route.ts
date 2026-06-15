@@ -3,7 +3,7 @@ import { MessageChannel, MessageStatus, SalesThreadStatus } from "@prisma/client
 import { NextRequest, NextResponse } from "next/server";
 
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 import { markCustomerResponded } from "@/server/services/sales-thread.service";
 
 type ResendAddress = string | { email?: string | null; name?: string | null };
@@ -160,30 +160,47 @@ async function handleInboundEmail(event: ResendEvent) {
   };
 
   const thread = threadId
-    ? await prisma.salesThread.findFirst({
-        where: {
-          id: threadId,
-          ...(businessId ? { businessId } : {}),
-          status: SalesThreadStatus.OPEN,
-          ...userThreadWhere
-        },
-        select: { id: true, businessId: true, contactPhone: true }
-      })
+    ? await (businessId
+        ? withBusinessScope(businessId, (tx) =>
+            tx.salesThread.findFirst({
+              where: {
+                id: threadId,
+                businessId,
+                status: SalesThreadStatus.OPEN,
+                ...userThreadWhere
+              },
+              select: { id: true, businessId: true, contactPhone: true }
+            })
+          )
+        : prisma.salesThread.findFirst({
+            where: {
+              id: threadId,
+              status: SalesThreadStatus.OPEN,
+              ...userThreadWhere
+            },
+            select: { id: true, businessId: true, contactPhone: true }
+          }))
     : null;
 
   const fallbackThread = thread ?? await (async () => {
     const recipientEmails = emailsFromAddresses([...(event.data.to ?? []), ...(event.data.cc ?? [])]);
     const businessIds = await resolveBusinessIdsForInboundEmail(recipientEmails);
     if (!businessIds.length) return null;
-    return prisma.salesThread.findFirst({
-      where: {
-        businessId: { in: businessIds },
-        status: SalesThreadStatus.OPEN,
-        ...userThreadWhere
-      },
-      orderBy: { updatedAt: "desc" },
-      select: { id: true, businessId: true, contactPhone: true }
-    });
+    for (const bid of businessIds) {
+      const found = await withBusinessScope(bid, (tx) =>
+        tx.salesThread.findFirst({
+          where: {
+            businessId: bid,
+            status: SalesThreadStatus.OPEN,
+            ...userThreadWhere
+          },
+          orderBy: { updatedAt: "desc" },
+          select: { id: true, businessId: true, contactPhone: true }
+        })
+      );
+      if (found) return found;
+    }
+    return null;
   })();
 
   if (!fallbackThread) {
@@ -192,31 +209,35 @@ async function handleInboundEmail(event: ResendEvent) {
   }
 
   const externalId = event.data.email_id ?? event.data.message_id ?? null;
-  const existing = externalId
-    ? await prisma.message.findFirst({ where: { channel: MessageChannel.EMAIL, externalId }, select: { id: true } })
-    : null;
-  if (existing) return;
+  const message = await withBusinessScope(fallbackThread.businessId, async (tx) => {
+    const existing = externalId
+      ? await tx.message.findFirst({ where: { channel: MessageChannel.EMAIL, externalId }, select: { id: true } })
+      : null;
+    if (existing) return null;
 
-  const message = await prisma.message.create({
-    data: {
-      businessId: fallbackThread.businessId,
-      userId: user.id,
-      contactPhone: fallbackThread.contactPhone,
-      channel: MessageChannel.EMAIL,
-      direction: "INBOUND",
-      externalId,
-      status: MessageStatus.RECEIVED,
-      body: plainTextFromEmail(event.data).slice(0, 10_000),
-      salesThreadId: fallbackThread.id,
-      metadata: {
-        fromEmail,
-        toEmails: emailsFromAddresses(event.data.to),
-        ccEmails: emailsFromAddresses(event.data.cc),
-        subject: event.data.subject ?? null,
-        provider: "resend"
+    return tx.message.create({
+      data: {
+        businessId: fallbackThread.businessId,
+        userId: user.id,
+        contactPhone: fallbackThread.contactPhone,
+        channel: MessageChannel.EMAIL,
+        direction: "INBOUND",
+        externalId,
+        status: MessageStatus.RECEIVED,
+        body: plainTextFromEmail(event.data).slice(0, 10_000),
+        salesThreadId: fallbackThread.id,
+        metadata: {
+          fromEmail,
+          toEmails: emailsFromAddresses(event.data.to),
+          ccEmails: emailsFromAddresses(event.data.cc),
+          subject: event.data.subject ?? null,
+          provider: "resend"
+        }
       }
-    }
+    });
   });
+
+  if (!message) return;
 
   await markCustomerResponded({
     businessId: fallbackThread.businessId,

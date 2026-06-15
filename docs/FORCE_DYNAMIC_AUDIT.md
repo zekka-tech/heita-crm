@@ -7,10 +7,10 @@ This file documents every remaining `export const dynamic = "force-dynamic"` in 
 - src/app/discover/page.tsx - removed the cookie-backed `auth()` call used only for a personalized back link. The unfiltered list remains cached for five minutes and the page exports `revalidate = 300`.
 - src/app/b/[slug]/page.tsx - auth-dependent CTAs (join/rewards button, staff chat link) and membership stats card extracted into `_components/membership-cta.tsx` Server Components wrapped in `<Suspense>` boundaries. The static shell — business name, description, rewards/promotions/events summaries, loyalty tiers, structured data — is now ISR with `revalidate = 60`.
 - src/app/api/og/[slug]/route.tsx - OG images are session-independent; replaced `force-dynamic` with `revalidate = 3600` (one-hour ISR per slug).
+- src/app/b/[slug]/events/page.tsx - public events listing; replaced `force-dynamic` with `revalidate = 60` (ISR). Dates use a fixed en-ZA locale on the server so the static shell has no request-time cookie/header reads.
 
 ## Remaining Dynamic Routes
 
-- `src/app/b/[slug]/events/page.tsx` - public, but currently resolves locale from cookies/headers via resolveLocale() and next-intl; convert after request-locale dependency is split from the static shell.
 - `src/app/b/[slug]/join/page.tsx` - session, membership state, CSRF form, referral/channel attribution.
 - `src/app/b/[slug]/rewards/page.tsx` - authenticated balance, tier, referral code, CSRF redemption, stock-sensitive reward state.
 - `src/app/b/[slug]/history/page.tsx` - authenticated member receipt/history data.
@@ -49,8 +49,10 @@ This file documents every remaining `export const dynamic = "force-dynamic"` in 
 - `src/app/api/account/sign-out-all/route.ts` - authenticated session mutation.
 - `src/app/api/account/verify-email/route.ts` - tokenized account verification.
 - `src/app/api/connect/ack/route.ts` - authenticated Connect delivery/read acknowledgement mutation.
+- `src/app/api/connect/block/route.ts` - authenticated mutation with CSRF.
 - `src/app/api/connect/messages/route.ts` - authenticated Connect message list/create endpoint.
 - `src/app/api/connect/presence/route.ts` - authenticated Connect presence mutation.
+- `src/app/api/connect/report/route.ts` - authenticated mutation with CSRF.
 - `src/app/api/connect/stream/route.ts` - authenticated Connect SSE stream.
 - `src/app/api/discover/businesses/route.ts` - request-specific discover API response.
 - `src/app/api/admin/dlq/route.ts` - admin queue state.
@@ -63,6 +65,7 @@ This file documents every remaining `export const dynamic = "force-dynamic"` in 
 - `src/app/api/auth/request-staff-otp/route.ts` - staff OTP request rate limits and CSRF.
 - `src/app/api/auth/verify-staff-otp/route.ts` - staff OTP verification.
 - `src/app/api/cron/hard-delete-users/route.ts` - cron-secret protected mutation.
+- `src/app/api/cron/purge-connect-messages/route.ts` - cron-secret protected mutation for retention.
 - `src/app/api/cron/purge-whatsapp-messages/route.ts` - cron-secret protected retention job.
 - `src/app/api/cron/recalculate-tiers/route.ts` - cron-secret protected loyalty mutation.
 - `src/app/api/cron/refresh-web-sources/route.ts` - cron-secret protected crawler enqueue.

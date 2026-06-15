@@ -91,7 +91,7 @@ export function DocumentUploadCard({ businessId }: DocumentUploadCardProps) {
 
         setStatus("Queueing document ingestion…");
         const completeResponse = await fetch(
-          `/api/upload/${createPayload.documentId}/complete`,
+          `/api/upload/${createPayload.documentId}/complete?businessId=${encodeURIComponent(businessId)}`,
           {
             method: "POST",
             headers: appendCsrfHeader(undefined, csrfToken)
