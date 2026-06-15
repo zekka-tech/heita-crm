@@ -1,12 +1,15 @@
 import {
   Prisma,
+  StaffRole,
   type BusinessPlanId,
   type PaymentProvider,
 } from "@prisma/client";
 
 import { getBusinessPlan, getPlanQuota } from "@/lib/billing";
 import { logger } from "@/lib/logger";
-import { withBusinessScope } from "@/lib/prisma";
+import { captureEvent } from "@/lib/telemetry";
+import { TELEMETRY_EVENTS } from "@/lib/telemetry-events";
+import { withBusinessScope, type PrismaTransactionClient } from "@/lib/prisma";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 import {
   getGateway,
@@ -157,6 +160,79 @@ function isUniqueConstraintError(err: unknown) {
   );
 }
 
+type SubscriptionTelemetry =
+  | {
+      event: typeof TELEMETRY_EVENTS.subscriptionStarted;
+      userId: string;
+      properties: {
+        businessId: string;
+        plan: BusinessPlanId;
+        billingInterval: "monthly" | "annual";
+      };
+    }
+  | {
+      event: typeof TELEMETRY_EVENTS.subscriptionUpgraded;
+      userId: string;
+      properties: {
+        businessId: string;
+        previousPlan: BusinessPlanId;
+        newPlan: BusinessPlanId;
+        billingInterval: "monthly" | "annual";
+      };
+    };
+
+async function buildSubscriptionTelemetry(
+  tx: Pick<PrismaTransactionClient, "business" | "staffMember">,
+  event: NormalizedPaymentEvent,
+): Promise<SubscriptionTelemetry | null> {
+  const previousBusiness = await tx.business.findUnique({
+    where: { id: event.businessId },
+    select: { planId: true },
+  });
+  const previousPlan = previousBusiness?.planId ?? "FREE";
+
+  if (previousPlan === event.planId) {
+    return null;
+  }
+
+  const owner = await tx.staffMember.findFirst({
+    where: { businessId: event.businessId, role: StaffRole.OWNER },
+    select: { userId: true },
+    orderBy: { joinedAt: "asc" },
+  });
+
+  if (!owner?.userId) {
+    return null;
+  }
+
+  if (previousPlan === "FREE") {
+    return {
+      event: TELEMETRY_EVENTS.subscriptionStarted,
+      userId: owner.userId,
+      properties: {
+        businessId: event.businessId,
+        plan: event.planId,
+        billingInterval: "monthly",
+      },
+    };
+  }
+
+  if (isPaidBusinessPlan(previousPlan)) {
+    return {
+      event: TELEMETRY_EVENTS.subscriptionUpgraded,
+      userId: owner.userId,
+      properties: {
+        businessId: event.businessId,
+        previousPlan,
+        newPlan: event.planId,
+        billingInterval: "monthly",
+      },
+    };
+  }
+
+  return null;
+}
+
 export async function createCheckout(
   businessId: string,
   planId: BusinessPlanId,
@@ -284,6 +360,8 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
     const periodEnd = new Date(now);
     periodEnd.setMonth(periodEnd.getMonth() + 1);
 
+    let subscriptionTelemetry: SubscriptionTelemetry | null = null;
+
     try {
       await withBusinessScope(event.businessId, async (tx) => {
           const existingInvoice = await tx.businessInvoice.findFirst({
@@ -303,6 +381,8 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
             );
             return;
           }
+
+          subscriptionTelemetry = await buildSubscriptionTelemetry(tx, event);
 
           await tx.businessInvoice.create({
             data: {
@@ -381,6 +461,10 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
         return;
       }
       throw err;
+    }
+
+    if (subscriptionTelemetry) {
+      captureEvent(subscriptionTelemetry);
     }
 
     logger.info(

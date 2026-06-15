@@ -52,7 +52,7 @@ beforeEach(() => {
 });
 
 describe("joinBusiness telemetry", () => {
-  it("captures membership.joined after a new membership is created", async () => {
+  it("captures business_joined and membership.joined after a new membership is created", async () => {
     mocks.prisma.membership.findUnique.mockResolvedValue(null);
 
     await expect(joinBusiness({
@@ -62,7 +62,17 @@ describe("joinBusiness telemetry", () => {
       referralCode: null
     })).resolves.toEqual(expect.objectContaining({ id: "mem_1" }));
 
-    expect(mocks.captureEvent).toHaveBeenCalledWith({
+    expect(mocks.captureEvent).toHaveBeenNthCalledWith(1, {
+      userId: "user_1",
+      event: TELEMETRY_EVENTS.businessJoined,
+      properties: {
+        businessId: "biz_1",
+        joinChannel: JoinChannel.QR_CODE,
+        referralUsed: false,
+        signupBonusPoints: 100
+      }
+    });
+    expect(mocks.captureEvent).toHaveBeenNthCalledWith(2, {
       userId: "user_1",
       event: TELEMETRY_EVENTS.membershipJoined,
       properties: {

@@ -6,9 +6,9 @@ const prisma = {
   $transaction: vi.fn((fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma)),
   business: { findUnique: vi.fn(), update: vi.fn() },
   businessSubscription: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+  staffMember: { count: vi.fn(), findFirst: vi.fn() },
   businessInvoice: { findFirst: vi.fn(), create: vi.fn() },
   membership: { count: vi.fn() },
-  staffMember: { count: vi.fn() },
   aiTokenUsage: { count: vi.fn() },
   businessDocument: { count: vi.fn() }
 };
@@ -20,6 +20,9 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/server/services/staff-audit.service", () => ({
   recordStaffAuditLog: vi.fn().mockResolvedValue(undefined)
 }));
+vi.mock("@/lib/telemetry", () => ({
+  captureEvent: vi.fn()
+}));
 
 const {
   applyPaymentEvent,
@@ -29,12 +32,15 @@ const {
   isPaidBusinessPlan,
   requirePaidBusinessPlan
 } = await import("@/server/services/billing.service");
+const { captureEvent } = await import("@/lib/telemetry");
+const { TELEMETRY_EVENTS } = await import("@/lib/telemetry-events");
 
 beforeEach(() => {
   vi.clearAllMocks();
   // Default: no blocking subscription, so a paid planId stays paid unless a
   // test explicitly sets a PAST_DUE/CANCELLED subscription.
   prisma.businessSubscription.findFirst.mockResolvedValue(null);
+  prisma.staffMember.findFirst.mockResolvedValue({ userId: "owner_1" });
   prisma.businessInvoice.findFirst.mockResolvedValue(null);
   prisma.businessInvoice.create.mockResolvedValue({});
   prisma.businessSubscription.create.mockResolvedValue({});
@@ -159,6 +165,46 @@ describe("handleYocoWebhook — payment.succeeded idempotency", () => {
     await handleYocoWebhook(successPayload);
     expect(prisma.businessSubscription.create).toHaveBeenCalledOnce();
     expect(prisma.businessInvoice.create).toHaveBeenCalledOnce();
+  });
+  it("captures subscription_started when a business moves from FREE to a paid plan", async () => {
+    prisma.business.findUnique.mockResolvedValue({ planId: "FREE" });
+
+    await handleYocoWebhook(successPayload);
+
+    expect(captureEvent).toHaveBeenCalledWith({
+      userId: "owner_1",
+      event: TELEMETRY_EVENTS.subscriptionStarted,
+      properties: {
+        businessId: "biz1",
+        plan: "GROWTH",
+        billingInterval: "monthly"
+      }
+    });
+  });
+
+  it("captures subscription_upgraded when a business changes paid plans", async () => {
+    prisma.business.findUnique.mockResolvedValue({ planId: "STARTER" });
+
+    await handleYocoWebhook(successPayload);
+
+    expect(captureEvent).toHaveBeenCalledWith({
+      userId: "owner_1",
+      event: TELEMETRY_EVENTS.subscriptionUpgraded,
+      properties: {
+        businessId: "biz1",
+        previousPlan: "STARTER",
+        newPlan: "GROWTH",
+        billingInterval: "monthly"
+      }
+    });
+  });
+
+  it("does not emit subscription funnel telemetry for same-plan renewals", async () => {
+    prisma.business.findUnique.mockResolvedValue({ planId: "GROWTH" });
+
+    await handleYocoWebhook(successPayload);
+
+    expect(captureEvent).not.toHaveBeenCalled();
   });
 
   it("skips duplicate processing when invoice already exists", async () => {

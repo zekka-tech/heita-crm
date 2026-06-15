@@ -95,15 +95,22 @@ export async function joinBusiness(input: JoinBusinessInput) {
       }
     });
 
+    const joinTelemetry = {
+      businessId: business.id,
+      joinChannel: input.joinChannel,
+      referralUsed: !!referralCode,
+      signupBonusPoints: business.loyaltySignupBonus
+    };
+
+    captureEvent({
+      userId: input.userId,
+      event: TELEMETRY_EVENTS.businessJoined,
+      properties: joinTelemetry
+    });
     captureEvent({
       userId: input.userId,
       event: TELEMETRY_EVENTS.membershipJoined,
-      properties: {
-        businessId: business.id,
-        joinChannel: input.joinChannel,
-        referralUsed: !!referralCode,
-        signupBonusPoints: business.loyaltySignupBonus
-      }
+      properties: joinTelemetry
     });
 
     return membership;

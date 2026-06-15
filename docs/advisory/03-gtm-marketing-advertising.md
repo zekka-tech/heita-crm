@@ -2,7 +2,7 @@
 
 *Investment Memorandum · Section 3 of the advisory series · Updated 15 June 2026 · Author: Senior Growth/GTM Advisor · Status: Pre-investment diligence*
 
-> **Scope note.** This refresh is grounded in the shipped product and current codebase, not aspirational packaging. The live plan ladder in `src/lib/billing.ts` is **FREE / STARTER / GROWTH / SCALE** at **R0 / R499 / R1,499 / R4,999** per month. The public pricing page shows annual prices, but the implemented checkout helpers for Yoco, PayFast, and Stripe currently create **monthly** charges only. The marketing-site pricing CTA is self-serve only for **FREE**; paid CTAs on `src/app/pricing/page.tsx` still route to `sales@heita.co.za`, while the in-dashboard billing surface can run self-serve checkout when payment-provider credentials are configured. Telemetry is also only partially wired: `onboarding_completed`, `membership.joined`, `loyalty.points_redeemed`, and legacy `ai.message_sent` are emitted today; `business_joined`, `subscription_started`, `subscription_upgraded`, and canonical `ai_message_sent` exist in the contract but are not yet emitted. The shipped referral engine is **member-to-member inside a business**; a **business-to-business referral loop** is still a required growth build, not a live CAC reducer.
+> **Scope note.** This refresh is grounded in the shipped product and current codebase, not aspirational packaging. The live plan ladder in `src/lib/billing.ts` is **FREE / STARTER / GROWTH / SCALE** at **R0 / R499 / R1,499 / R4,999** per month. The public pricing page shows annual prices, but the implemented checkout helpers for Yoco, PayFast, and Stripe currently create **monthly** charges only. The marketing-site pricing CTA is self-serve only for **FREE**; paid CTAs on `src/app/pricing/page.tsx` still route to `sales@heita.co.za`, while the in-dashboard billing surface can run self-serve checkout when payment-provider credentials are configured. Telemetry is still partially wired, but the core funnel contract is now materially better covered: `onboarding_completed`, `business_joined`, `membership.joined`, `loyalty.points_redeemed`, `subscription_started`, `subscription_upgraded`, legacy `ai.message_sent`, and canonical `ai_message_sent` are emitted today. The remaining gap is attribution richness and checkout-step instrumentation, not total absence of subscription or AI funnel events. The shipped referral engine is **member-to-member inside a business**; a **business-to-business referral loop** is still a required growth build, not a live CAC reducer.
 
 ## 1. Executive View
 
@@ -113,9 +113,9 @@ In other words: use **measured cohort payback thresholds** as the operating cont
 | Customer joined a business | Emitted today as `membership.joined` |
 | Reward or points redemption | Emitted today as `loyalty.points_redeemed` |
 | AI workspace engagement | Emitted today as legacy `ai.message_sent` |
-| Merchant-level `business_joined` event | Defined in telemetry contract, not currently emitted |
-| Subscription started / upgraded | Defined in telemetry contract, not currently emitted |
-| Canonical `ai_message_sent` | Defined, but legacy event name is still the emitted one |
+| Customer joined a business (`business_joined`) | Emitted today alongside `membership.joined` |
+| Subscription started / upgraded | Emitted today on first paid activation and paid-plan changes |
+| Canonical `ai_message_sent` | Emitted today alongside legacy `ai.message_sent` |
 
 This matters because the **current telemetry is good enough to assess product activation**, but **not yet good enough to claim reliable channel CAC, paid conversion, or upgrade economics**.
 
@@ -137,13 +137,12 @@ The core insight is that **Heita's commercial "aha" is not account creation. It 
 
 The first GTM engineering workstream should be small, concrete, and non-negotiable:
 
-1. Emit `business_joined`, `subscription_started`, and `subscription_upgraded` in the live product.
-2. Add explicit `checkout_started`, `provider_selected`, and `first_reward_created` events.
-3. Normalize AI analytics onto canonical `ai_message_sent`.
-4. Tie lead source and campaign metadata to the merchant record or onboarding session.
-5. Build a per-channel dashboard that reports activation and paid conversion by cohort, not just raw signups.
+1. Add explicit `checkout_started`, `provider_selected`, and `first_reward_created` events.
+2. Tie lead source and campaign metadata to the merchant record or onboarding session.
+3. Build a per-channel dashboard that reports activation and paid conversion by cohort, not just raw signups.
+4. Add richer billing-state context for renewals, downgrades, and assisted-sales attribution.
 
-Until that exists, **every exact CAC, conversion, and LTV claim should be treated as an internal planning estimate, not an investor fact.**
+Until that exists, **every exact CAC, conversion, and LTV claim should still be treated as an internal planning estimate, not an investor fact.**
 
 ## 6. Marketing Narrative And Creative Direction
 

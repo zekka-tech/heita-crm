@@ -10,6 +10,7 @@ import { logger } from "@/lib/logger";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { prisma, withBusinessScope } from "@/lib/prisma";
 import { captureEvent } from "@/lib/telemetry";
+import { TELEMETRY_EVENTS } from "@/lib/telemetry-events";
 import {
   AiUsageQuotaExceededError,
   checkAiMessageAllowance,
@@ -416,7 +417,16 @@ export async function POST(request: NextRequest): Promise<Response> {
             "rag.answer_ungrounded"
           );
         }
-        captureEvent({ userId, event: "ai.message_sent", properties: { businessId, runtime: ragAnswer.runtime, model: ragAnswer.model ?? undefined, citationCount: ragAnswer.citations.length, totalTokens: totalTokens || undefined, grounded: grounding.grounded } });
+        const aiTelemetry = {
+          businessId,
+          runtime: ragAnswer.runtime,
+          model: ragAnswer.model ?? undefined,
+          citationCount: ragAnswer.citations.length,
+          totalTokens: totalTokens || undefined,
+          grounded: grounding.grounded
+        };
+        captureEvent({ userId, event: TELEMETRY_EVENTS.aiMessageSentLegacy, properties: aiTelemetry });
+        captureEvent({ userId, event: TELEMETRY_EVENTS.aiMessageSent, properties: aiTelemetry });
         controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"));
       } catch (err) {
         logger.error({ err }, "ai.chat.stream_error");
