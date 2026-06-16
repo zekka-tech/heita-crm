@@ -25,15 +25,16 @@ describeIfDbConfigured("live RLS enforcement", () => {
     businessAId = randomUUID();
     businessBId = randomUUID();
 
+    // updatedAt is Prisma @updatedAt (no DB default), so raw SQL must set it.
     await owner.query(
-      `INSERT INTO "User" ("id", "email") VALUES ($1, $2)`,
+      `INSERT INTO "User" ("id", "email", "updatedAt") VALUES ($1, $2, NOW())`,
       [userId, `rls-live-${userId}@example.com`]
     );
 
     await owner.query(
-      `INSERT INTO "Business" ("id", "slug", "name", "category", "province")
-       VALUES ($1, $2, $3, 'GROCERY', 'GAUTENG'),
-              ($4, $5, $6, 'GROCERY', 'GAUTENG')`,
+      `INSERT INTO "Business" ("id", "slug", "name", "category", "province", "updatedAt")
+       VALUES ($1, $2, $3, 'GROCERY', 'GAUTENG', NOW()),
+              ($4, $5, $6, 'GROCERY', 'GAUTENG', NOW())`,
       [
         businessAId,
         `rls-live-${businessAId}`,
@@ -81,6 +82,29 @@ describeIfDbConfigured("live RLS enforcement", () => {
       );
 
       expect(result.rows).toEqual([{ businessId: businessAId }]);
+    } finally {
+      await app.query("ROLLBACK");
+    }
+  });
+
+  it("rejects writing a row into a tenant other than the scoped one (WITH CHECK)", async () => {
+    await app.query("BEGIN");
+
+    try {
+      await app.query(
+        `SELECT set_config('app.current_business_id', $1, true)`,
+        [businessAId]
+      );
+
+      // Scoped to business A, attempt to create a membership owned by business B.
+      // The WITH CHECK clause must reject this cross-tenant write.
+      await expect(
+        app.query(
+          `INSERT INTO "Membership" ("id", "businessId", "userId", "joinChannel")
+           VALUES ($1, $2, $3, 'QR_CODE')`,
+          [randomUUID(), businessBId, userId]
+        )
+      ).rejects.toThrow(/row-level security/i);
     } finally {
       await app.query("ROLLBACK");
     }

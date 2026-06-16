@@ -151,11 +151,41 @@ When adding a new table with a `businessId` column:
 
 ---
 
-## 7. Key files
+## 7. Verifying enforcement against a live database
+
+`src/__tests__/rls-isolation.test.ts` and `rls-migration.test.ts` assert policy
+coverage with mocks. To prove enforcement against a **real** Postgres using the
+non-`BYPASSRLS` `heita_app` role, run the live test:
+
+```bash
+npm run docker:up && npm run db:migrate   # Postgres up + schema applied
+npm run test:rls                          # provision heita_app + run live RLS test
+```
+
+`npm run test:rls` (`scripts/rls-live.ts`):
+1. Idempotently creates/repairs the `heita_app` role (NOSUPERUSER, NOBYPASSRLS)
+   and grants it DML on the **current** database (database-name agnostic, unlike
+   the prod `docker/postgres/init.sql`).
+2. Asserts the role genuinely cannot bypass RLS and that RLS is enabled.
+3. Runs `tests/unit/rls-live.test.ts` as that role, proving:
+   - **fail-closed** reads (no GUC ⇒ 0 rows),
+   - **scoped** reads (GUC set ⇒ only that tenant's rows),
+   - **cross-tenant write rejection** (`WITH CHECK` blocks writing another tenant).
+
+CI runs the same live test inside the `quality` job — `DATABASE_URL` +
+`APP_DATABASE_URL` are both set there, so `rls-live.test.ts` executes (not skips)
+on every push and PR. Locally, with no `APP_DATABASE_URL`, it self-skips.
+
+> The password used by `test:rls` (`RLS_APP_PASSWORD`, default `heita_app_test`)
+> is for local/CI only — never the production `heita_app` secret.
+
+## 8. Key files
 
 | File | Purpose |
 |---|---|
-| `src/lib/prisma.ts` | `withBusinessScope` implementation + dev RLS guard |
+| `src/lib/prisma.ts` | `withBusinessScope` / `withUserScope` / `withSystemScope` + dev RLS guard |
 | `prisma/migrations/0040_enable_business_rls/migration.sql` | RLS policies for all business-scoped tables |
-| `src/__tests__/rls-isolation.test.ts` | Property-based isolation tests |
+| `scripts/rls-live.ts` | Provisions `heita_app` and runs the live RLS test (`npm run test:rls`) |
+| `tests/unit/rls-live.test.ts` | Live enforcement proof against a real non-BYPASSRLS role |
+| `src/__tests__/rls-isolation.test.ts` | Property-based isolation tests (mocked) |
 | `src/__tests__/rls-migration.test.ts` | Schema coverage assertions |

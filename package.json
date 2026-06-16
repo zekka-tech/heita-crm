@@ -23,6 +23,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:load": "tsx tests/load/run.ts",
+    "test:rls": "tsx scripts/rls-live.ts",
     "db:migrate": "prisma migrate dev",
     "db:setup": "tsx scripts/db-preflight.ts && prisma migrate deploy && prisma db seed",
     "db:generate": "prisma generate",
