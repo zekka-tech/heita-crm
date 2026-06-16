@@ -156,7 +156,7 @@ This is the at-a-glance grade view used in the verbal CTO review, mapped to the 
 
 **Strengths** — differentiated per-tenant RAG; clean 53k-LOC codebase with investor-grade CI; 4-tier ZAR-native pricing with local rails; real multi-channel de-risking of Meta dependency; sub-1.5-month payback.
 
-**Weaknesses** — incomplete app-role RLS rollout (§3) despite broad service scoping (10+ services plus self-service reads now scoped); single-maintainer bus factor; no native POS integration; AI usage is still a hard cap rather than a monetized overage path; the B2B referral loop is now shipped but unproven in-market (credit application is wired for the Yoco checkout path; Stripe/PayFast not yet credit-aware); category-education cost.
+**Weaknesses** — incomplete app-role RLS rollout (§3) despite broad service scoping (10+ services plus self-service reads now scoped); single-maintainer bus factor; no native POS integration; AI usage is still a hard cap rather than a monetized overage path; the B2B referral loop is now shipped but unproven in-market (credit application is wired across all three checkout providers — Yoco, Stripe, PayFast — and referral CAC is surfaced in `/admin/cac-ltv`, but no referral cohorts have converted yet); category-education cost.
 
 **Opportunities** — LATAM/Brazil as a near-clone of SA; payments-rail and FMCG-distributor partnerships as owned distribution; franchise roll-up as a land-and-expand wedge; AfCFTA/POPIA procurement tailwind.
 

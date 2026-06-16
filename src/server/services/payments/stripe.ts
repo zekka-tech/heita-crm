@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { getBusinessPlan } from "@/lib/billing";
 import { logger } from "@/lib/logger";
+import { computeApplicableCredit } from "@/server/services/merchant-credit.service";
 import {
   PaymentWebhookError,
   type PaymentGateway,
@@ -39,21 +40,32 @@ export const stripeGateway: PaymentGateway = {
       throw new Error("Cannot create a checkout session for the Free plan.");
     }
 
+    // Apply available merchant referral credit to reduce the charge. Fails open
+    // to 0 (full charge) so credit can never block checkout.
+    const appliedCreditZar = await computeApplicableCredit(
+      input.businessId,
+      plan.monthlyPriceZar,
+    );
+    const chargeZar = plan.monthlyPriceZar - appliedCreditZar;
+    const metadata = {
+      businessId: input.businessId,
+      planId: input.planId,
+      appliedCreditZar: String(appliedCreditZar),
+    };
+
     const session = await stripeClient().checkout.sessions.create({
       mode: "payment",
       success_url: `${input.returnUrl}?checkout=success&plan=${input.planId}`,
       cancel_url: `${input.returnUrl}?checkout=cancelled`,
       client_reference_id: input.businessId,
-      metadata: { businessId: input.businessId, planId: input.planId },
-      payment_intent_data: {
-        metadata: { businessId: input.businessId, planId: input.planId },
-      },
+      metadata,
+      payment_intent_data: { metadata },
       line_items: [
         {
           quantity: 1,
           price_data: {
             currency: "zar",
-            unit_amount: plan.monthlyPriceZar * 100,
+            unit_amount: chargeZar * 100,
             product_data: { name: `Heita ${plan.name} monthly` },
           },
         },
@@ -107,6 +119,7 @@ export const stripeGateway: PaymentGateway = {
         );
         throw new PaymentWebhookError("Invalid Stripe amount.");
       }
+      const appliedCreditZar = Number(session.metadata?.appliedCreditZar ?? 0);
       return {
         provider: "STRIPE",
         type: "payment_succeeded",
@@ -123,6 +136,7 @@ export const stripeGateway: PaymentGateway = {
         providerCustomerId:
           typeof session.customer === "string" ? session.customer : undefined,
         amountZar: session.amount_total / 100,
+        appliedCreditZar: Number.isFinite(appliedCreditZar) ? appliedCreditZar : 0,
       };
     }
 
