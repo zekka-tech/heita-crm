@@ -23,6 +23,7 @@ type OnboardPageProps = {
     utm_source?: string;
     utm_medium?: string;
     utm_campaign?: string;
+    mref?: string;
   }>;
 };
 
@@ -37,6 +38,7 @@ export default async function OnboardPage({ searchParams }: OnboardPageProps) {
   const utmSource = resolvedSearchParams.utm_source?.trim() ?? "";
   const utmMedium = resolvedSearchParams.utm_medium?.trim() ?? "";
   const utmCampaign = resolvedSearchParams.utm_campaign?.trim() ?? "";
+  const merchantReferralCode = resolvedSearchParams.mref?.trim().toUpperCase() ?? "";
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
@@ -62,6 +64,7 @@ export default async function OnboardPage({ searchParams }: OnboardPageProps) {
           encType="multipart/form-data"
         >
           <CsrfField />
+          <input type="hidden" name="merchantReferralCode" value={merchantReferralCode} />
           <input type="hidden" name="utmSource" value={utmSource} />
           <input type="hidden" name="utmMedium" value={utmMedium} />
           <input type="hidden" name="utmCampaign" value={utmCampaign} />

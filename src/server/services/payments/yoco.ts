@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { getBusinessPlan } from "@/lib/billing";
 import { logger } from "@/lib/logger";
 import { constantTimeEqual } from "@/lib/security";
+import { computeApplicableCredit } from "@/server/services/merchant-credit.service";
 import {
   PaymentWebhookError,
   type PaymentGateway,
@@ -22,7 +23,7 @@ function parseYocoPayload(rawBody: string) {
         id?: string;
         status?: string;
         amount?: number;
-        metadata?: { businessId?: string; planId?: string };
+        metadata?: { businessId?: string; planId?: string; appliedCreditZar?: string };
       };
     };
   } catch {
@@ -47,9 +48,16 @@ export const yocoGateway: PaymentGateway = {
     const yocoKey = process.env.YOCO_SECRET_KEY;
     if (!yocoKey) throw new Error("YOCO_SECRET_KEY not configured.");
 
-    const amountCents = plan.monthlyPriceZar * 100;
+    // Apply available merchant referral credit to reduce the charge. Fails open
+    // to 0 (full charge) so credit can never block checkout.
+    const appliedCreditZar = await computeApplicableCredit(
+      input.businessId,
+      plan.monthlyPriceZar,
+    );
+    const chargeZar = plan.monthlyPriceZar - appliedCreditZar;
+    const amountCents = chargeZar * 100;
     const monthStamp = new Date().toISOString().slice(0, 7);
-    const idempotencyKey = `checkout:${input.businessId}:${input.planId}:${monthStamp}`;
+    const idempotencyKey = `checkout:${input.businessId}:${input.planId}:${monthStamp}:${appliedCreditZar}`;
 
     const resp = await fetch("https://payments.yoco.com/api/checkouts", {
       method: "POST",
@@ -61,7 +69,11 @@ export const yocoGateway: PaymentGateway = {
       body: JSON.stringify({
         amount: amountCents,
         currency: "ZAR",
-        metadata: { businessId: input.businessId, planId: input.planId },
+        metadata: {
+          businessId: input.businessId,
+          planId: input.planId,
+          appliedCreditZar: String(appliedCreditZar),
+        },
         successUrl: `${input.returnUrl}?checkout=success&plan=${input.planId}`,
         cancelUrl: `${input.returnUrl}?checkout=cancelled`,
       }),
@@ -127,6 +139,7 @@ export const yocoGateway: PaymentGateway = {
       logger.warn({ type: payload.type }, "yoco.webhook.missing_metadata");
       return null;
     }
+    const appliedCreditZar = Number(payload.payload?.metadata?.appliedCreditZar ?? 0);
 
     if (payload.type === "payment.succeeded") {
       return {
@@ -140,6 +153,7 @@ export const yocoGateway: PaymentGateway = {
           typeof payload.payload?.amount === "number"
             ? payload.payload.amount / 100
             : undefined,
+        appliedCreditZar: Number.isFinite(appliedCreditZar) ? appliedCreditZar : 0,
       };
     }
     if (payload.type === "payment.failed") {

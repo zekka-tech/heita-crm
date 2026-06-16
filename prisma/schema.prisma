@@ -171,6 +171,10 @@ model Business {
   aiProviderConnections AiProviderConnection[]
   featureFlagOverrides  FeatureFlagOverride[]
   conversations         Conversation[]
+  merchantReferralCode  MerchantReferralCode?    @relation("MerchantReferrerCode")
+  merchantReferralsMade MerchantReferral[]       @relation("MerchantReferralReferrer")
+  merchantReferralReceived MerchantReferral?     @relation("MerchantReferralReferred")
+  merchantCreditEntries MerchantCreditLedger[]   @relation("MerchantCredit")
 
   @@index([parentBusinessId])
   @@index([acquisitionSource, createdAt])
@@ -1174,6 +1178,70 @@ model AdSpend {
   @@unique([channel, periodStart, periodEnd])
   @@index([channel])
   @@index([periodStart])
+}
+
+// ─── B2B merchant referral loop ──────────────────────────────────────────────
+// A merchant refers another merchant. When the referred business pays its first
+// invoice, the referrer earns Rand account credit (MerchantCreditLedger) that
+// auto-applies to the referrer's next checkout. MerchantReferralCode and
+// MerchantReferral are cross-tenant by nature (they link two businesses) and are
+// accessed only via withSystemScope, so they carry no single-tenant RLS field
+// named `businessId`. MerchantCreditLedger is per-business and RLS-protected.
+
+model MerchantReferralCode {
+  id              String             @id @default(cuid())
+  ownerBusinessId String             @unique
+  code            String             @unique
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  ownerBusiness   Business           @relation("MerchantReferrerCode", fields: [ownerBusinessId], references: [id], onDelete: Cascade)
+  referrals       MerchantReferral[]
+}
+
+model MerchantReferral {
+  id                 String                 @id @default(cuid())
+  codeId             String
+  referrerBusinessId String
+  referredBusinessId String                 @unique
+  status             MerchantReferralStatus @default(PENDING)
+  rewardAmountZar    Int                    @default(0)
+  convertedAt        DateTime?
+  rewardedAt         DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  code               MerchantReferralCode   @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  referrerBusiness   Business               @relation("MerchantReferralReferrer", fields: [referrerBusinessId], references: [id], onDelete: Cascade)
+  referredBusiness   Business               @relation("MerchantReferralReferred", fields: [referredBusinessId], references: [id], onDelete: Cascade)
+
+  @@index([referrerBusinessId])
+  @@index([status])
+}
+
+model MerchantCreditLedger {
+  id          String             @id @default(cuid())
+  businessId  String
+  amountZar   Int
+  type        MerchantCreditType
+  description String?
+  referralId  String?
+  invoiceId   String?
+  createdAt   DateTime           @default(now())
+  business    Business           @relation("MerchantCredit", fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+}
+
+enum MerchantReferralStatus {
+  PENDING
+  REWARDED
+  VOID
+}
+
+enum MerchantCreditType {
+  REFERRAL_REWARD
+  INVOICE_APPLIED
+  ADJUSTMENT
 }
 
 enum PaymentProvider {

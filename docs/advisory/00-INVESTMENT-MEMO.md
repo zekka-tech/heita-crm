@@ -9,9 +9,10 @@
 > - [`03-gtm-marketing-advertising.md`](./03-gtm-marketing-advertising.md) — acquisition, advertising, unit economics
 >
 > **16 June 2026 refresh notes.** Added the dimension-level **letter-grade scorecard** (§1a) used in the verbal CTO
-> review; refreshed measured metrics to current `main`; recorded that the two remaining CAC-richness telemetry items
-> — `first_reward_created` and lead-source/UTM campaign attribution on the join funnel — are **now shipped**, leaving
-> B2B merchant referral as the only major GTM build outstanding.
+> review; refreshed measured metrics to current `main`; recorded that the CAC-richness telemetry items
+> (`first_reward_created`, lead-source/UTM attribution), the per-channel **CAC/LTV cohort dashboard** (`/admin/cac-ltv`),
+> **and the B2B merchant referral loop** (Rand account credit, settled on the referred merchant's first paid invoice,
+> auto-applied at checkout) are **all now shipped** — clearing the GTM build backlog the prior memo flagged.
 
 ---
 
@@ -155,7 +156,7 @@ This is the at-a-glance grade view used in the verbal CTO review, mapped to the 
 
 **Strengths** — differentiated per-tenant RAG; clean 53k-LOC codebase with investor-grade CI; 4-tier ZAR-native pricing with local rails; real multi-channel de-risking of Meta dependency; sub-1.5-month payback.
 
-**Weaknesses** — incomplete app-role RLS rollout (§3) despite broad service scoping (10+ services plus self-service reads now scoped); single-maintainer bus factor; no native POS integration; AI usage is still a hard cap rather than a monetized overage path; B2B referral loop (the CAC-lowering one) not yet built; category-education cost.
+**Weaknesses** — incomplete app-role RLS rollout (§3) despite broad service scoping (10+ services plus self-service reads now scoped); single-maintainer bus factor; no native POS integration; AI usage is still a hard cap rather than a monetized overage path; the B2B referral loop is now shipped but unproven in-market (credit application is wired for the Yoco checkout path; Stripe/PayFast not yet credit-aware); category-education cost.
 
 **Opportunities** — LATAM/Brazil as a near-clone of SA; payments-rail and FMCG-distributor partnerships as owned distribution; franchise roll-up as a land-and-expand wedge; AfCFTA/POPIA procurement tailwind.
 

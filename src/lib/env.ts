@@ -20,6 +20,9 @@ const envSchema = z
     // Comma-separated user IDs allowed to access platform-admin surfaces
     // (e.g. the CAC/LTV cohort dashboard). Empty/unset = no one has access.
     PLATFORM_ADMIN_USER_IDS: z.string().optional(),
+    // Rand account credit a referrer earns when a business it referred pays its
+    // first invoice (B2B merchant referral loop). Default R500.
+    MERCHANT_REFERRAL_REWARD_ZAR: z.coerce.number().int().min(0).max(100_000).default(500),
 
     // POS
     POS_SHARED_SECRET: z.string().optional(),

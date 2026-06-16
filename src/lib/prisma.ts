@@ -49,6 +49,7 @@ const BUSINESS_SCOPED_MODELS = new Set([
   "businessInvoice",
   "conversation",
   "conversationParticipant",
+  "merchantCreditLedger",
 ]);
 
 // Soft-delete middleware: automatically filter out soft-deleted rows for
