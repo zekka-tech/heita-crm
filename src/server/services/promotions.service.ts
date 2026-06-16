@@ -1,9 +1,14 @@
-import { ConsentType, Prisma, PromotionType, StaffRole } from "@prisma/client";
+import { ConsentType, MessageChannel, Prisma, PromotionType, StaffRole } from "@prisma/client";
 
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { logger } from "@/lib/logger";
 import { shouldDeliverNotificationChannel } from "@/lib/notification-preferences";
 import { withBusinessScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
+import {
+  assertOutboundMessageQuota,
+  MessageQuotaExceededError
+} from "@/server/services/message-usage.service";
 import { sendNotification } from "@/server/services/notification.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 import { sendPromotionWhatsApp } from "@/server/services/whatsapp.service";
@@ -320,6 +325,28 @@ export async function broadcastPromotion(
   });
 
   assertPromotionBroadcastable(promotion);
+
+  // Reach-pack enforcement (feature-flagged, default off): block a proactive
+  // broadcast once the effective WhatsApp allowance (plan quota + active
+  // reach-packs) is used up, so merchants buy a pack instead of silently
+  // overspending. Coarse gate — refuses when already at/over the limit; precise
+  // per-recipient accounting is a follow-up. Off by default → no behaviour change.
+  if (await isFeatureEnabled("reachPackEnforcement", { businessId: promotion.businessId })) {
+    try {
+      await assertOutboundMessageQuota({
+        businessId: promotion.businessId,
+        channel: MessageChannel.WHATSAPP,
+        count: 1
+      });
+    } catch (error) {
+      if (error instanceof MessageQuotaExceededError) {
+        throw new Error(
+          "Your WhatsApp message allowance for this month is used up. Buy a reach-pack to keep broadcasting."
+        );
+      }
+      throw error;
+    }
+  }
 
   // Atomically claim the broadcast slot — prevents two concurrent callers from
   // both passing assertPromotionBroadcastable and double-sending.

@@ -19,12 +19,18 @@ import {
 } from "@/server/services/billing.service";
 import { getConfiguredProviders } from "@/server/services/payments/registry";
 import { getMonthlyMessageUsage } from "@/server/services/message-usage.service";
+import { getMerchantCreditBalance } from "@/server/services/merchant-credit.service";
+import { listActiveReachPacks } from "@/server/services/reach-pack.service";
+import { REACH_PACK_SKUS } from "@/lib/reach-packs";
+import { CsrfField } from "@/components/security/csrf-field";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { purchaseReachPackAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 type BillingPageProps = {
   params: Promise<{ businessId: string }>;
-  searchParams: Promise<{ checkout?: string; plan?: string; sales?: string }>;
+  searchParams: Promise<{ checkout?: string; plan?: string; sales?: string; reachpack?: string; msg?: string }>;
 };
 
 export default async function BillingPage({
@@ -32,25 +38,28 @@ export default async function BillingPage({
   searchParams
 }: BillingPageProps) {
   const { businessId } = await params;
-  const { checkout, sales } = await searchParams;
+  const { checkout, sales, reachpack, msg: reachpackMsg } = await searchParams;
   const session = await auth();
   if (!session?.user?.id) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/settings/billing`);
   }
 
-  const [planId, activeSub, invoices, business, paymentProviders, messageUsage] = await Promise.all([
-    getEffectivePlan(businessId),
-    getActiveSubscription(businessId),
-    listInvoices(businessId),
-    withBusinessScope(businessId, (tx) => {
-      return tx.business.findUnique({
-        where: { id: businessId },
-        select: { name: true }
-      });
-    }),
-    Promise.resolve(getConfiguredProviders()),
-    getMonthlyMessageUsage(businessId)
-  ]);
+  const [planId, activeSub, invoices, business, paymentProviders, messageUsage, creditBalance, activePacks] =
+    await Promise.all([
+      getEffectivePlan(businessId),
+      getActiveSubscription(businessId),
+      listInvoices(businessId),
+      withBusinessScope(businessId, (tx) => {
+        return tx.business.findUnique({
+          where: { id: businessId },
+          select: { name: true }
+        });
+      }),
+      Promise.resolve(getConfiguredProviders()),
+      getMonthlyMessageUsage(businessId),
+      getMerchantCreditBalance(businessId),
+      listActiveReachPacks(businessId)
+    ]);
 
   const currentPlan = getBusinessPlan(planId);
 
@@ -172,6 +181,70 @@ export default async function BillingPage({
         <p className="mt-3 text-xs text-ink-subtle">
           SMS and email sends are not metered against a plan allowance yet.
         </p>
+      </Card>
+
+      {/* Reach-packs: buy extra outbound-message volume with account credit */}
+      <Card variant="surface">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Send className="h-4 w-4 text-primary-action" />
+            <span className="text-sm font-semibold uppercase tracking-wider text-ink-subtle">
+              Reach-packs
+            </span>
+          </div>
+          <Chip variant="primary" size="sm">
+            Credit: {formatZar(creditBalance)}
+          </Chip>
+        </div>
+        <p className="mt-2 text-sm text-ink-muted">
+          Top up extra messaging volume on top of your plan, paid from account credit (earned via referrals).
+        </p>
+
+        {reachpack === "success" ? (
+          <p className="mt-3 rounded-lg border border-success/30 bg-success/5 px-3 py-2 text-sm text-success">
+            Reach-pack added — your effective allowance has increased.
+          </p>
+        ) : null}
+        {reachpack === "error" ? (
+          <p className="mt-3 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">
+            {reachpackMsg || "Could not buy the reach-pack."}
+          </p>
+        ) : null}
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {REACH_PACK_SKUS.map((sku) => (
+            <form
+              key={sku.id}
+              action={purchaseReachPackAction}
+              className="flex items-center justify-between gap-2 rounded-lg border border-line bg-surface-elevated px-3 py-2"
+            >
+              <CsrfField />
+              <input type="hidden" name="businessId" value={businessId} />
+              <input type="hidden" name="packId" value={sku.id} />
+              <div>
+                <p className="text-sm font-semibold text-ink">{sku.label}</p>
+                <p className="text-xs text-ink-muted">{formatZar(sku.priceZar)} · {sku.validDays} days</p>
+              </div>
+              <SubmitButton variant="secondary" disabled={creditBalance < sku.priceZar}>
+                Buy
+              </SubmitButton>
+            </form>
+          ))}
+        </div>
+
+        {activePacks.length > 0 ? (
+          <div className="mt-4">
+            <p className="text-xs uppercase tracking-wide text-ink-subtle">Active packs</p>
+            <ul className="mt-2 space-y-1 text-sm text-ink-muted">
+              {activePacks.map((pack) => (
+                <li key={pack.id}>
+                  +{pack.units.toLocaleString()} {pack.group === "WHATSAPP" ? "WhatsApp" : "in-app"} · expires{" "}
+                  {pack.expiresAt.toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </Card>
 
       {/* Upgrade options */}
