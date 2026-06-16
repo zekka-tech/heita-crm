@@ -4,30 +4,45 @@
 **Subject:** Heita CRM — multi-tenant PWA loyalty + WhatsApp messaging + per-tenant RAG AI co-worker
 **Stack:** Next.js 15 (App Router) · TypeScript · Prisma 7 · PostgreSQL 16 + pgvector · Auth.js v5 · BullMQ/Redis
 **Method:** Evidence-based review of source, migrations, tests, CI, and infra. Claims verified against code; file/line citations provided.
-**Date:** 2026-06-14
+**Date:** 2026-06-14 · **Metrics refreshed:** 2026-06-16 (current `main`)
 
 ---
 
 ## 0. Headline metrics (measured, not claimed)
 
-| Metric | Value | Source |
-|---|---|---|
-| Source files (`.ts`/`.tsx` under `src`) | 425 | `find src` |
-| Source LOC | ~53,100 | `wc -l` |
-| Prisma models | 46 | `prisma/schema.prisma` |
-| Prisma migrations | 42 (`0001`–`0042`) | `prisma/migrations` |
-| Domain services | ~40 | `src/server/services` |
-| Unit/integration test files | 88 | `find ... *.test.ts` |
-| `it/test` cases | ~670 | grep |
-| E2E specs (Playwright) | 11 | `tests/e2e` |
-| BYOM provider models in registry | 19 references | `src/lib/ai/providers/registry.ts` |
-| `TODO/FIXME/HACK` markers in `src` | 1 | grep |
-| `any` / `@ts-ignore` / `@ts-expect-error` in `src` | 3 | grep |
-| Production npm vulnerabilities | 0 | `npm audit --omit=dev` |
-| Prometheus metrics defined | 29 | `src/lib/metrics.ts` |
-| Git commits | 185 | `git log` |
+| Metric | Value (16 Jun 2026, `main`) | Prior (14 Jun) | Source |
+|---|---|---|---|
+| Source files (`.ts`/`.tsx` under `src`) | 428 | 425 | `find src` |
+| Source LOC | ~54,200 | ~53,100 | `wc -l` |
+| Prisma models / enums | 46 / 28 | 46 | `prisma/schema.prisma` |
+| Prisma migrations | 44 (`0001`–`0044`) | 42 | `prisma/migrations` |
+| Domain services | 47 | ~40 | `src/server/services` |
+| Unit/integration test files | 102 | 88 | `find ... *.test.ts` |
+| `it/test` cases | 654 (646 passing / 3 skipped on last run) | ~670 | grep / `vitest run` |
+| E2E specs (Playwright) | 11 | 11 | `tests/e2e` |
+| API routes (`route.ts`) | 40 | 40 | `find src/app/api` |
+| Operational runbooks | 20 | 22 | `docs/runbooks` |
+| `TODO/FIXME/HACK` markers in `src` | 0 | 1 | grep |
+| `any` / `@ts-ignore` / `@ts-expect-error` in `src` | 4 | 3 | grep |
+| Production npm vulnerabilities | 0 (7 dev-only `@lhci/cli` audit items remain) | 0 | `npm audit --omit=dev` |
+| Git commits | 194 | 185 | `git log` |
 
-This is a substantial, disciplined codebase. The near-total absence of `any`, `@ts-ignore`, and TODOs across 53k LOC is unusual and indicates real engineering rigor, not a prototype.
+This is a substantial, disciplined codebase. The near-total absence of `any`, `@ts-ignore`, and TODOs across 54k LOC is unusual and indicates real engineering rigor, not a prototype. The 16 June refresh also lands the last two CAC-richness telemetry events (`first_reward_created`, lead-source/UTM attribution) discussed in `03-gtm-marketing-advertising.md`.
+
+### 0a. Dimension letter grades (maps the numeric scores below to the CTO scorecard)
+
+| Dimension | Grade | Numeric (this memo) |
+|---|---|---|
+| Architecture & code quality | **A−** | 8/10 (§1) |
+| Security controls | **A−** | 8/10 (§3) |
+| Multi-tenant isolation | **C+** | 6.5/10 (§2) — the score cap |
+| AI / RAG pipeline | **A** | 8.5/10 (§4) |
+| Test coverage & CI | **B+** | 7.5/10 (§5) |
+| Scalability & performance | **B** | 7.5/10 (§6) |
+| Production readiness | **B+** | 8.0/10 (§7) |
+| **Overall** | **B+** | **8.3/10** |
+
+The single grade an investor should fixate on is **multi-tenant isolation (C+)** — correct, fail-closed architecture with a live CI smoke test, but not yet proven app-wide under the runtime role (§2). Resolving it lifts the overall to an honest A−.
 
 ---
 

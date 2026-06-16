@@ -1,8 +1,8 @@
 # Heita CRM — User-Acquisition, Advertising & Marketing Strategy
 
-*Investment Memorandum · Section 3 of the advisory series · Updated 15 June 2026 · Author: Senior Growth/GTM Advisor · Status: Pre-investment diligence*
+*Investment Memorandum · Section 3 of the advisory series · Updated 15 June 2026 · Refreshed 16 June 2026 (telemetry shipped + acquisition-plan ladder) · Author: Senior Growth/GTM Advisor · Status: Pre-investment diligence*
 
-> **Scope note.** This refresh is grounded in the shipped product and current codebase, not aspirational packaging. The live plan ladder in `src/lib/billing.ts` is **FREE / STARTER / GROWTH / SCALE** at **R0 / R499 / R1,499 / R4,999** per month. The public pricing page shows annual prices, but the implemented checkout helpers for Yoco, PayFast, and Stripe currently create **monthly** charges only. The marketing-site pricing CTA is self-serve only for **FREE**; paid CTAs on `src/app/pricing/page.tsx` still route to `sales@heita.co.za`, while the in-dashboard billing surface can run self-serve checkout when payment-provider credentials are configured. Telemetry is still partially wired, but the core funnel contract is now materially better covered: `onboarding_completed`, `business_joined`, `membership.joined`, `loyalty.points_redeemed`, `checkout_started`, `subscription_started`, `subscription_upgraded`, `provider_selected`, legacy `ai.message_sent`, and canonical `ai_message_sent` are emitted today. With `checkout_started` (paid checkout initiation) and `provider_selected` (BYOM AI activation) now wired, the remaining gap is attribution richness — lead-source/campaign metadata and per-cohort dashboards — not checkout-step instrumentation or absence of subscription/AI funnel events. The shipped referral engine is **member-to-member inside a business**; a **business-to-business referral loop** is still a required growth build, not a live CAC reducer.
+> **Scope note.** This refresh is grounded in the shipped product and current codebase, not aspirational packaging. The live plan ladder in `src/lib/billing.ts` is **FREE / STARTER / GROWTH / SCALE** at **R0 / R499 / R1,499 / R4,999** per month. The public pricing page shows annual prices, but the implemented checkout helpers for Yoco, PayFast, and Stripe currently create **monthly** charges only. The marketing-site pricing CTA is self-serve only for **FREE**; paid CTAs on `src/app/pricing/page.tsx` still route to `sales@heita.co.za`, while the in-dashboard billing surface can run self-serve checkout when payment-provider credentials are configured. The core funnel telemetry contract is now **essentially complete**: `onboarding_completed`, `business_joined`, `membership.joined`, `loyalty.points_redeemed`, `checkout_started`, `subscription_started`, `subscription_upgraded`, `provider_selected`, `first_reward_created`, legacy `ai.message_sent`, and canonical `ai_message_sent` are all emitted today. **As of the 16 June refresh, `first_reward_created` (the activation milestone) and lead-source / UTM campaign attribution on the public join funnel are shipped** (`src/lib/telemetry-events.ts` `buildLeadAttribution`, threaded through `b/[slug]/join`). The remaining gap is **per-cohort dashboards**, not event instrumentation. The shipped referral engine is **member-to-member inside a business**; a **business-to-business referral loop** is still the one required growth build, not a live CAC reducer.
 
 ## 1. Executive View
 
@@ -103,6 +103,40 @@ The right investor-grade framing is:
 
 In other words: use **measured cohort payback thresholds** as the operating control, not market-wide CAC folklore.
 
+### 4.5 The acquisition-channel ladder (prioritized by leverage)
+
+The product is integrated and sales-assisted, **not** a self-serve widget — so paid ads alone will not carry it. The plan is layered, ordered by strategic leverage. Tiers A and B carry the seed case; C–E compound it.
+
+**A. Distribution partnerships — highest leverage (closes the C+ distribution gap).**
+This is the direct answer to the single biggest weakness: Heita has no proprietary merchant channel, while incumbents (Yoco, iKhokha) do. Rather than out-spend them on ads, *borrow* their distribution.
+- **Co-sell / bundle with payments & POS players that lack loyalty+AI**, accounting/SME platforms, and — highest value — **franchise head offices** (one HO deal cascades to many outlets).
+- **Agency / BSP reseller channel:** WhatsApp and marketing agencies resell Heita with margin.
+- *Guardrail:* do not model partner volume until **one signed, active, measured** channel exists. One real rev-share deal is worth more than ten LOIs.
+
+**B. Franchise / multi-location direct sales — the economic core.**
+Outbound to franchise HOs and small chains (≈5–30 outlets). Land the HO, roll to outlets. This is where CAC/LTV is best, churn lowest, and the franchise-aware architecture is a genuine wedge. **Point the sales motion here, not at the lowest-end informal micro-merchant.**
+
+**C. Paid acquisition — for STARTER / GROWTH self-serve funnel (scaling, not foundational).**
+- Meta (FB/IG) **click-to-WhatsApp** (best creative fit; 72-hour free window) + Google Search on high-intent SA terms ("loyalty app for my shop", "WhatsApp marketing for restaurants"), geo/category-targeted.
+- **Now unblocked by the shipped lead-source attribution + funnel events** — compute true CAC by channel/campaign **before** scaling spend.
+- **Optimize to activation events, not signups:** `first_reward_created` and first broadcast are the real "aha," not account creation.
+
+**D. Consumer-side flywheel — compounding, near-zero CAC.**
+Every loyalty join / QR scan / referral is merchant-funded acquisition of *consumers*. Surface a discovery layer so consumers pull more merchants onto the platform over time. Referral codes already exist in schema — instrument and push them. (This is the path to an eventual *network* moat, currently graded only a thesis.)
+
+**E. Community & proof — founder-led, trust-driven.**
+WhatsApp-commerce / franchise / retail-association presence; published case studies with hard numbers (repeat-visit lift, redemption rates). In a low-trust, relationship-led market, founder-led content and a trusted intermediary signing the anchor merchant convert cheaper than brand ads.
+
+**Governing metric across all tiers:** CAC payback **< 6–9 months on GROWTH/SCALE** (the underwritable steady-state target; the sub-1.5-month early-cohort payback in §6 will regress as cheap channels saturate). Treat FREE/STARTER as funnel, not profit.
+
+| Tier | Channel | Leverage | Role in seed case |
+|---|---|---|---|
+| A | Payments/POS/franchise-HO partnerships + agency resellers | **Highest** | Closes distribution gap; foundational |
+| B | Franchise / multi-location direct sales | **High** | Economic core (best LTV:CAC) |
+| C | Meta CTWA + Google Search paid | Medium | Scales single-location self-serve funnel |
+| D | Consumer loyalty/referral flywheel | Compounding | Cheap merchant + consumer acquisition; future network moat |
+| E | Community, associations, founder-led proof | Medium | Trust + referenceability in a relationship-led market |
+
 ## 5. Funnel, Activation, And Measurement
 
 ### 5.1 What the codebase actually measures today
@@ -118,8 +152,10 @@ In other words: use **measured cohort payback thresholds** as the operating cont
 | Subscription started / upgraded | Emitted today on first paid activation and paid-plan changes |
 | AI provider connected (`provider_selected`) | Emitted today when a business connects a BYOM AI provider |
 | Canonical `ai_message_sent` | Emitted today alongside legacy `ai.message_sent` |
+| First reward published (`first_reward_created`) | **Emitted today** (16 Jun) — fires once when a business creates its first redeemable reward |
+| Lead-source / campaign attribution | **Shipped today** (16 Jun) — `utm_source/medium/campaign` captured on the join funnel and attached to `business_joined` / `membership.joined` |
 
-This matters because the **current telemetry is good enough to assess product activation**, but **not yet good enough to claim reliable channel CAC, paid conversion, or upgrade economics**.
+This matters because the **current telemetry is now good enough to assess both product activation and per-channel attribution**; the missing piece is the **per-cohort CAC/LTV dashboard**, not the underlying events. Reliable channel-CAC and upgrade-economics *reporting* remains the immediate build.
 
 ### 5.2 The right activation model for Heita
 
@@ -139,12 +175,12 @@ The core insight is that **Heita's commercial "aha" is not account creation. It 
 
 The first GTM engineering workstream should be small, concrete, and non-negotiable:
 
-1. ~~Add explicit `checkout_started`, `provider_selected`, and `first_reward_created` events.~~ `checkout_started` (paid checkout initiation) and `provider_selected` (BYOM AI connection) are now emitted; `first_reward_created` remains.
-2. Tie lead source and campaign metadata to the merchant record or onboarding session.
-3. Build a per-channel dashboard that reports activation and paid conversion by cohort, not just raw signups.
+1. ~~Add explicit `checkout_started`, `provider_selected`, and `first_reward_created` events.~~ **Done** — all three now emitted (`checkout_started` and `provider_selected` on 14 Jun; `first_reward_created` on 16 Jun).
+2. ~~Tie lead source and campaign metadata to the onboarding session.~~ **Done (16 Jun)** — `utm_source/medium/campaign` captured on the join funnel via `buildLeadAttribution` and attached to `business_joined` / `membership.joined`. (Still to do: extend the same attribution capture to the merchant `onboard` flow and persist it onto the business record for durable cohorting.)
+3. **Build a per-channel dashboard that reports activation and paid conversion by cohort, not just raw signups.** ← *now the top remaining instrumentation task.*
 4. Add richer billing-state context for renewals, downgrades, and assisted-sales attribution.
 
-Until that exists, **every exact CAC, conversion, and LTV claim should still be treated as an internal planning estimate, not an investor fact.**
+The events now exist; until the **cohort dashboard** is wired, **every exact CAC, conversion, and LTV claim should still be treated as an internal planning estimate, not an investor fact.**
 
 ## 6. Marketing Narrative And Creative Direction
 
@@ -221,8 +257,8 @@ Investors should underwrite **South African merchant activation and disciplined 
 ## 9. Immediate GTM Priorities For The Next 180 Days
 
 1. **Finish the paid funnel story.** Either make public paid-plan conversion genuinely self-serve, or present the product honestly as an assisted-upgrade motion.
-2. **Wire the missing telemetry.** Without subscription and merchant-level events, GTM reporting remains incomplete.
-3. **Build business-to-business referrals.** This is the most obvious product-level CAC reducer not yet shipped.
+2. **Build the per-channel CAC/LTV cohort dashboard.** The funnel *events* are now complete (`first_reward_created` and lead-source attribution shipped 16 Jun); the missing piece is the PostHog cohort dashboard that turns those events into measured channel economics. This is the top instrumentation task.
+3. **Build business-to-business referrals.** With the telemetry gap now closed, this is the single most obvious product-level CAC reducer still unshipped — the clear next growth build.
 4. **Create three verticalized proof packs.** Salon/beauty, café/QSR, and boutique/specialty retail should each have their own onboarding, case study, and creative pack.
 5. **Operationalize WhatsApp template onboarding.** Merchant setup must include template readiness, permissions, and `wabaPhoneId` completion.
 6. **Resolve annual billing presentation.** Either implement it properly or stop leaning on it in front-stage GTM materials.
