@@ -84,6 +84,32 @@ describe("joinBusiness telemetry", () => {
     });
   });
 
+  it("includes lead-source attribution in the join telemetry when provided", async () => {
+    mocks.prisma.membership.findUnique.mockResolvedValue(null);
+
+    await joinBusiness({
+      businessId: "biz_1",
+      userId: "user_1",
+      joinChannel: JoinChannel.DIRECT_LINK,
+      referralCode: null,
+      attribution: { leadSource: "google", leadMedium: "cpc", leadCampaign: "winter-sale" }
+    });
+
+    expect(mocks.captureEvent).toHaveBeenNthCalledWith(1, {
+      userId: "user_1",
+      event: TELEMETRY_EVENTS.businessJoined,
+      properties: {
+        businessId: "biz_1",
+        joinChannel: JoinChannel.DIRECT_LINK,
+        referralUsed: false,
+        signupBonusPoints: 100,
+        leadSource: "google",
+        leadMedium: "cpc",
+        leadCampaign: "winter-sale"
+      }
+    });
+  });
+
   it("does not capture membership.joined when the membership already exists", async () => {
     mocks.prisma.membership.findUnique.mockResolvedValue({
       id: "mem_existing",

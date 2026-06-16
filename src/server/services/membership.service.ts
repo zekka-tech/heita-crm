@@ -3,7 +3,7 @@ import { JoinChannel, TransactionType } from "@prisma/client";
 import { calculatePointsExpiryDate } from "@/lib/loyalty";
 import { withBusinessScope } from "@/lib/prisma";
 import { captureEvent } from "@/lib/telemetry";
-import { TELEMETRY_EVENTS } from "@/lib/telemetry-events";
+import { TELEMETRY_EVENTS, type LeadAttribution } from "@/lib/telemetry-events";
 import { resolveReferralCode } from "@/server/services/referral.service";
 
 type JoinBusinessInput = {
@@ -11,6 +11,7 @@ type JoinBusinessInput = {
   userId: string;
   joinChannel: JoinChannel;
   referralCode?: string | null;
+  attribution?: LeadAttribution;
 };
 
 export async function joinBusiness(input: JoinBusinessInput) {
@@ -99,7 +100,8 @@ export async function joinBusiness(input: JoinBusinessInput) {
       businessId: business.id,
       joinChannel: input.joinChannel,
       referralUsed: !!referralCode,
-      signupBonusPoints: business.loyaltySignupBonus
+      signupBonusPoints: business.loyaltySignupBonus,
+      ...input.attribution
     };
 
     captureEvent({

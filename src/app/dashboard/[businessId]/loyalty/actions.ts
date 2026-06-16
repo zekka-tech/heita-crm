@@ -10,6 +10,8 @@ import { prisma } from "@/lib/prisma";
 import { requestStaffStepUpOtp, requireFreshStaffStepUp, verifyStaffStepUpOtp } from "@/lib/staff-step-up";
 import { requireRole } from "@/lib/staff";
 import { sendOtpSms } from "@/lib/sms";
+import { captureEvent } from "@/lib/telemetry";
+import { TELEMETRY_EVENTS } from "@/lib/telemetry-events";
 import {
   earnPoints,
   redeemPoints,
@@ -186,8 +188,10 @@ export async function createRewardAction(formData: FormData) {
     throw new Error("Reward title and points cost are required.");
   }
 
-  await prisma.$transaction(async (tx) => {
-    const reward = await tx.reward.create({
+  const { reward, isFirstReward } = await prisma.$transaction(async (tx) => {
+    // Count before insert so we can flag the activation milestone (first reward).
+    const existingRewards = await tx.reward.count({ where: { businessId } });
+    const created = await tx.reward.create({
       data: {
         businessId,
         title,
@@ -203,16 +207,31 @@ export async function createRewardAction(formData: FormData) {
         actorUserId: userId,
         action: "LOYALTY_REWARD_CREATE",
         targetType: "Reward",
-        targetId: reward.id,
+        targetId: created.id,
         metadata: {
           title,
           pointsCost,
-          stock: reward.stock
+          stock: created.stock
         }
       },
       tx
     );
+
+    return { reward: created, isFirstReward: existingRewards === 0 };
   });
+
+  if (isFirstReward) {
+    captureEvent({
+      userId,
+      event: TELEMETRY_EVENTS.firstRewardCreated,
+      properties: {
+        businessId,
+        rewardId: reward.id,
+        pointsCost,
+        hasStockLimit: reward.stock !== null
+      }
+    });
+  }
 
   redirect(`/dashboard/${businessId}/loyalty?updated=reward`);
 }

@@ -11,6 +11,9 @@ export const TELEMETRY_EVENTS = {
   pointsRedeemed: "points_redeemed",
   loyaltyPointsRedeemed: "loyalty.points_redeemed",
   tierUpgraded: "tier_upgraded",
+  // Activation milestone: a business published its first redeemable reward —
+  // the supply side of the loyalty loop and a key CAC→activation signal.
+  firstRewardCreated: "first_reward_created",
   // Subscription / billing funnel
   // checkout_started fires when an owner initiates a paid checkout session (the
   // step before subscription_started, which fires on confirmed payment) — the
@@ -34,6 +37,18 @@ type BaseBusinessProps = {
   businessId?: string;
 };
 
+/**
+ * Lead-source / campaign attribution captured from inbound UTM parameters on the
+ * acquisition surfaces (e.g. the public join flow). Every field is optional —
+ * only populated dimensions are emitted, so organic traffic stays clean and
+ * paid-CAC dashboards can group by source/medium/campaign when present.
+ */
+export type LeadAttribution = {
+  leadSource?: string;
+  leadMedium?: string;
+  leadCampaign?: string;
+};
+
 export type TelemetryEventProperties = {
   [TELEMETRY_EVENTS.onboardingPageViewed]: Record<string, never>;
   [TELEMETRY_EVENTS.onboardingStep]: {
@@ -49,12 +64,12 @@ export type TelemetryEventProperties = {
   [TELEMETRY_EVENTS.onboardingError]: {
     error: string;
   };
-  [TELEMETRY_EVENTS.businessJoined]: BaseBusinessProps & {
+  [TELEMETRY_EVENTS.businessJoined]: BaseBusinessProps & LeadAttribution & {
     joinChannel: string;
     referralUsed: boolean;
     signupBonusPoints: number;
   };
-  [TELEMETRY_EVENTS.membershipJoined]: BaseBusinessProps & {
+  [TELEMETRY_EVENTS.membershipJoined]: BaseBusinessProps & LeadAttribution & {
     joinChannel: string;
     referralUsed: boolean;
     signupBonusPoints: number;
@@ -70,6 +85,11 @@ export type TelemetryEventProperties = {
   [TELEMETRY_EVENTS.tierUpgraded]: BaseBusinessProps & {
     previousTier: string;
     newTier: string;
+  };
+  [TELEMETRY_EVENTS.firstRewardCreated]: BaseBusinessProps & {
+    rewardId: string;
+    pointsCost: number;
+    hasStockLimit: boolean;
   };
   [TELEMETRY_EVENTS.checkoutStarted]: BaseBusinessProps & {
     plan: string;
@@ -116,6 +136,30 @@ export type TelemetryCaptureInput<EventName extends TelemetryEventName = Telemet
   event: EventName;
   properties?: TelemetryEventProperties[EventName];
 };
+
+/**
+ * Build a {@link LeadAttribution} object from raw inbound values, dropping
+ * blank/missing dimensions and trimming/length-capping the rest. Returns only
+ * the populated keys so telemetry payloads stay free of empty attribution noise.
+ */
+export function buildLeadAttribution(input: {
+  source?: string | null;
+  medium?: string | null;
+  campaign?: string | null;
+}): LeadAttribution {
+  const clean = (value: string | null | undefined) => {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed.slice(0, 120) : undefined;
+  };
+  const out: LeadAttribution = {};
+  const source = clean(input.source);
+  const medium = clean(input.medium);
+  const campaign = clean(input.campaign);
+  if (source) out.leadSource = source;
+  if (medium) out.leadMedium = medium;
+  if (campaign) out.leadCampaign = campaign;
+  return out;
+}
 
 const REDACTED_KEYS = new Set([
   "phone",

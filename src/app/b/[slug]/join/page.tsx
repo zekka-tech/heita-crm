@@ -16,7 +16,13 @@ export const dynamic = "force-dynamic";
 
 type BusinessJoinPageProps = {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ channel?: string; ref?: string }>;
+  searchParams?: Promise<{
+    channel?: string;
+    ref?: string;
+    utm_source?: string;
+    utm_medium?: string;
+    utm_campaign?: string;
+  }>;
 };
 
 export default async function BusinessJoinPage({
@@ -60,6 +66,9 @@ export default async function BusinessJoinPage({
     ? (resolvedSearchParams.channel as JoinChannel)
     : JoinChannel.DIRECT_LINK;
   const referralCode = resolvedSearchParams.ref?.trim().toUpperCase() ?? "";
+  const utmSource = resolvedSearchParams.utm_source?.trim() ?? "";
+  const utmMedium = resolvedSearchParams.utm_medium?.trim() ?? "";
+  const utmCampaign = resolvedSearchParams.utm_campaign?.trim() ?? "";
 
   return (
     <main className="px-4 py-6 sm:px-8">
@@ -132,6 +141,9 @@ export default async function BusinessJoinPage({
             <input type="hidden" name="slug" value={business.slug} />
             <input type="hidden" name="channel" value={channel} />
             <input type="hidden" name="referralCode" value={referralCode} />
+            <input type="hidden" name="utmSource" value={utmSource} />
+            <input type="hidden" name="utmMedium" value={utmMedium} />
+            <input type="hidden" name="utmCampaign" value={utmCampaign} />
             <label className="flex items-start gap-3 rounded-xl border border-line bg-surface-elevated px-3 py-3 text-sm text-ink">
               <input
                 type="checkbox"
