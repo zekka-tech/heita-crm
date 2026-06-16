@@ -6,6 +6,7 @@ import type { BusinessPlanId } from "@prisma/client";
 import { getBusinessPlan } from "@/lib/billing";
 import { logger } from "@/lib/logger";
 import { constantTimeEqual, getClientIp } from "@/lib/security";
+import { computeApplicableCredit } from "@/server/services/merchant-credit.service";
 import {
   PaymentWebhookError,
   type PaymentGateway,
@@ -101,8 +102,13 @@ function parseForm(rawBody: string) {
 function assertAmountMatches(
   fields: Record<string, string>,
   planId: BusinessPlanId,
+  appliedCreditZar: number,
 ) {
-  const expected = getBusinessPlan(planId).monthlyPriceZar.toFixed(2);
+  // Merchant referral credit legitimately reduces the charge (round-tripped via
+  // custom_str3), so the expected amount is the plan price net of credit.
+  const expected = (
+    getBusinessPlan(planId).monthlyPriceZar - Math.max(0, appliedCreditZar)
+  ).toFixed(2);
   const received = Number(fields.amount_gross).toFixed(2);
   if (received !== expected) {
     logger.warn(
@@ -132,6 +138,14 @@ export const payfastGateway: PaymentGateway = {
       throw new Error("Cannot create a checkout session for the Free plan.");
     }
 
+    // Apply available merchant referral credit to reduce the charge. Fails open
+    // to 0 (full charge) so credit can never block checkout.
+    const appliedCreditZar = await computeApplicableCredit(
+      input.businessId,
+      plan.monthlyPriceZar,
+    );
+    const chargeZar = plan.monthlyPriceZar - appliedCreditZar;
+
     const fields: Record<string, string> = {
       merchant_id: merchantId,
       merchant_key: merchantKey,
@@ -139,10 +153,11 @@ export const payfastGateway: PaymentGateway = {
       cancel_url: `${input.returnUrl}?checkout=cancelled`,
       notify_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/webhooks/payfast`,
       m_payment_id: crypto.randomUUID(),
-      amount: plan.monthlyPriceZar.toFixed(2),
+      amount: chargeZar.toFixed(2),
       item_name: `Heita ${plan.name} monthly`,
       custom_str1: input.businessId,
       custom_str2: input.planId,
+      custom_str3: String(appliedCreditZar),
     };
 
     fields.signature = createPayFastSignature(fields);
@@ -182,7 +197,10 @@ export const payfastGateway: PaymentGateway = {
       return null;
     }
 
-    assertAmountMatches(fields, planId);
+    const appliedCreditRaw = Number(fields.custom_str3 ?? 0);
+    const appliedCreditZar = Number.isFinite(appliedCreditRaw) ? appliedCreditRaw : 0;
+
+    assertAmountMatches(fields, planId, appliedCreditZar);
 
     const status = fields.payment_status?.toUpperCase();
     if (status === "COMPLETE") {
@@ -194,6 +212,7 @@ export const payfastGateway: PaymentGateway = {
         providerPaymentId: fields.pf_payment_id || fields.m_payment_id,
         providerSubscriptionId: fields.token,
         amountZar: Number(fields.amount_gross),
+        appliedCreditZar,
       };
     }
 

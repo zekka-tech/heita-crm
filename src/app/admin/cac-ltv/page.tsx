@@ -97,6 +97,40 @@ export default async function CacLtvAdminPage({ searchParams }: PageProps) {
         </Card>
       </section>
 
+      <Card variant="surface" className="space-y-3">
+        <h2 className="font-display text-lg font-semibold text-ink">Referral programme</h2>
+        <p className="text-sm text-ink-muted">
+          B2B merchant referral as its own channel. CAC is the Rand credit granted to referrers; LTV is
+          paid-invoice revenue per referred business.
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-ink-muted">Referred</p>
+            <p className="text-xl font-bold text-ink">{report.referral.referredBusinesses.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-ink-muted">Paying</p>
+            <p className="text-xl font-bold text-ink">{report.referral.payingBusinesses.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-ink-muted">Credit paid</p>
+            <p className="text-xl font-bold text-ink">{formatZar(report.referral.rewardSpendZar)}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-ink-muted">Revenue</p>
+            <p className="text-xl font-bold text-ink">{formatZar(report.referral.revenueZar)}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-ink-muted">CAC</p>
+            <p className="text-xl font-bold text-ink">{cacLabel(report.referral.cacZar)}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-ink-muted">LTV:CAC</p>
+            <p className="text-xl font-bold text-ink">{ratioLabel(report.referral.ltvCacRatio)}</p>
+          </div>
+        </div>
+      </Card>
+
       <Card variant="surface" className="space-y-3 overflow-x-auto">
         <h2 className="font-display text-lg font-semibold text-ink">Per-channel economics</h2>
         <table className="w-full min-w-[640px] text-left text-sm">

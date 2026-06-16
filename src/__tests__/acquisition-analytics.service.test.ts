@@ -27,9 +27,19 @@ describe("getChannelCacLtv", () => {
       .mockResolvedValueOnce([{ channel: "google", spend_zar: 5000n }])
       .mockResolvedValueOnce([
         { cohort_month: "2026-05", channel: "google", businesses: 10n, revenue_zar: 20000n }
+      ])
+      .mockResolvedValueOnce([
+        { referred: 4n, paying: 2n, revenue_zar: 8000n, reward_spend_zar: 2000n }
       ]);
 
     const report = await getChannelCacLtv(12);
+
+    // Referral programme channel: CAC = credit paid / referred, LTV = revenue / referred.
+    expect(report.referral.referredBusinesses).toBe(4);
+    expect(report.referral.rewardSpendZar).toBe(2000);
+    expect(report.referral.cacZar).toBe(500); // 2000 / 4
+    expect(report.referral.ltvZar).toBe(2000); // 8000 / 4
+    expect(report.referral.ltvCacRatio).toBe(4); // 2000 / 500
 
     const google = report.channels.find((c) => c.channel === "google")!;
     expect(google.businesses).toBe(10);
@@ -55,12 +65,15 @@ describe("getChannelCacLtv", () => {
     mocks.tx.$queryRaw
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ referred: 0n, paying: 0n, revenue_zar: 0n, reward_spend_zar: 0n }]);
 
     const report = await getChannelCacLtv(6);
     expect(report.channels).toHaveLength(0);
     expect(report.totals.businesses).toBe(0);
     expect(report.totals.blendedCacZar).toBeNull();
     expect(report.totals.blendedLtvZar).toBe(0);
+    expect(report.referral.referredBusinesses).toBe(0);
+    expect(report.referral.cacZar).toBeNull();
   });
 });

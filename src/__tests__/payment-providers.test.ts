@@ -7,9 +7,15 @@ import {
 } from "@/server/services/payments/payfast";
 import { stripeGateway } from "@/server/services/payments/stripe";
 import { getConfiguredProviders } from "@/server/services/payments/registry";
+import { computeApplicableCredit } from "@/server/services/merchant-credit.service";
 
 vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+// Deterministic credit: default to no credit so charge math is the plan price
+// unless a test overrides it. Avoids touching the DB from the gateway.
+vi.mock("@/server/services/merchant-credit.service", () => ({
+  computeApplicableCredit: vi.fn().mockResolvedValue(0),
 }));
 
 function payfastRawBody(overrides: Record<string, string> = {}) {
@@ -239,6 +245,24 @@ describe("PayFast gateway", () => {
     }
   });
 
+  it("applies merchant referral credit: reduces the charge and round-trips it via custom_str3", async () => {
+    vi.mocked(computeApplicableCredit).mockResolvedValueOnce(500);
+    const result = await payfastGateway.createCheckout({
+      businessId: "biz1",
+      planId: "GROWTH",
+      returnUrl: "https://app.test/dashboard/biz1/settings/billing",
+    });
+
+    expect(result.kind).toBe("form_post");
+    if (result.kind === "form_post") {
+      expect(result.fields.amount).toBe("999.00"); // R1,499 − R500 credit
+      expect(result.fields.custom_str3).toBe("500");
+      expect(result.fields.signature).toBe(
+        createPayFastSignature(result.fields, "secret-passphrase"),
+      );
+    }
+  });
+
   it("accepts a valid Starter ITN after signature, postback, and amount validation", async () => {
     const event = await payfastGateway.verifyAndParseWebhook(
       new Request("https://app.test/api/webhooks/payfast", { method: "POST" }),
@@ -251,6 +275,20 @@ describe("PayFast gateway", () => {
       businessId: "biz1",
       planId: "STARTER",
       providerPaymentId: "pf-payment-1",
+    });
+  });
+
+  it("accepts a credit-reduced ITN whose amount equals plan price minus custom_str3 credit", async () => {
+    const event = await payfastGateway.verifyAndParseWebhook(
+      new Request("https://app.test/api/webhooks/payfast", { method: "POST" }),
+      payfastRawBody({ amount_gross: "999.00", custom_str2: "GROWTH", custom_str3: "500" }),
+    );
+
+    expect(event).toMatchObject({
+      provider: "PAYFAST",
+      type: "payment_succeeded",
+      planId: "GROWTH",
+      appliedCreditZar: 500,
     });
   });
 

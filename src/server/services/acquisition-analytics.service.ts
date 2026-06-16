@@ -35,10 +35,26 @@ export type CohortCell = {
   revenueZar: number;
 };
 
+/**
+ * B2B merchant referral programme treated as its own acquisition channel. The
+ * CAC numerator is the Rand credit actually granted to referrers (rewarded
+ * referrals), and revenue/LTV come from the referred businesses' paid invoices.
+ */
+export type ReferralCacSummary = {
+  referredBusinesses: number;
+  payingBusinesses: number;
+  rewardSpendZar: number;
+  revenueZar: number;
+  cacZar: number | null;
+  ltvZar: number;
+  ltvCacRatio: number | null;
+};
+
 export type ChannelCacLtvReport = {
   since: string;
   channels: ChannelCacLtvRow[];
   cohorts: CohortCell[];
+  referral: ReferralCacSummary;
   totals: {
     businesses: number;
     payingBusinesses: number;
@@ -69,6 +85,13 @@ type CohortAggRow = {
   revenue_zar: bigint;
 };
 
+type ReferralAggRow = {
+  referred: bigint;
+  paying: bigint;
+  revenue_zar: bigint;
+  reward_spend_zar: bigint;
+};
+
 const DEFAULT_MONTHS = 12;
 
 function ratio(numerator: number, denominator: number): number | null {
@@ -88,7 +111,7 @@ export async function getChannelCacLtv(months: number = DEFAULT_MONTHS): Promise
   since.setUTCHours(0, 0, 0, 0);
 
   return withSystemScope(async (tx) => {
-    const [channelRows, spendRows, cohortRows] = await Promise.all([
+    const [channelRows, spendRows, cohortRows, referralRows] = await Promise.all([
       tx.$queryRaw<ChannelAggRow[]>(Prisma.sql`
         SELECT
           COALESCE(NULLIF(b."acquisitionSource", ''), 'direct') AS channel,
@@ -128,6 +151,22 @@ export async function getChannelCacLtv(months: number = DEFAULT_MONTHS): Promise
         WHERE b."deletedAt" IS NULL AND b."createdAt" >= ${since}
         GROUP BY 1, 2
         ORDER BY 1 DESC, businesses DESC
+      `),
+      tx.$queryRaw<ReferralAggRow[]>(Prisma.sql`
+        SELECT
+          COUNT(*)::bigint AS referred,
+          COUNT(*) FILTER (WHERE rev.revenue_zar > 0)::bigint AS paying,
+          COALESCE(SUM(rev.revenue_zar), 0)::bigint AS revenue_zar,
+          COALESCE(SUM(mr."rewardAmountZar") FILTER (WHERE mr.status = 'REWARDED'), 0)::bigint AS reward_spend_zar
+        FROM "MerchantReferral" mr
+        JOIN "Business" b ON b.id = mr."referredBusinessId" AND b."deletedAt" IS NULL
+        LEFT JOIN (
+          SELECT "businessId", SUM("amountZar") AS revenue_zar
+          FROM "BusinessInvoice"
+          WHERE status = 'PAID'
+          GROUP BY "businessId"
+        ) rev ON rev."businessId" = b.id
+        WHERE b."createdAt" >= ${since}
       `)
     ]);
 
@@ -161,6 +200,22 @@ export async function getChannelCacLtv(months: number = DEFAULT_MONTHS): Promise
       revenueZar: Number(row.revenue_zar)
     }));
 
+    const referralAgg = referralRows[0];
+    const referredBusinesses = Number(referralAgg?.referred ?? 0);
+    const referralRevenue = Number(referralAgg?.revenue_zar ?? 0);
+    const referralRewardSpend = Number(referralAgg?.reward_spend_zar ?? 0);
+    const referralCac = referralRewardSpend > 0 ? ratio(referralRewardSpend, referredBusinesses) : null;
+    const referralLtv = referredBusinesses > 0 ? referralRevenue / referredBusinesses : 0;
+    const referral: ReferralCacSummary = {
+      referredBusinesses,
+      payingBusinesses: Number(referralAgg?.paying ?? 0),
+      rewardSpendZar: referralRewardSpend,
+      revenueZar: referralRevenue,
+      cacZar: referralCac,
+      ltvZar: referralLtv,
+      ltvCacRatio: referralCac && referralCac > 0 ? referralLtv / referralCac : null
+    };
+
     const totalBusinesses = channels.reduce((sum, c) => sum + c.businesses, 0);
     const totalPaying = channels.reduce((sum, c) => sum + c.payingBusinesses, 0);
     const totalRevenue = channels.reduce((sum, c) => sum + c.revenueZar, 0);
@@ -174,6 +229,7 @@ export async function getChannelCacLtv(months: number = DEFAULT_MONTHS): Promise
       since: since.toISOString(),
       channels,
       cohorts,
+      referral,
       totals: {
         businesses: totalBusinesses,
         payingBusinesses: totalPaying,
