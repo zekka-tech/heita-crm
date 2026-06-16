@@ -84,7 +84,7 @@ describe("generateAdCopy", () => {
     });
     const result = await generateAdCopy({ businessId: "biz1", offer: "Spring sale", channel: "EMAIL" });
     expect(result.variants).toHaveLength(1);
-    expect(result.variants[0].body).toContain("Spring sale");
+    expect(result.variants[0]?.body).toContain("Spring sale");
   });
 
   it("clamps variant count and extracts JSON embedded in prose", async () => {
