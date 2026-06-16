@@ -2,7 +2,7 @@
 
 *Investment Memorandum · Section 3 of the advisory series · Updated 15 June 2026 · Author: Senior Growth/GTM Advisor · Status: Pre-investment diligence*
 
-> **Scope note.** This refresh is grounded in the shipped product and current codebase, not aspirational packaging. The live plan ladder in `src/lib/billing.ts` is **FREE / STARTER / GROWTH / SCALE** at **R0 / R499 / R1,499 / R4,999** per month. The public pricing page shows annual prices, but the implemented checkout helpers for Yoco, PayFast, and Stripe currently create **monthly** charges only. The marketing-site pricing CTA is self-serve only for **FREE**; paid CTAs on `src/app/pricing/page.tsx` still route to `sales@heita.co.za`, while the in-dashboard billing surface can run self-serve checkout when payment-provider credentials are configured. Telemetry is still partially wired, but the core funnel contract is now materially better covered: `onboarding_completed`, `business_joined`, `membership.joined`, `loyalty.points_redeemed`, `subscription_started`, `subscription_upgraded`, legacy `ai.message_sent`, and canonical `ai_message_sent` are emitted today. The remaining gap is attribution richness and checkout-step instrumentation, not total absence of subscription or AI funnel events. The shipped referral engine is **member-to-member inside a business**; a **business-to-business referral loop** is still a required growth build, not a live CAC reducer.
+> **Scope note.** This refresh is grounded in the shipped product and current codebase, not aspirational packaging. The live plan ladder in `src/lib/billing.ts` is **FREE / STARTER / GROWTH / SCALE** at **R0 / R499 / R1,499 / R4,999** per month. The public pricing page shows annual prices, but the implemented checkout helpers for Yoco, PayFast, and Stripe currently create **monthly** charges only. The marketing-site pricing CTA is self-serve only for **FREE**; paid CTAs on `src/app/pricing/page.tsx` still route to `sales@heita.co.za`, while the in-dashboard billing surface can run self-serve checkout when payment-provider credentials are configured. Telemetry is still partially wired, but the core funnel contract is now materially better covered: `onboarding_completed`, `business_joined`, `membership.joined`, `loyalty.points_redeemed`, `checkout_started`, `subscription_started`, `subscription_upgraded`, `provider_selected`, legacy `ai.message_sent`, and canonical `ai_message_sent` are emitted today. With `checkout_started` (paid checkout initiation) and `provider_selected` (BYOM AI activation) now wired, the remaining gap is attribution richness — lead-source/campaign metadata and per-cohort dashboards — not checkout-step instrumentation or absence of subscription/AI funnel events. The shipped referral engine is **member-to-member inside a business**; a **business-to-business referral loop** is still a required growth build, not a live CAC reducer.
 
 ## 1. Executive View
 
@@ -114,7 +114,9 @@ In other words: use **measured cohort payback thresholds** as the operating cont
 | Reward or points redemption | Emitted today as `loyalty.points_redeemed` |
 | AI workspace engagement | Emitted today as legacy `ai.message_sent` |
 | Customer joined a business (`business_joined`) | Emitted today alongside `membership.joined` |
+| Paid checkout initiated (`checkout_started`) | Emitted today when an owner starts a paid checkout session |
 | Subscription started / upgraded | Emitted today on first paid activation and paid-plan changes |
+| AI provider connected (`provider_selected`) | Emitted today when a business connects a BYOM AI provider |
 | Canonical `ai_message_sent` | Emitted today alongside legacy `ai.message_sent` |
 
 This matters because the **current telemetry is good enough to assess product activation**, but **not yet good enough to claim reliable channel CAC, paid conversion, or upgrade economics**.
@@ -137,7 +139,7 @@ The core insight is that **Heita's commercial "aha" is not account creation. It 
 
 The first GTM engineering workstream should be small, concrete, and non-negotiable:
 
-1. Add explicit `checkout_started`, `provider_selected`, and `first_reward_created` events.
+1. ~~Add explicit `checkout_started`, `provider_selected`, and `first_reward_created` events.~~ `checkout_started` (paid checkout initiation) and `provider_selected` (BYOM AI connection) are now emitted; `first_reward_created` remains.
 2. Tie lead source and campaign metadata to the merchant record or onboarding session.
 3. Build a per-channel dashboard that reports activation and paid conversion by cohort, not just raw signups.
 4. Add richer billing-state context for renewals, downgrades, and assisted-sales attribution.

@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
+import { captureEvent } from "@/lib/telemetry";
+import { TELEMETRY_EVENTS } from "@/lib/telemetry-events";
 import {
   createProviderConnection,
   deleteProviderConnection,
@@ -48,18 +50,29 @@ export async function addProviderConnectionAction(formData: FormData) {
   const userId = requireUser(session, businessId);
   const base = settingsBase(businessId);
 
+  const provider = parseProvider(String(formData.get("provider") ?? ""));
+  const chatModel = String(formData.get("chatModel") ?? "");
+
   let connectionId: string | null = null;
   try {
     const connection = await createProviderConnection({
       businessId,
       userId,
-      provider: parseProvider(String(formData.get("provider") ?? "")),
+      provider,
       apiKey: String(formData.get("apiKey") ?? ""),
-      chatModel: String(formData.get("chatModel") ?? ""),
+      chatModel,
       label: String(formData.get("label") ?? ""),
       baseUrl: String(formData.get("baseUrl") ?? "")
     });
     connectionId = connection.id;
+
+    // AI activation milestone — fires once the connection is saved, regardless
+    // of whether the subsequent key probe succeeds.
+    captureEvent({
+      userId,
+      event: TELEMETRY_EVENTS.providerSelected,
+      properties: { businessId, provider, model: chatModel || undefined }
+    });
 
     // Validate immediately so the user gets instant feedback on the key.
     await validateProviderConnection({ businessId, userId, connectionId });

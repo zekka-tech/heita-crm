@@ -12,8 +12,14 @@ export const TELEMETRY_EVENTS = {
   loyaltyPointsRedeemed: "loyalty.points_redeemed",
   tierUpgraded: "tier_upgraded",
   // Subscription / billing funnel
+  // checkout_started fires when an owner initiates a paid checkout session (the
+  // step before subscription_started, which fires on confirmed payment) — the
+  // pair gives a checkout→activation conversion rate for CAC reporting.
+  checkoutStarted: "checkout_started",
   subscriptionStarted: "subscription_started",
   subscriptionUpgraded: "subscription_upgraded",
+  // AI co-worker activation: a business connected a BYOM provider.
+  providerSelected: "provider_selected",
   // AI co-worker
   // "ai.message_sent" is the legacy event name emitted by src/app/api/ai/chat/route.ts.
   // "ai_message_sent" is the canonical taxonomy name for the paid-CAC dashboard contract.
@@ -64,6 +70,14 @@ export type TelemetryEventProperties = {
   [TELEMETRY_EVENTS.tierUpgraded]: BaseBusinessProps & {
     previousTier: string;
     newTier: string;
+  };
+  [TELEMETRY_EVENTS.checkoutStarted]: BaseBusinessProps & {
+    plan: string;
+    provider: string;
+  };
+  [TELEMETRY_EVENTS.providerSelected]: BaseBusinessProps & {
+    provider: string;
+    model?: string;
   };
   [TELEMETRY_EVENTS.subscriptionStarted]: BaseBusinessProps & {
     plan: string;

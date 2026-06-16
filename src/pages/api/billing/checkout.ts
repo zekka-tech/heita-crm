@@ -5,6 +5,8 @@ import { verifyCsrfNextApiRequest } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { authenticateRequestUser } from "@/lib/request-auth";
 import { requireRole } from "@/lib/staff";
+import { captureEvent } from "@/lib/telemetry";
+import { TELEMETRY_EVENTS } from "@/lib/telemetry-events";
 import { createCheckout } from "@/server/services/billing.service";
 import { isConfiguredProvider } from "@/server/services/payments/registry";
 
@@ -54,6 +56,12 @@ export default async function handler(
 
   try {
     const result = await createCheckout(businessId, planId, returnUrl, provider);
+    // Funnel step before subscription_started (fired on confirmed payment).
+    captureEvent({
+      userId: session.userId,
+      event: TELEMETRY_EVENTS.checkoutStarted,
+      properties: { businessId, plan: planId, provider }
+    });
     return res.status(200).json(result);
   } catch (err) {
     logger.error({ err, businessId, planId, provider }, "billing.checkout.error");
