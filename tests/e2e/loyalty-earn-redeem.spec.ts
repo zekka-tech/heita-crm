@@ -20,7 +20,9 @@ import type { Locator, Page } from "@playwright/test";
 import { prisma } from "../../src/lib/prisma";
 import { createBusinessWithDefaults } from "../../src/server/services/business.service";
 
-test.setTimeout(60_000);
+// Generous budget: this test signs in twice and runs the full join → earn →
+// redeem cycle against the standalone build, which can be slow under CI load.
+test.setTimeout(120_000);
 
 async function readDevOtp(
   payload: { devCode?: string },
