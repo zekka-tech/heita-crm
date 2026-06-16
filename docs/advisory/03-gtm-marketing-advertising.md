@@ -137,6 +137,16 @@ WhatsApp-commerce / franchise / retail-association presence; published case stud
 | D | Consumer loyalty/referral flywheel | Compounding | Cheap merchant + consumer acquisition; future network moat |
 | E | Community, associations, founder-led proof | Medium | Trust + referenceability in a relationship-led market |
 
+### 4.6 Advertising-monetization primitives (build status)
+
+A separate axis from acquiring *merchants* is helping merchants **reach their own markets** — and monetizing that reach. The plan is tiered by feasibility:
+
+- **Tier 1 — owned-audience reach.** **AI campaign-copy generation is now shipped** (`ai-ad.service` + `/api/ai/ad-copy`, surfaced on the promotions dashboard): RAG-grounded, channel-tuned (WhatsApp/SMS/email/in-app) ad-copy variants, metered against the business's AI allowance so heavy use drives plan upgrades. The complementary **reach-packs** (selling messaging volume above plan quota) are **not yet built** — they depend on a prerequisite that does not exist today: the per-business outbound-message metering/enforcement layer (plan `maxWaTemplatesPerMonth` / `maxInAppMessagesPerMonth` are currently metadata only, not counted at send time). Reach-packs should be the next Tier-1 build, starting with that meter.
+- **Tier 2 — discovery marketplace.** Sponsored placements / featured listings in `/discover` and `/categories`, and sponsored "join" offers priced on **CPA (cost-per-join)**. The feed exists; the ad layer and CPA billing do not yet.
+- **Tier 3 — cross-merchant audience.** Consented reach across the wallet network (lead-gen / cost-per-acquired-member) + partner co-marketing. Gated on POPIA consent volume and network liquidity; venture-scale prize, deliberately deferred.
+
+**Measurement is already in place:** sponsored channels become new `acquisitionSource` values flowing through the shipped `/admin/cac-ltv` dashboard, so ad products can be priced on measured outcomes (CPA/CPL) rather than impressions. **Guardrails:** POPIA consent gates any cross-merchant reach (sell reach, never data); WhatsApp marketing is template/economics-constrained, so lean ad inventory toward in-app/push/discovery; keep the wallet ad-light to protect the consumer trust that *is* the asset.
+
 ## 5. Funnel, Activation, And Measurement
 
 ### 5.1 What the codebase actually measures today
