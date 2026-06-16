@@ -39,7 +39,7 @@ jobs:
             type=sha,format=short,prefix=pr-${{ github.event.pull_request.number }}-
 
       - name: Build & push preview image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -60,7 +60,7 @@ jobs:
           trivyignores: .trivyignore
 
       - name: Publish staging compose artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: heita-preview-compose
           path: |

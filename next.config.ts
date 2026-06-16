@@ -96,6 +96,17 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return [{ source: "/sitemap.xml", destination: "/api/sitemap" }];
+  },
+  webpack: (config) => {
+    // @opentelemetry/sdk-node lazily references the optional
+    // @opentelemetry/shim-opencensus migration shim (only needed when bridging
+    // from legacy OpenCensus, which we don't). Suppress the benign
+    // "Can't resolve" build warning rather than pulling in an unused package.
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      { message: /Can't resolve '@opentelemetry\/shim-opencensus'/ }
+    ];
+    return config;
   }
 };
 
