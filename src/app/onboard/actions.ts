@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { captureEvent } from "@/lib/telemetry";
-import { TELEMETRY_EVENTS } from "@/lib/telemetry-events";
+import { buildLeadAttribution, TELEMETRY_EVENTS } from "@/lib/telemetry-events";
 import {
   createBusinessWithDefaults,
   uploadBusinessLogo
@@ -39,6 +39,11 @@ export async function createBusinessAction(formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const email = String(formData.get("email") ?? "").trim() || null;
   const loyaltySignupBonus = Number(formData.get("loyaltySignupBonus") ?? 100);
+  const attribution = buildLeadAttribution({
+    source: String(formData.get("utmSource") ?? ""),
+    medium: String(formData.get("utmMedium") ?? ""),
+    campaign: String(formData.get("utmCampaign") ?? "")
+  });
 
   if (!name) {
     throw new Error("Business name is required.");
@@ -67,7 +72,8 @@ export async function createBusinessAction(formData: FormData) {
       phone,
       email,
       logoUrl,
-      loyaltySignupBonus: Number.isFinite(loyaltySignupBonus) ? loyaltySignupBonus : 100
+      loyaltySignupBonus: Number.isFinite(loyaltySignupBonus) ? loyaltySignupBonus : 100,
+      attribution
     });
   } catch (error) {
     captureEvent({

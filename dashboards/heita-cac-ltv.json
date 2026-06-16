@@ -1,6 +1,6 @@
 {
   "title": "Heita CAC/LTV by Acquisition Channel",
-  "description": "Paid-CAC diligence dashboard. PostHog event data contract: acquisition channel comes from 'business_joined' (joinChannel, referralUsed) and 'membership.joined' (joinChannel, referralUsed, signupBonusPoints); customer value comes from 'points_earned' (points), 'points_redeemed' (points/rewardId), 'tier_upgraded' (previousTier, newTier), 'subscription_started' (plan, billingInterval), and 'subscription_upgraded' (previousPlan, newPlan, billingInterval). All events scoped by businessId. CAC numerator: ad spend from warehouse ad_spend table by joinChannel. LTV numerator: gross margin from billing + loyalty redemption value. Replace stub SQL panels with warehouse/PostHog queries when CAC spend import lands.",
+  "description": "SUPERSEDED by the in-app dashboard at /admin/cac-ltv (platform-admin gated), which computes per-channel merchant CAC/LTV directly from the app Postgres: channel from Business.acquisitionSource (UTM at onboarding), revenue/LTV from paid BusinessInvoice rows, and CAC from the AdSpend table — see src/server/services/acquisition-analytics.service.ts. This Grafana board remains a stub kept only for operators who prefer Grafana; wire its panels against the same tables/AdSpend if needed.",
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 2,

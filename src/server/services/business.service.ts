@@ -7,6 +7,7 @@ import { scanStoredObjectForMalware } from "@/lib/malware-scan";
 import { isE164, maskPhone, normalizeZaPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
+import type { LeadAttribution } from "@/lib/telemetry-events";
 import {
   deleteStoredObject,
   getStoredObjectUrl,
@@ -81,6 +82,7 @@ type CreateBusinessInput = {
   email?: string | null;
   logoUrl?: string | null;
   loyaltySignupBonus?: number;
+  attribution?: LeadAttribution;
 };
 
 export async function createBusinessWithDefaults(input: CreateBusinessInput) {
@@ -99,6 +101,9 @@ export async function createBusinessWithDefaults(input: CreateBusinessInput) {
       email: input.email || null,
       logoUrl: input.logoUrl || null,
       loyaltySignupBonus: input.loyaltySignupBonus ?? 100,
+      acquisitionSource: input.attribution?.leadSource ?? null,
+      acquisitionMedium: input.attribution?.leadMedium ?? null,
+      acquisitionCampaign: input.attribution?.leadCampaign ?? null,
       staffMembers: {
         create: {
           userId: input.userId,

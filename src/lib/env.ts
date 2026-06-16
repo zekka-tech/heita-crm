@@ -17,6 +17,9 @@ const envSchema = z
     AUTH_APPLE_ID: z.string().optional(),
     AUTH_APPLE_SECRET: z.string().optional(),
     STAFF_INVITE_SECRET: z.string().optional(),
+    // Comma-separated user IDs allowed to access platform-admin surfaces
+    // (e.g. the CAC/LTV cohort dashboard). Empty/unset = no one has access.
+    PLATFORM_ADMIN_USER_IDS: z.string().optional(),
 
     // POS
     POS_SHARED_SECRET: z.string().optional(),
