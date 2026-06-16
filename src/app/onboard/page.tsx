@@ -18,12 +18,25 @@ import {
 export const metadata = { title: "Onboard a business" };
 export const dynamic = "force-dynamic";
 
-export default async function OnboardPage() {
+type OnboardPageProps = {
+  searchParams?: Promise<{
+    utm_source?: string;
+    utm_medium?: string;
+    utm_campaign?: string;
+  }>;
+};
+
+export default async function OnboardPage({ searchParams }: OnboardPageProps) {
   const session = await auth();
 
   if (!session?.user?.id) {
     redirect("/sign-in?callbackUrl=/onboard");
   }
+
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const utmSource = resolvedSearchParams.utm_source?.trim() ?? "";
+  const utmMedium = resolvedSearchParams.utm_medium?.trim() ?? "";
+  const utmCampaign = resolvedSearchParams.utm_campaign?.trim() ?? "";
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">
@@ -49,6 +62,9 @@ export default async function OnboardPage() {
           encType="multipart/form-data"
         >
           <CsrfField />
+          <input type="hidden" name="utmSource" value={utmSource} />
+          <input type="hidden" name="utmMedium" value={utmMedium} />
+          <input type="hidden" name="utmCampaign" value={utmCampaign} />
           <Input
             label="Business name"
             name="name"

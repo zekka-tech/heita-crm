@@ -130,6 +130,11 @@ model Business {
   parentBusiness        Business?                @relation("BusinessHierarchy", fields: [parentBusinessId], references: [id], onDelete: SetNull)
   childBusinesses       Business[]               @relation("BusinessHierarchy")
   deletedAt             DateTime?
+  // Merchant-acquisition attribution captured at onboarding (UTM-derived).
+  // Powers the platform per-channel CAC/LTV cohort reporting.
+  acquisitionSource     String?
+  acquisitionMedium     String?
+  acquisitionCampaign   String?
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
   qrCodes               QrCode[]
@@ -168,6 +173,7 @@ model Business {
   conversations         Conversation[]
 
   @@index([parentBusinessId])
+  @@index([acquisitionSource, createdAt])
 }
 
 model FeatureFlag {
@@ -1148,6 +1154,26 @@ model BusinessInvoice {
   @@index([businessId])
   @@index([provider])
   @@index([status])
+}
+
+// Platform-level marketing spend per acquisition channel and period. Not
+// tenant-scoped (no RLS) — it is administrative reporting data, read only by
+// the platform CAC/LTV dashboard via withSystemScope. `amountZar` is stored in
+// whole Rand to match BusinessInvoice.amountZar. `channel` is matched against
+// Business.acquisitionSource (case-insensitive) to compute per-channel CAC.
+model AdSpend {
+  id          String   @id @default(cuid())
+  channel     String
+  periodStart DateTime
+  periodEnd   DateTime
+  amountZar   Int
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([channel, periodStart, periodEnd])
+  @@index([channel])
+  @@index([periodStart])
 }
 
 enum PaymentProvider {
