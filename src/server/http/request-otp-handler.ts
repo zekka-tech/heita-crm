@@ -29,6 +29,11 @@ const RequestOtpSchema = z.object({
 const OTP_PER_PHONE_PER_HOUR = 5;
 const OTP_PER_IP_PER_HOUR = 20;
 const OTP_PER_PHONE_PER_MINUTE = 1;
+// In CI the whole E2E/smoke suite signs in from a single IP (localhost), which
+// exhausts the 20/hour per-IP limit and intermittently 429s sign-ins. Relax the
+// per-IP limit only under the E2E dev-OTP affordance (never set in production),
+// so the per-phone limits still exercise real logic without flaking the suite.
+const OTP_PER_IP_PER_HOUR_E2E = 100_000;
 
 // Generic response returned in every case where a code would be sent.
 // Using identical text and status for both "account found" and "not found"
@@ -109,7 +114,7 @@ async function _handleRequestOtp(request: Request) {
   const ipLimit = await enforceRateLimit({
     identifier: `otp:ip:${ip}`,
     windowSeconds: 3600,
-    max: OTP_PER_IP_PER_HOUR,
+    max: e2eDevOtpEnabled() ? OTP_PER_IP_PER_HOUR_E2E : OTP_PER_IP_PER_HOUR,
     failClosed: true
   });
   if (!ipLimit.allowed) {
