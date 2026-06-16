@@ -1,24 +1,48 @@
 # Heita CRM — Senior CTO Advisory & Investment Memorandum
 
-*Prepared: 14 June 2026 · Author: Senior CTO Advisor · Status: Diligence refresh (post-remediation)*
+*Prepared: 14 June 2026 · Refreshed: 16 June 2026 (grade scorecard + acquisition-plan refresh) · Author: Senior CTO Advisor · Status: Diligence refresh (post-remediation)*
 
 > This memo supersedes the June 2026 `CTO_ADVISORY_INVESTMENT_MEMO.txt` and is backed by three deep-dive
 > workstreams produced under it:
 > - [`01-technical-due-diligence.md`](./01-technical-due-diligence.md) — code-grounded technical audit
 > - [`02-market-competitive-swot.md`](./02-market-competitive-swot.md) — market, moat, SWOT, competitors by region
 > - [`03-gtm-marketing-advertising.md`](./03-gtm-marketing-advertising.md) — acquisition, advertising, unit economics
+>
+> **16 June 2026 refresh notes.** Added the dimension-level **letter-grade scorecard** (§1a) used in the verbal CTO
+> review; refreshed measured metrics to current `main`; recorded that the two remaining CAC-richness telemetry items
+> — `first_reward_created` and lead-source/UTM campaign attribution on the join funnel — are **now shipped**, leaving
+> B2B merchant referral as the only major GTM build outstanding.
 
 ---
 
 ## 1. Executive Verdict
 
-**Heita CRM is a genuine category-creation play occupying an empty quadrant of the SMB software map — WhatsApp × loyalty × per-tenant AI co-worker × PWA × franchise multi-tenancy × ZAR-native — built to a standard well above the typical seed-stage codebase.** It is a 53,000-LOC TypeScript monorepo: 425 source files, 46 Prisma models, 42 migrations, 40 API routes, ~670 unit cases across 88 test files, 11 Playwright E2E flows, and a real SLO/error-budget/runbook operating layer. Across 53k LOC there is **1 TODO, 3 type-escapes, and 0 production npm vulnerabilities.** This is not a prototype.
+**Heita CRM is a genuine category-creation play occupying an empty quadrant of the SMB software map — WhatsApp × loyalty × per-tenant AI co-worker × PWA × franchise multi-tenancy × ZAR-native — built to a standard well above the typical seed-stage codebase.** It is a ~54,200-LOC TypeScript monorepo (measured on current `main`): 428 source files, 46 Prisma models + 28 enums, 44 migrations (`0001`–`0044`), 40 API routes, 47 domain services, 654 unit/integration cases across 102 test files, 11 Playwright E2E flows, 20 operational runbooks, and a real SLO/error-budget/runbook operating layer. Across 54k LOC there are **0 TODO/FIXME markers, 4 type-escapes, and 0 production npm vulnerabilities** (the 7 outstanding audit items are the dev-only `@lhci/cli` semver-major chain). This is not a prototype.
 
 **Corrected production-readiness score: 8.3/10** — well short of the prior 9.5/10 internal claim but improved from 8.0 with the closure of the public ISR gap, SSRF TOCTOU/robots redirect hardening, explicit system-scope support for cross-tenant jobs, and the second wave of service scoping. The largest remaining gap is that tenant isolation is only **partially verified end-to-end** despite now covering the main scoped runtime services, self-service user-scoped reads, and explicit cross-tenant cron/export/account paths. The code provisions `heita_app` in CI with a live RLS smoke test, and public-surface ISR conversion (including `b/[slug]/events`) is complete. The remaining work is proving the broader app green under the runtime role.
 
 **The investment case is real, asymmetric, and time-boxed.** The window in which (a) WhatsApp Business API is cheap, (b) Meta has not shipped native SMB loyalty/AI, (c) no global SaaS has stitched per-tenant RAG into the emerging-market SMB stack, and (d) POPIA/SADC/AfCFTA create a procurement moat — is **18–24 months**. The durable moat is **not** WhatsApp-nativeness (a commodity Meta gates) nor data-residency (protects only the SCALE tier); it is **per-tenant RAG institutional memory compounding with franchise switching cost and loyalty-point liability.**
 
 **Recommendation: fundable at seed / seed-extension, USD 3.5–5.0M (R65–90M) at R140–180M pre-money**, released against the four milestones in §8. I have trimmed both the valuation and the TAM from the prior memo on the basis of corrected sizing and the unproven-RLS finding — and I would make the RLS verification a condition precedent to the first tranche.
+
+---
+
+## 1a. Dimension Scorecard (CTO letter grades)
+
+This is the at-a-glance grade view used in the verbal CTO review, mapped to the numeric scores carried in §4 and the workstream memos. The headline: **the technology is ahead of the go-to-market.** "Can they build it" is essentially answered; the thesis now rides on **focus and distribution.**
+
+| Dimension | Grade | One-line |
+|---|---|---|
+| Build quality / engineering | **A−** | Disciplined, tested, secure; breadth is the main quality risk |
+| Production readiness | **B+** | Strong infra/SRE posture; gated by ops staffing & real-load proof |
+| Product scope / ambition | **A** | Closed loyalty↔wallet↔messaging↔AI loop, franchise-aware, real sales pipeline |
+| Moat | **B** | Workflow + switching-cost moat, not a platform/network moat (yet) |
+| Market fit (SA beachhead) | **A−** | Channel + behaviour + price fit is excellent in South Africa |
+| Distribution / GTM | **C+** | The single biggest gap; no proprietary merchant channel |
+| Defensibility vs. incumbents | **B−** | Beats startups on bundle; loses to payments incumbents on reach |
+| **Overall (weighted)** | **B+ / 8.3-of-10** | Fundable, unusually well-engineered; underwrite the moat, gate on RLS proof, measure CAC |
+
+**Why the spread between an A− engineering grade and a C+ distribution grade matters:** Heita is a rare seed-stage company where the build de-risks the technical question almost entirely, leaving an unusually clean — and unusually concentrated — bet on whether the team can win South African franchise / multi-location accounts via partnerships **before** a payments incumbent (Yoco, iKhokha) decides loyalty + WhatsApp + AI is worth bundling into its existing merchant base. The grades above are deliberately not all A's: the C+ on distribution and B− on incumbent defensibility are the two cells an investor should spend diligence time on.
 
 ---
 
@@ -121,7 +145,7 @@
 
 **Honesty flag for the IC:** the 20–57× ratios are *early-cohort*, resting on very low SA SMB CAC, 84% gross margin, and a 3-year LTV cap. At steady state with mature emerging-market SMB churn (~3%/mo) and saturating cheap channels, **expect blended LTV:CAC to settle at 6–10×.** The genuinely underwritable figure is the **sub-1.5-month gross-profit payback**, which holds across every tier.
 
-**18-month GTM budget: ~R7.2M**, phased SA founder-led → SA paid scale → Africa expansion. **Non-negotiable:** wire PostHog end-to-end for a named per-channel CAC dashboard by M3 — the event contract exists; without it every number above stays a forecast.
+**18-month GTM budget: ~R7.2M**, phased SA founder-led → SA paid scale → Africa expansion. **Non-negotiable:** wire PostHog end-to-end for a named per-channel CAC dashboard by M3. The event contract is now essentially complete — `first_reward_created` (activation milestone) and lead-source/UTM campaign attribution on the join funnel both shipped in the 16 June refresh, joining `checkout_started`, `subscription_started/upgraded`, and `provider_selected`. The remaining gap is the **dashboard and cohort wiring**, not event instrumentation; until that is live every CAC/LTV number stays a forecast.
 
 **Biggest GTM risk:** Meta dependency (template-approval tax across 30+ templates × 4 languages; CTWA pricing). Mitigation: own distribution via partnerships; keep WhatsApp <40% of volume.
 

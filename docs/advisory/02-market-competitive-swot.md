@@ -1,6 +1,17 @@
 # Heita CRM — Market, Competitive Landscape, Moat & SWOT
 
-*Prepared: June 2026 · Status: advisory memo refresh · Scope: product-grounded competitive and strategic assessment*
+*Prepared: June 2026 · Refreshed: 16 June 2026 (CTO grade block) · Status: advisory memo refresh · Scope: product-grounded competitive and strategic assessment*
+
+### Strategic grade block (CTO scorecard)
+
+| Dimension | Grade | Read |
+|---|---|---|
+| Market fit (SA beachhead) | **A−** | Channel + behaviour + price fit is excellent in South Africa |
+| Moat | **B** | Workflow + switching-cost moat, not a platform/network moat (yet) |
+| Distribution / GTM | **C+** | No proprietary merchant channel — the single biggest strategic gap |
+| Defensibility vs. incumbents | **B−** | Beats startups on the bundle; loses to payments incumbents on reach |
+
+The competitor map and SWOT below explain these grades. The recurring theme: Heita's *product* out-competes the standalone WhatsApp/loyalty startups across every region, but its *distribution* is structurally weaker than the payments/POS and commerce-ecosystem incumbents that can cross-sell into an existing merchant base. The strategy follows directly — **partner for distribution, win the franchise/multi-location wedge, and treat South Africa as the proving ground.**
 
 ## Grounding and method
 
