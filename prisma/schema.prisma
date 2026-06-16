@@ -175,6 +175,7 @@ model Business {
   merchantReferralsMade MerchantReferral[]       @relation("MerchantReferralReferrer")
   merchantReferralReceived MerchantReferral?     @relation("MerchantReferralReferred")
   merchantCreditEntries MerchantCreditLedger[]   @relation("MerchantCredit")
+  messagePacks          MessagePack[]            @relation("MessagePacks")
 
   @@index([parentBusinessId])
   @@index([acquisitionSource, createdAt])
@@ -1241,7 +1242,37 @@ enum MerchantReferralStatus {
 enum MerchantCreditType {
   REFERRAL_REWARD
   INVOICE_APPLIED
+  REACH_PACK
   ADJUSTMENT
+}
+
+// ─── Reach-packs (Tier-1 advertising: extra outbound-message volume) ──────────
+// A purchased bundle of outbound-message units that raises a business's
+// effective monthly allowance for a quota group, on top of the plan quota.
+// Per-business and RLS-protected. `expiresAt` scopes a pack to a billing window.
+model MessagePack {
+  id         String            @id @default(cuid())
+  businessId String
+  group      MessagePackGroup
+  units      Int
+  source     MessagePackSource @default(CREDIT)
+  invoiceId  String?
+  expiresAt  DateTime
+  createdAt  DateTime          @default(now())
+  business   Business          @relation("MessagePacks", fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, group, expiresAt])
+}
+
+enum MessagePackGroup {
+  WHATSAPP
+  IN_APP
+}
+
+enum MessagePackSource {
+  CREDIT
+  PURCHASE
+  ADMIN
 }
 
 enum PaymentProvider {
