@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Receipt, Zap } from "lucide-react";
+import { Receipt, Send, Zap } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import {
   listInvoices
 } from "@/server/services/billing.service";
 import { getConfiguredProviders } from "@/server/services/payments/registry";
+import { getMonthlyMessageUsage } from "@/server/services/message-usage.service";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function BillingPage({
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/settings/billing`);
   }
 
-  const [planId, activeSub, invoices, business, paymentProviders] = await Promise.all([
+  const [planId, activeSub, invoices, business, paymentProviders, messageUsage] = await Promise.all([
     getEffectivePlan(businessId),
     getActiveSubscription(businessId),
     listInvoices(businessId),
@@ -47,7 +48,8 @@ export default async function BillingPage({
         select: { name: true }
       });
     }),
-    Promise.resolve(getConfiguredProviders())
+    Promise.resolve(getConfiguredProviders()),
+    getMonthlyMessageUsage(businessId)
   ]);
 
   const currentPlan = getBusinessPlan(planId);
@@ -135,6 +137,41 @@ export default async function BillingPage({
             })}
           </p>
         )}
+      </Card>
+
+      {/* Message usage this month (outbound-message metering) */}
+      <Card variant="surface">
+        <div className="flex items-center gap-2">
+          <Send className="h-4 w-4 text-primary-action" />
+          <span className="text-sm font-semibold uppercase tracking-wider text-ink-subtle">
+            Message usage this month
+          </span>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 text-sm">
+          {[
+            { label: "WhatsApp", usage: messageUsage.whatsapp },
+            { label: "In-app / push", usage: messageUsage.inApp }
+          ].map(({ label, usage }) => (
+            <div key={label} className="rounded-lg bg-surface-elevated px-3 py-2">
+              <span className="text-ink-muted">{label}</span>
+              <p className="font-semibold text-ink">
+                {usage.limit === null
+                  ? `${usage.used.toLocaleString()} sent (unlimited)`
+                  : `${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()}`}
+              </p>
+              {usage.limit !== null ? (
+                <p className={usage.exceeded ? "text-xs text-danger" : "text-xs text-ink-muted"}>
+                  {usage.exceeded
+                    ? "Monthly allowance reached"
+                    : `${(usage.remaining ?? 0).toLocaleString()} remaining`}
+                </p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-ink-subtle">
+          SMS and email sends are not metered against a plan allowance yet.
+        </p>
       </Card>
 
       {/* Upgrade options */}
