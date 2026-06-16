@@ -2,8 +2,8 @@
 
 *Prepared: 14 June 2026 · Refreshed: 16 June 2026 (grade scorecard + acquisition-plan refresh) · Author: Senior CTO Advisor · Status: Diligence refresh (post-remediation)*
 
-> This memo supersedes the June 2026 `CTO_ADVISORY_INVESTMENT_MEMO.txt` and is backed by three deep-dive
-> workstreams produced under it:
+> This memo supersedes (and replaces) the original root `CTO_ADVISORY_INVESTMENT_MEMO.txt`, which has been removed.
+> It is backed by three deep-dive workstreams produced under it:
 > - [`01-technical-due-diligence.md`](./01-technical-due-diligence.md) — code-grounded technical audit
 > - [`02-market-competitive-swot.md`](./02-market-competitive-swot.md) — market, moat, SWOT, competitors by region
 > - [`03-gtm-marketing-advertising.md`](./03-gtm-marketing-advertising.md) — acquisition, advertising, unit economics
