@@ -16,6 +16,7 @@ const TABS = [
   { href: "ai-models", label: "AI model" },
   { href: "templates", label: "Templates" },
   { href: "billing", label: "Billing" },
+  { href: "referrals", label: "Referrals" },
   { href: "audit", label: "Audit Log" }
 ] as const;
 

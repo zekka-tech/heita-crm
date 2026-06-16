@@ -25,6 +25,10 @@ export type NormalizedPaymentEvent = {
   providerSubscriptionId?: string;
   providerCustomerId?: string;
   amountZar?: number;
+  // Rand of merchant referral credit applied to this charge at checkout
+  // (round-tripped via provider metadata). Reduces the expected charge amount
+  // and is consumed from the ledger when the invoice is recorded.
+  appliedCreditZar?: number;
 };
 
 export type ConfiguredPaymentProvider = {

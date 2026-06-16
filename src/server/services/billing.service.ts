@@ -10,6 +10,8 @@ import { logger } from "@/lib/logger";
 import { captureEvent } from "@/lib/telemetry";
 import { TELEMETRY_EVENTS } from "@/lib/telemetry-events";
 import { withBusinessScope, type PrismaTransactionClient } from "@/lib/prisma";
+import { consumeMerchantCredit } from "@/server/services/merchant-credit.service";
+import { settleMerchantReferralForReferred } from "@/server/services/merchant-referral.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 import {
   getGateway,
@@ -266,7 +268,7 @@ export async function createYocoCheckoutSession(
 function normalizeLegacyYocoWebhook(payload: {
   type: string;
   payload: {
-    metadata?: { businessId?: string; planId?: string };
+    metadata?: { businessId?: string; planId?: string; appliedCreditZar?: string };
     id?: string;
     status?: string;
     amount?: number;
@@ -281,6 +283,8 @@ function normalizeLegacyYocoWebhook(payload: {
     return null;
   }
 
+  const appliedCreditZar = Number(meta?.appliedCreditZar ?? 0);
+
   if (payload.type === "payment.succeeded") {
     return {
       provider: "YOCO",
@@ -293,6 +297,7 @@ function normalizeLegacyYocoWebhook(payload: {
         typeof payload.payload.amount === "number"
           ? payload.payload.amount / 100
           : undefined,
+      appliedCreditZar: Number.isFinite(appliedCreditZar) ? appliedCreditZar : 0,
     };
   }
 
@@ -325,7 +330,10 @@ function normalizeLegacyYocoWebhook(payload: {
 
 function assertPaidEventAmount(event: NormalizedPaymentEvent) {
   if (event.amountZar === undefined) return;
-  const expected = getBusinessPlan(event.planId).monthlyPriceZar;
+  // Merchant referral credit legitimately reduces the charged amount; the
+  // expected charge is the plan price net of credit applied at checkout.
+  const appliedCredit = Math.max(0, event.appliedCreditZar ?? 0);
+  const expected = getBusinessPlan(event.planId).monthlyPriceZar - appliedCredit;
   if (Number(event.amountZar.toFixed(2)) !== expected) {
     logger.warn(
       {
@@ -356,6 +364,8 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
     assertPaidEventAmount(event);
 
     const plan = getBusinessPlan(event.planId);
+    const appliedCredit = Math.max(0, event.appliedCreditZar ?? 0);
+    const netAmountZar = Math.max(0, plan.monthlyPriceZar - appliedCredit);
     const now = new Date();
     const periodEnd = new Date(now);
     periodEnd.setMonth(periodEnd.getMonth() + 1);
@@ -384,11 +394,11 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
 
           subscriptionTelemetry = await buildSubscriptionTelemetry(tx, event);
 
-          await tx.businessInvoice.create({
+          const invoice = await tx.businessInvoice.create({
             data: {
               businessId: event.businessId,
               planId: event.planId,
-              amountZar: plan.monthlyPriceZar,
+              amountZar: netAmountZar,
               status: "PAID",
               provider: event.provider,
               providerPaymentId: event.providerPaymentId,
@@ -399,6 +409,17 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
               periodEnd,
             },
           });
+
+          // Consume any merchant referral credit applied to this charge. Runs in
+          // the same business scope and is guarded by the duplicate-invoice check
+          // above, so it is recorded exactly once per payment.
+          if (appliedCredit > 0) {
+            await consumeMerchantCredit(tx, {
+              businessId: event.businessId,
+              requestedZar: appliedCredit,
+              invoiceId: invoice.id,
+            });
+          }
 
           await tx.businessSubscription.updateMany({
             where: {
@@ -465,6 +486,18 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
 
     if (subscriptionTelemetry) {
       captureEvent(subscriptionTelemetry);
+    }
+
+    // Settle any pending B2B merchant referral now that this business has paid.
+    // Cross-tenant (credits the referrer) and idempotent, so it runs after the
+    // payment transaction commits and never blocks activation on failure.
+    try {
+      await settleMerchantReferralForReferred(event.businessId);
+    } catch (settleErr) {
+      logger.error(
+        { businessId: event.businessId, err: settleErr },
+        "merchant_referral.settle_failed",
+      );
     }
 
     logger.info(
@@ -582,7 +615,7 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
 export async function handleYocoWebhook(payload: {
   type: string;
   payload: {
-    metadata?: { businessId?: string; planId?: string };
+    metadata?: { businessId?: string; planId?: string; appliedCreditZar?: string };
     id?: string;
     status?: string;
     amount?: number;

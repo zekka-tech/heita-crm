@@ -10,18 +10,26 @@ const prisma = {
   businessInvoice: { findFirst: vi.fn(), create: vi.fn() },
   membership: { count: vi.fn() },
   aiTokenUsage: { count: vi.fn() },
-  businessDocument: { count: vi.fn() }
+  businessDocument: { count: vi.fn() },
+  merchantCreditLedger: { create: vi.fn(), aggregate: vi.fn() }
 };
 
 vi.mock("@/lib/prisma", () => ({
   prisma,
-  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma))
+  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma)),
+  withSystemScope: vi.fn(async (fn: (tx: typeof prisma) => unknown) => fn(prisma))
 }));
 vi.mock("@/server/services/staff-audit.service", () => ({
   recordStaffAuditLog: vi.fn().mockResolvedValue(undefined)
 }));
 vi.mock("@/lib/telemetry", () => ({
   captureEvent: vi.fn()
+}));
+vi.mock("@/server/services/merchant-credit.service", () => ({
+  consumeMerchantCredit: vi.fn().mockResolvedValue(0)
+}));
+vi.mock("@/server/services/merchant-referral.service", () => ({
+  settleMerchantReferralForReferred: vi.fn().mockResolvedValue(null)
 }));
 
 const {
@@ -34,6 +42,10 @@ const {
 } = await import("@/server/services/billing.service");
 const { captureEvent } = await import("@/lib/telemetry");
 const { TELEMETRY_EVENTS } = await import("@/lib/telemetry-events");
+const { consumeMerchantCredit } = await import("@/server/services/merchant-credit.service");
+const { settleMerchantReferralForReferred } = await import(
+  "@/server/services/merchant-referral.service"
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -233,6 +245,28 @@ describe("handleYocoWebhook — payment.succeeded idempotency", () => {
       })
     ).rejects.toThrow(/amount/i);
     expect(prisma.businessInvoice.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a credit-reduced charge, records the net invoice, consumes credit, and settles referral", async () => {
+    prisma.businessInvoice.create.mockResolvedValue({ id: "inv_net" });
+    // GROWTH is R1,499; R500 credit applied → R999 charged (99900 cents).
+    await handleYocoWebhook({
+      type: "payment.succeeded",
+      payload: {
+        id: "pay_with_credit",
+        amount: 99900,
+        metadata: { businessId: "biz1", planId: "GROWTH", appliedCreditZar: "500" }
+      }
+    });
+
+    expect(prisma.businessInvoice.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ amountZar: 999 }) })
+    );
+    expect(consumeMerchantCredit).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({ businessId: "biz1", requestedZar: 500, invoiceId: "inv_net" })
+    );
+    expect(settleMerchantReferralForReferred).toHaveBeenCalledWith("biz1");
   });
 });
 

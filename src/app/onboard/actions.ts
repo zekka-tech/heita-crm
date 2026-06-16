@@ -12,6 +12,7 @@ import {
   createBusinessWithDefaults,
   uploadBusinessLogo
 } from "@/server/services/business.service";
+import { captureMerchantReferral } from "@/server/services/merchant-referral.service";
 
 export async function createBusinessAction(formData: FormData) {
   await requireCsrfFormData(formData);
@@ -84,6 +85,20 @@ export async function createBusinessAction(formData: FormData) {
       }
     });
     throw error;
+  }
+
+  // Record a B2B merchant referral if this business onboarded via a code.
+  // Best-effort: never block onboarding on a referral-capture failure.
+  const merchantReferralCode = String(formData.get("merchantReferralCode") ?? "").trim();
+  if (merchantReferralCode) {
+    try {
+      await captureMerchantReferral({
+        codeValue: merchantReferralCode,
+        referredBusinessId: business.id
+      });
+    } catch {
+      // swallow — attribution is non-critical to onboarding success
+    }
   }
 
   captureEvent({
