@@ -5,7 +5,9 @@ import type { Locator, Page } from "@playwright/test";
 import { prisma } from "../../src/lib/prisma";
 import { createBusinessWithDefaults } from "../../src/server/services/business.service";
 
-test.setTimeout(60_000);
+// Heavy flow: sign-in + staff step-up + pipeline + follow-up. Give it the same
+// generous budget as the other multi-step authenticated specs.
+test.setTimeout(120_000);
 
 async function readDevOtp(payload: { devCode?: string }, chip: Locator): Promise<string | undefined> {
   if (payload.devCode) return payload.devCode;

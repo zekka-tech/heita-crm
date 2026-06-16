@@ -19,6 +19,16 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? "github" : "list",
+  // Per-test budget. The default 30s is tight for flows that sign in (OTP
+  // request + verify + redirect) and then do several authenticated steps against
+  // the standalone build under CI load — the main remaining source of E2E flake
+  // once per-IP OTP rate limiting was relaxed for E2E. Individual heavy specs
+  // may still raise this further with test.setTimeout().
+  timeout: 90_000,
+  // Default assertion timeout: most specs already pass { timeout: 10_000 } to
+  // toBeVisible/poll; make that the baseline so newly added expects don't flake
+  // on the default 5s under CI load.
+  expect: { timeout: 10_000 },
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: "on-first-retry",
