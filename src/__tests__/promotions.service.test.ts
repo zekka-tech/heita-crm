@@ -27,6 +27,10 @@ const prisma = {
 
 const sendNotification = vi.fn();
 const sendPromotionWhatsApp = vi.fn();
+const isFeatureEnabled = vi.fn();
+const assertOutboundMessageQuota = vi.fn();
+
+class MessageQuotaExceededError extends Error {}
 
 const withBusinessScope = vi.fn(async (_businessId: string, callback: (tx: typeof prisma) => unknown) => callback(prisma));
 
@@ -41,6 +45,13 @@ vi.mock("@/server/services/notification.service", () => ({
 
 vi.mock("@/server/services/whatsapp.service", () => ({
   sendPromotionWhatsApp
+}));
+
+vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled }));
+
+vi.mock("@/server/services/message-usage.service", () => ({
+  assertOutboundMessageQuota,
+  MessageQuotaExceededError
 }));
 
 const {
@@ -63,6 +74,10 @@ describe("promotions service", () => {
     );
     prisma.promotion.updateMany.mockResolvedValue({ count: 1 });
     sendPromotionWhatsApp.mockResolvedValue(undefined);
+    // Reach-pack enforcement defaults to OFF so existing broadcast tests are
+    // unaffected (the feature flag gates the new quota check).
+    isFeatureEnabled.mockResolvedValue(false);
+    assertOutboundMessageQuota.mockResolvedValue(undefined);
   });
 
   describe("createPromotion", () => {
@@ -486,6 +501,31 @@ describe("promotions service", () => {
       await expect(
         broadcastPromotion({ promotionId: "promo_sent", businessId: "biz_1", actorUserId: "user_1" })
       ).rejects.toThrow(/already been broadcast/i);
+    });
+
+    it("blocks the broadcast when reach-pack enforcement is on and the WhatsApp allowance is used up", async () => {
+      mockManagerRole();
+      prisma.promotion.findUniqueOrThrow.mockResolvedValue({
+        id: "promo_quota",
+        businessId: "biz_1",
+        title: "Quota",
+        description: "Details",
+        isActive: true,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60_000),
+        broadcastAt: null,
+        targetTierIds: [],
+        business: { id: "biz_1", slug: "acme", name: "Acme", wabaPhoneId: "waba_1" }
+      });
+      isFeatureEnabled.mockResolvedValue(true);
+      assertOutboundMessageQuota.mockRejectedValue(new MessageQuotaExceededError("over"));
+
+      await expect(
+        broadcastPromotion({ promotionId: "promo_quota", businessId: "biz_1", actorUserId: "user_1" })
+      ).rejects.toThrow(/allowance for this month is used up/i);
+
+      // Must refuse before claiming the broadcast slot.
+      expect(prisma.promotion.updateMany).not.toHaveBeenCalled();
     });
   });
 });

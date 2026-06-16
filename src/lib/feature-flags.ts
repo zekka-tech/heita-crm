@@ -25,6 +25,12 @@ export const FEATURE_FLAGS = {
     label: "WhatsApp primary channel",
     description: "Keep WhatsApp as a preferred outbound channel when available.",
     defaultEnabled: true
+  },
+  reachPackEnforcement: {
+    key: "reachPackEnforcement",
+    label: "Reach-pack quota enforcement",
+    description: "Block proactive broadcasts once the effective outbound-message allowance (plan + reach-packs) is reached.",
+    defaultEnabled: false
   }
 } as const;
 
