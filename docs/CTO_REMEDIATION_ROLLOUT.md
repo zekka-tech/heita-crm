@@ -1,6 +1,6 @@
 # Heita CRM — CTO Advisory Remediation & Execution Rollout
 
-> Source of record: `CTO_ADVISORY_INVESTMENT_MEMO.txt` (June 2026, production-readiness 7.8/10).
+> Source of record: [`docs/advisory/`](./advisory/) memo set (June 2026 refresh, production-readiness 8.3/10), which superseded the original root `CTO_ADVISORY_INVESTMENT_MEMO.txt` (since removed).
 > Purpose: a sequenced, agent-driven execution plan that closes **every** concern, gap, weakness,
 > and shortfall named in the memo, adds the **in-app communication subsystem** (WhatsApp-optional),
 > and locks pricing at the **4-tier ladder (Free / Starter R499 / Growth R1499 / Scale R4999)**.
