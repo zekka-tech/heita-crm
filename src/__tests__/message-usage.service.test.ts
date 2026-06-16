@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   tx: {
     business: { findUniqueOrThrow: vi.fn() },
-    message: { groupBy: vi.fn() }
+    message: { groupBy: vi.fn() },
+    messagePack: { groupBy: vi.fn() }
   },
   withBusinessScope: vi.fn(),
   getPlanQuota: vi.fn()
@@ -28,6 +29,7 @@ beforeEach(() => {
   );
   mocks.tx.business.findUniqueOrThrow.mockResolvedValue({ planId: "GROWTH" });
   mocks.getPlanQuota.mockReturnValue({ maxWaTemplatesPerMonth: 1000, maxInAppMessagesPerMonth: 500 });
+  mocks.tx.messagePack.groupBy.mockResolvedValue([]); // no active reach-packs by default
   mocks.tx.message.groupBy.mockResolvedValue([
     { channel: "WHATSAPP", _count: { _all: 200 } },
     { channel: "IN_APP", _count: { _all: 300 } },
@@ -60,6 +62,14 @@ describe("getMonthlyMessageUsage", () => {
         where: expect.objectContaining({ businessId: "biz1", direction: "OUTBOUND" })
       })
     );
+  });
+
+  it("adds active reach-pack units to the effective limit", async () => {
+    mocks.tx.message.groupBy.mockResolvedValue([{ channel: "WHATSAPP", _count: { _all: 1100 } }]);
+    mocks.tx.messagePack.groupBy.mockResolvedValue([{ group: "WHATSAPP", _sum: { units: 500 } }]);
+    const report = await getMonthlyMessageUsage("biz1");
+    // plan 1000 + 500 pack = 1500 effective; 1100 used → not exceeded, 400 left.
+    expect(report.whatsapp).toMatchObject({ used: 1100, limit: 1500, remaining: 400, exceeded: false });
   });
 
   it("marks a group exceeded when usage reaches the limit", async () => {

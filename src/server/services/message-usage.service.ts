@@ -2,6 +2,7 @@ import { MessageChannel } from "@prisma/client";
 
 import { getPlanQuota } from "@/lib/billing";
 import { withBusinessScope, type PrismaTransactionClient } from "@/lib/prisma";
+import { sumActivePackUnits } from "@/server/services/reach-pack.service";
 
 /**
  * Outbound-message metering — the foundation reach-packs build on.
@@ -104,10 +105,16 @@ export async function getMonthlyMessageUsage(businessId: string): Promise<Messag
       select: { planId: true }
     });
     const counts = await countOutboundByGroup(tx, businessId, since);
+    // Effective limit = plan quota + active reach-pack units (null = unlimited).
+    const packUnits = await sumActivePackUnits(tx, businessId);
+    const effectiveLimit = (group: "whatsapp" | "in_app") => {
+      const planLimit = limitForGroup(business.planId, group);
+      return planLimit === null ? null : planLimit + packUnits[group];
+    };
     return {
       periodStart: since.toISOString(),
-      whatsapp: buildChannelUsage("whatsapp", counts.whatsapp, limitForGroup(business.planId, "whatsapp")),
-      inApp: buildChannelUsage("in_app", counts.in_app, limitForGroup(business.planId, "in_app"))
+      whatsapp: buildChannelUsage("whatsapp", counts.whatsapp, effectiveLimit("whatsapp")),
+      inApp: buildChannelUsage("in_app", counts.in_app, effectiveLimit("in_app"))
     };
   });
 }
