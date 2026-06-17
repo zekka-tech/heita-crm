@@ -179,6 +179,35 @@ on every push and PR. Locally, with no `APP_DATABASE_URL`, it self-skips.
 > The password used by `test:rls` (`RLS_APP_PASSWORD`, default `heita_app_test`)
 > is for local/CI only — never the production `heita_app` secret.
 
+### 7a. End-to-end proof: the whole app under `heita_app`
+
+`npm run test:rls` proves the *policies* fail closed at the SQL layer. The
+`e2e-app-role` CI job proves the **entire request surface** works green under the
+non-`BYPASSRLS` role — i.e. that every server action / API route / service path
+either sets a tenant scope or is a legitimately public/system path.
+
+How it works (`.github/workflows/ci.yml` → `e2e-app-role`):
+1. Migrations + seed run as the **owner** role (`DATABASE_URL`).
+2. The `heita_app` role is provisioned with DML grants.
+3. The Playwright `webServer` boots the app under **`APP_DATABASE_URL`** (the
+   `heita_app` role) — see `playwright.config.ts` `webServer.env`, which
+   overrides `DATABASE_URL` only when `APP_DATABASE_URL` is present.
+4. The smoke suite (auth/OTP, join+earn, earn/redeem) runs against that app, so a
+   missed scope wrapper surfaces as a failing flow (0-row reads / `WITH CHECK`).
+
+Run it locally (requires local Postgres with the `heita_app` role — `npm run
+test:rls` provisions it once):
+
+```bash
+npm run build
+APP_DATABASE_URL="postgresql://heita_app:heita_app@localhost:5432/heita" npm run test:e2e:app-role
+```
+
+**Rollout status:** the job is currently `continue-on-error: true` (non-blocking)
+per shadow → enforce (§3). Once it has been green for a stable window, drop
+`continue-on-error` so it gates merges — that closes production-readiness
+blocker #1.
+
 ## 8. Key files
 
 | File | Purpose |
@@ -186,6 +215,7 @@ on every push and PR. Locally, with no `APP_DATABASE_URL`, it self-skips.
 | `src/lib/prisma.ts` | `withBusinessScope` / `withUserScope` / `withSystemScope` + dev RLS guard |
 | `prisma/migrations/0040_enable_business_rls/migration.sql` | RLS policies for all business-scoped tables |
 | `scripts/rls-live.ts` | Provisions `heita_app` and runs the live RLS test (`npm run test:rls`) |
+| `.github/workflows/ci.yml` → `e2e-app-role` | Runs the smoke E2E suite with the app booted under `heita_app` (whole-app enforcement proof) |
 | `tests/unit/rls-live.test.ts` | Live enforcement proof against a real non-BYPASSRLS role |
 | `src/__tests__/rls-isolation.test.ts` | Property-based isolation tests (mocked) |
 | `src/__tests__/rls-migration.test.ts` | Schema coverage assertions |

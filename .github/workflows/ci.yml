@@ -246,6 +246,108 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  # Proves the entire request surface runs green under the non-BYPASSRLS
+  # `heita_app` role with FORCE ROW LEVEL SECURITY active — production-readiness
+  # blocker #1 (multi-tenant isolation). Migrations run as the owner role;
+  # the app boots under `heita_app` via APP_DATABASE_URL (see playwright.config
+  # webServer.env). Currently NON-BLOCKING (continue-on-error) per the
+  # shadow → enforce rollout in docs/runbooks/rls-enforcement.md: once it has
+  # been green for a stable window, drop `continue-on-error` to make it a gate.
+  e2e-app-role:
+    name: E2E under heita_app role (RLS enforcement proof)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: quality
+    continue-on-error: true
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: heita
+          POSTGRES_PASSWORD: heita
+          POSTGRES_DB: heita
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U heita -d heita"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      AUTH_SECRET: "ci-only-secret"
+      # Owner role: runs migrations + seed (subject to, but allowed by, RLS).
+      DATABASE_URL: "postgresql://heita:heita@localhost:5432/heita"
+      # App runtime role: non-BYPASSRLS. The Playwright webServer boots the app
+      # under this URL so every request is subject to FORCE ROW LEVEL SECURITY.
+      APP_DATABASE_URL: "postgresql://heita_app:heita_app@localhost:5432/heita"
+      REDIS_URL: "redis://localhost:6379"
+      NODE_ENV: "test"
+      E2E_EXPOSE_DEV_OTP: "1"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit --progress=false
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Prisma generate + migrate (owner role)
+        run: npx prisma generate && npx prisma migrate deploy
+
+      - name: Provision heita_app role + grants
+        run: |
+          PGPASSWORD=heita psql -h localhost -U heita -d heita <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'heita_app') THEN
+              CREATE ROLE heita_app WITH
+                LOGIN
+                NOSUPERUSER
+                NOCREATEDB
+                NOCREATEROLE
+                NOINHERIT
+                NOBYPASSRLS
+                PASSWORD 'heita_app';
+            END IF;
+          END
+          $$;
+
+          GRANT CONNECT ON DATABASE heita TO heita_app;
+          GRANT USAGE ON SCHEMA public TO heita_app;
+          GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO heita_app;
+          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO heita_app;
+          SQL
+
+      - name: Build for E2E
+        run: npm run build
+
+      - name: Run smoke E2E under heita_app
+        run: npx playwright test --project=smoke
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-app-role
+          path: playwright-report/
+          retention-days: 7
+
   playwright-smoke:
     name: Playwright smoke (PR gate)
     runs-on: ubuntu-latest

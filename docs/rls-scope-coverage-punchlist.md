@@ -85,7 +85,13 @@ Additional gap found during this pass (the inventory grep doesn't catch
 |---|------|-------|---------------|-------|
 | 9 | `server/services/business.service.ts` `updateBusinessWhatsApp` | `business` (update) + `staffAuditLog` (insert) | `withBusinessScope` | Was a bare `prisma.$transaction`; both writes carry a `WITH CHECK` on `app.current_business_id` |
 
-**Remaining to fully prove the role:** run the full E2E suite with
-`DATABASE_URL` pointing at the `heita_app` role to prove end-to-end enforcement.
-The dev `[RLS-WARN]` guard in `src/lib/prisma.ts` flags any new miss when
-`NODE_ENV !== 'production'`.
+**End-to-end proof — wired.** The `e2e-app-role` CI job
+(`.github/workflows/ci.yml`) now boots the app under the `heita_app` role (via
+`APP_DATABASE_URL` → `playwright.config.ts` `webServer.env`) and runs the smoke
+E2E suite, so any missed scope wrapper surfaces as a failing flow. It is
+currently `continue-on-error: true` (non-blocking) per the shadow → enforce
+rollout; promote it to a required gate once green for a stable window — that
+closes production-readiness blocker #1. Run locally with
+`npm run test:e2e:app-role` (after `npm run build`; requires the local
+`heita_app` role from `npm run test:rls`). The dev `[RLS-WARN]` guard in
+`src/lib/prisma.ts` flags any new miss when `NODE_ENV !== 'production'`.
