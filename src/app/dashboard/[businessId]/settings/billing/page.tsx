@@ -24,7 +24,7 @@ import { listActiveReachPacks } from "@/server/services/reach-pack.service";
 import { REACH_PACK_SKUS } from "@/lib/reach-packs";
 import { CsrfField } from "@/components/security/csrf-field";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { purchaseReachPackAction } from "./actions";
+import { purchaseReachPackAction, purchaseReachPackWithCardAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +60,8 @@ export default async function BillingPage({
       getMerchantCreditBalance(businessId),
       listActiveReachPacks(businessId)
     ]);
+
+  const yocoConfigured = paymentProviders.some((p) => p.id === "YOCO");
 
   const currentPlan = getBusinessPlan(planId);
 
@@ -213,22 +215,33 @@ export default async function BillingPage({
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {REACH_PACK_SKUS.map((sku) => (
-            <form
+            <div
               key={sku.id}
-              action={purchaseReachPackAction}
               className="flex items-center justify-between gap-2 rounded-lg border border-line bg-surface-elevated px-3 py-2"
             >
-              <CsrfField />
-              <input type="hidden" name="businessId" value={businessId} />
-              <input type="hidden" name="packId" value={sku.id} />
               <div>
                 <p className="text-sm font-semibold text-ink">{sku.label}</p>
                 <p className="text-xs text-ink-muted">{formatZar(sku.priceZar)} · {sku.validDays} days</p>
               </div>
-              <SubmitButton variant="secondary" disabled={creditBalance < sku.priceZar}>
-                Buy
-              </SubmitButton>
-            </form>
+              <div className="flex items-center gap-2">
+                <form action={purchaseReachPackAction}>
+                  <CsrfField />
+                  <input type="hidden" name="businessId" value={businessId} />
+                  <input type="hidden" name="packId" value={sku.id} />
+                  <SubmitButton variant="secondary" disabled={creditBalance < sku.priceZar}>
+                    Credit
+                  </SubmitButton>
+                </form>
+                {yocoConfigured ? (
+                  <form action={purchaseReachPackWithCardAction}>
+                    <CsrfField />
+                    <input type="hidden" name="businessId" value={businessId} />
+                    <input type="hidden" name="packId" value={sku.id} />
+                    <SubmitButton variant="primary">Card</SubmitButton>
+                  </form>
+                ) : null}
+              </div>
+            </div>
           ))}
         </div>
 

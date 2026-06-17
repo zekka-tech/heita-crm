@@ -3,18 +3,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   tx: {
     merchantCreditLedger: { aggregate: vi.fn(), create: vi.fn() },
-    messagePack: { create: vi.fn(), groupBy: vi.fn(), findMany: vi.fn() }
+    messagePack: { create: vi.fn(), groupBy: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() }
   },
   withBusinessScope: vi.fn()
 }));
 
 vi.mock("@/lib/prisma", () => ({ withBusinessScope: mocks.withBusinessScope }));
+vi.mock("@/lib/logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 const {
   purchaseReachPackWithCredit,
   getActivePackUnits,
   sumActivePackUnits,
   packGroupToQuotaGroup,
+  grantReachPackFromPayment,
   ReachPackError
 } = await import("@/server/services/reach-pack.service");
 
@@ -27,6 +29,7 @@ beforeEach(() => {
   mocks.tx.merchantCreditLedger.create.mockResolvedValue({});
   mocks.tx.messagePack.create.mockResolvedValue({ id: "pack1" });
   mocks.tx.messagePack.groupBy.mockResolvedValue([]);
+  mocks.tx.messagePack.findFirst.mockResolvedValue(null);
 });
 
 describe("packGroupToQuotaGroup", () => {
@@ -63,6 +66,38 @@ describe("purchaseReachPackWithCredit", () => {
     ).rejects.toBeInstanceOf(ReachPackError);
     expect(mocks.tx.merchantCreditLedger.create).not.toHaveBeenCalled();
     expect(mocks.tx.messagePack.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("grantReachPackFromPayment", () => {
+  const base = { businessId: "biz1", packId: "wa_500", providerPaymentId: "pay_1", amountZar: 149 };
+
+  it("grants a PURCHASE pack on a valid payment, keyed to the payment id", async () => {
+    const pack = await grantReachPackFromPayment(base);
+    expect(pack).toEqual({ id: "pack1" });
+    expect(mocks.tx.messagePack.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ group: "WHATSAPP", units: 500, source: "PURCHASE", invoiceId: "pay_1" })
+      })
+    );
+  });
+
+  it("is idempotent — a repeat webhook for the same payment id is a no-op", async () => {
+    mocks.tx.messagePack.findFirst.mockResolvedValue({ id: "existing" });
+    const result = await grantReachPackFromPayment(base);
+    expect(result).toBeNull();
+    expect(mocks.tx.messagePack.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an amount that does not match the SKU price", async () => {
+    const result = await grantReachPackFromPayment({ ...base, amountZar: 1 });
+    expect(result).toBeNull();
+    expect(mocks.tx.messagePack.create).not.toHaveBeenCalled();
+  });
+
+  it("returns null for an unknown SKU", async () => {
+    const result = await grantReachPackFromPayment({ ...base, packId: "nope" });
+    expect(result).toBeNull();
   });
 });
 
