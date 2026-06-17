@@ -15,48 +15,14 @@ import { createHmac } from "node:crypto";
 
 import { BusinessCategory, Province } from "@prisma/client";
 import { expect, test } from "@playwright/test";
-import type { Locator, Page } from "@playwright/test";
 
 import { prisma } from "../../src/lib/prisma";
 import { createBusinessWithDefaults } from "../../src/server/services/business.service";
+import { readDevOtp, signInWithOtp } from "./helpers/auth";
 
 // Generous budget: this test signs in twice and runs the full join → earn →
 // redeem cycle against the standalone build, which can be slow under CI load.
 test.setTimeout(120_000);
-
-async function readDevOtp(
-  payload: { devCode?: string },
-  chip: Locator
-): Promise<string | undefined> {
-  if (payload.devCode) {
-    return payload.devCode;
-  }
-
-  const chipText = await chip.textContent({ timeout: 2_000 }).catch(() => "");
-  return (chipText ?? "").match(/(\d{6})/)?.[1];
-}
-
-async function signInAs(page: Page, phone: string) {
-  // Clear any existing session first: this helper is called twice in the same
-  // page (customer, then staff), and an authenticated user hitting /sign-in is
-  // correctly redirected to /home by middleware — which would leave no phone
-  // field to fill. Cookie-consent lives in localStorage (storageState), so it
-  // survives clearCookies; the CSRF cookie is re-issued on the next page load.
-  await page.context().clearCookies();
-  await page.goto("/sign-in");
-  await page.getByLabel(/phone number/i).fill(phone);
-  const otpResponsePromise = page.waitForResponse((response) =>
-    response.url().includes("/api/auth/request-otp") && response.request().method() === "POST"
-  );
-  await page.getByRole("button", { name: /send.*code/i }).click();
-  const otpPayload = (await (await otpResponsePromise).json()) as { devCode?: string };
-  const devOtpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
-  const devOtp = await readDevOtp(otpPayload, devOtpChip);
-  expect(devOtp).toBeTruthy();
-  await page.getByLabel(/verification code|code/i).fill(devOtp!);
-  await page.getByRole("button", { name: /verify and sign in|verify sign in/i }).click();
-  await page.waitForURL(/\/home/);
-}
 
 test("customer earns and redeems loyalty points end-to-end", async ({ page, request }) => {
   const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
@@ -99,7 +65,7 @@ test("customer earns and redeems loyalty points end-to-end", async ({ page, requ
 
   try {
     // ── Step 1: Customer signs in and joins ──────────────────────────────
-    await signInAs(page, customerPhone);
+    await signInWithOtp(page, customerPhone);
     await page.goto(`/b/${business.slug}/join`);
     await page.getByRole("button", { name: /claim .* welcome points/i }).click();
     await page.waitForURL(/\/home\?joined=/);
@@ -141,7 +107,7 @@ test("customer earns and redeems loyalty points end-to-end", async ({ page, requ
     expect(membership.pointsBalance).toBe(EXPECTED_BALANCE);
 
     // ── Step 5: Staff signs in and redeems via dashboard ─────────────────
-    await signInAs(page, ownerPhone);
+    await signInWithOtp(page, ownerPhone);
     await page.goto(`/dashboard/${business.id}/loyalty`);
 
     // Mutating loyalty actions require a fresh staff step-up OTP. Request one,
@@ -151,11 +117,8 @@ test("customer earns and redeems loyalty points end-to-end", async ({ page, requ
       response.request().method() === "POST"
     );
     await page.getByRole("button", { name: /send staff otp/i }).click();
-    const stepUpPayload = (await (await stepUpResponsePromise).json()) as { devCode?: string };
-    const stepUpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
-    const stepUpCode = await readDevOtp(stepUpPayload, stepUpChip);
-    expect(stepUpCode).toBeTruthy();
-    await page.getByLabel(/verification code/i).fill(stepUpCode!);
+    const stepUpCode = await readDevOtp(page, await stepUpResponsePromise);
+    await page.getByLabel(/verification code/i).fill(stepUpCode);
     await page.getByRole("button", { name: /verify staff access/i }).click();
     await expect(page.getByText(/staff verification is active/i)).toBeVisible({
       timeout: 10_000

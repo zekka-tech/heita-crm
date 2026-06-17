@@ -1,45 +1,22 @@
 import { BusinessCategory, FollowUpStatus, JoinChannel, MessageChannel, Province } from "@prisma/client";
 import { expect, test } from "@playwright/test";
-import type { Locator, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 import { prisma } from "../../src/lib/prisma";
 import { createBusinessWithDefaults } from "../../src/server/services/business.service";
+import { readDevOtp, signInWithOtp } from "./helpers/auth";
 
 // Heavy flow: sign-in + staff step-up + pipeline + follow-up. Give it the same
 // generous budget as the other multi-step authenticated specs.
 test.setTimeout(120_000);
-
-async function readDevOtp(payload: { devCode?: string }, chip: Locator): Promise<string | undefined> {
-  if (payload.devCode) return payload.devCode;
-  const chipText = await chip.textContent({ timeout: 2_000 }).catch(() => "");
-  return (chipText ?? "").match(/(\d{6})/)?.[1];
-}
-
-async function signInAs(page: Page, phone: string) {
-  await page.context().clearCookies();
-  await page.goto("/sign-in");
-  await page.getByLabel(/phone number/i).fill(phone);
-  const otpResponsePromise = page.waitForResponse((response) =>
-    response.url().includes("/api/auth/request-otp") && response.request().method() === "POST"
-  );
-  await page.getByRole("button", { name: /send.*code/i }).click();
-  const otpPayload = (await (await otpResponsePromise).json()) as { devCode?: string };
-  const devOtp = await readDevOtp(otpPayload, page.getByText(/Dev OTP:\s*\d{6}/i));
-  expect(devOtp).toBeTruthy();
-  await page.getByLabel(/verification code|code/i).fill(devOtp!);
-  await page.getByRole("button", { name: /verify and sign in|verify sign in/i }).click();
-  await page.waitForURL(/\/home/);
-}
 
 async function verifyStaffStepUp(page: Page) {
   const stepUpResponsePromise = page.waitForResponse((response) =>
     response.url().includes("/api/auth/request-staff-otp") && response.request().method() === "POST"
   );
   await page.getByRole("button", { name: /send staff otp/i }).click();
-  const stepUpPayload = (await (await stepUpResponsePromise).json()) as { devCode?: string };
-  const stepUpCode = await readDevOtp(stepUpPayload, page.getByText(/Dev OTP:\s*\d{6}/i));
-  expect(stepUpCode).toBeTruthy();
-  await page.getByLabel(/verification code/i).fill(stepUpCode!);
+  const stepUpCode = await readDevOtp(page, await stepUpResponsePromise);
+  await page.getByLabel(/verification code/i).fill(stepUpCode);
   await page.getByRole("button", { name: /verify staff access/i }).click();
   await expect(page.getByText(/staff verification is active/i)).toBeVisible({ timeout: 10_000 });
 }
@@ -82,7 +59,7 @@ test("paid staff can create a sales thread and approve an in-app follow-up", asy
       }
     });
 
-    await signInAs(page, ownerPhone);
+    await signInWithOtp(page, ownerPhone);
     await page.goto(`/dashboard/${business.id}/sales`);
     await expect(page.getByRole("heading", { name: /sales pipeline/i })).toBeVisible({ timeout: 10_000 });
 

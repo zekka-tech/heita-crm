@@ -14,25 +14,7 @@ import { expect, test } from "@playwright/test";
 
 import { prisma } from "../../src/lib/prisma";
 import { createBusinessWithDefaults } from "../../src/server/services/business.service";
-
-async function signInAs(
-  page: import("@playwright/test").Page,
-  phone: string
-): Promise<void> {
-  await page.goto("/sign-in");
-  await page.getByLabel(/phone number/i).fill(phone);
-  await page.getByRole("button", { name: /send.*code/i }).click();
-
-  const devOtpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
-  await expect(devOtpChip).toBeVisible({ timeout: 10_000 });
-  const devOtpText = (await devOtpChip.textContent()) ?? "";
-  const devOtp = devOtpText.match(/(\d{6})/)?.[1];
-  expect(devOtp).toBeTruthy();
-
-  await page.getByLabel(/verification code|code/i).fill(devOtp!);
-  await page.getByRole("button", { name: /verify and sign in|verify sign in/i }).click();
-  await page.waitForURL(/\/home/);
-}
+import { signInWithOtp } from "./helpers/auth";
 
 test.describe("dashboard overview", () => {
   test("owner sees dashboard with business name and metric cards", async ({ page }) => {
@@ -53,7 +35,7 @@ test.describe("dashboard overview", () => {
     });
 
     try {
-      await signInAs(page, ownerPhone);
+      await signInWithOtp(page, ownerPhone);
       await page.goto(`/dashboard/${business.id}`);
 
       // Business name should appear in the hero card
@@ -87,7 +69,7 @@ test.describe("promotions CRUD", () => {
     });
 
     try {
-      await signInAs(page, ownerPhone);
+      await signInWithOtp(page, ownerPhone);
       await page.goto(`/dashboard/${business.id}/promotions`);
 
       const promoTitle = `E2E Promo ${suffix}`;
@@ -131,7 +113,7 @@ test.describe("events CRUD", () => {
       .slice(0, 16); // "YYYY-MM-DDTHH:MM"
 
     try {
-      await signInAs(page, ownerPhone);
+      await signInWithOtp(page, ownerPhone);
       await page.goto(`/dashboard/${business.id}/events`);
 
       const eventTitle = `E2E Event ${suffix}`;
@@ -185,7 +167,7 @@ test.describe("access control", () => {
 
     try {
       // Sign in as the stranger (not a staff member of this business)
-      await signInAs(page, strangerPhone);
+      await signInWithOtp(page, strangerPhone);
       await page.goto(`/dashboard/${business.id}`);
 
       // Should either redirect to /sign-in or show a not-found/forbidden page

@@ -19,6 +19,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 import { prisma } from "../../src/lib/prisma";
 import { createBusinessWithDefaults } from "../../src/server/services/business.service";
+import { signInWithOtp } from "./helpers/auth";
 
 // ── Overflow detector (runs in the page) ───────────────────────────────────────
 async function findOverflows(page: Page): Promise<string[]> {
@@ -60,21 +61,6 @@ async function expectNoOverflow(page: Page, route: string): Promise<void> {
   await page.waitForTimeout(350);
   const offenders = await findOverflows(page);
   expect(offenders, `Layout overflow on ${route}:\n  - ${offenders.join("\n  - ")}`).toEqual([]);
-}
-
-async function signInAs(page: Page, phone: string): Promise<void> {
-  await page.goto("/sign-in");
-  await page.getByLabel(/phone number/i).fill(phone);
-  await page.getByRole("button", { name: /send.*code/i }).click();
-
-  const devOtpChip = page.getByText(/Dev OTP:\s*\d{6}/i);
-  await expect(devOtpChip).toBeVisible({ timeout: 10_000 });
-  const devOtp = ((await devOtpChip.textContent()) ?? "").match(/(\d{6})/)?.[1];
-  expect(devOtp).toBeTruthy();
-
-  await page.getByLabel(/verification code|code/i).fill(devOtp!);
-  await page.getByRole("button", { name: /verify and sign in|verify sign in/i }).click();
-  await page.waitForURL(/\/home/);
 }
 
 // ── Public routes (no session) ──────────────────────────────────────────────────
@@ -134,7 +120,7 @@ test.describe.serial("responsive layout — authenticated routes", () => {
 
     context = await browser.newContext();
     page = await context.newPage();
-    await signInAs(page, ownerPhone);
+    await signInWithOtp(page, ownerPhone);
   });
 
   test.afterAll(async () => {
