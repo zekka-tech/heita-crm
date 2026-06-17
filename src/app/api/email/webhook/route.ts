@@ -3,7 +3,7 @@ import { MessageChannel, MessageStatus, SalesThreadStatus } from "@prisma/client
 import { NextRequest, NextResponse } from "next/server";
 
 import { logger } from "@/lib/logger";
-import { prisma, withBusinessScope } from "@/lib/prisma";
+import { prisma, withBusinessScope, withSystemScope } from "@/lib/prisma";
 import { markCustomerResponded } from "@/server/services/sales-thread.service";
 
 type ResendAddress = string | { email?: string | null; name?: string | null };
@@ -114,15 +114,20 @@ function plainTextFromEmail(data: ResendEvent["data"]) {
 
 async function resolveBusinessIdsForInboundEmail(recipientEmails: string[]) {
   if (!recipientEmails.length) return [];
-  const mapped = await prisma.businessInboundAddress.findMany({
-    where: {
-      channel: MessageChannel.EMAIL,
-      provider: "resend",
-      address: { in: recipientEmails },
-      isActive: true
-    },
-    select: { businessId: true }
-  });
+  // BusinessInboundAddress is tenant-scoped (FORCE RLS) with no public-read
+  // policy; this pre-scope inbound-routing lookup must run under the explicit
+  // system scope to avoid silently returning 0 rows under the app role.
+  const mapped = await withSystemScope((tx) =>
+    tx.businessInboundAddress.findMany({
+      where: {
+        channel: MessageChannel.EMAIL,
+        provider: "resend",
+        address: { in: recipientEmails },
+        isActive: true
+      },
+      select: { businessId: true }
+    })
+  );
 
   const businesses = await prisma.business.findMany({
     where: {
@@ -172,14 +177,19 @@ async function handleInboundEmail(event: ResendEvent) {
               select: { id: true, businessId: true, contactPhone: true }
             })
           )
-        : prisma.salesThread.findFirst({
-            where: {
-              id: threadId,
-              status: SalesThreadStatus.OPEN,
-              ...userThreadWhere
-            },
-            select: { id: true, businessId: true, contactPhone: true }
-          }))
+        : // No business-id header: resolve the thread cross-tenant by its id under
+          // the explicit system scope (SalesThread has no public-read policy). The
+          // userThreadWhere clause keeps this constrained to the sender's threads.
+          withSystemScope((tx) =>
+            tx.salesThread.findFirst({
+              where: {
+                id: threadId,
+                status: SalesThreadStatus.OPEN,
+                ...userThreadWhere
+              },
+              select: { id: true, businessId: true, contactPhone: true }
+            })
+          ))
     : null;
 
   const fallbackThread = thread ?? await (async () => {

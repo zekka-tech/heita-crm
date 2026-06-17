@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
 import { buildEventIcs, buildEventIcsFilename } from "@/lib/ics";
-import { prisma } from "@/lib/prisma";
+import { withSystemScope } from "@/lib/prisma";
 
 export default async function handler(
   req: NextApiRequest,
@@ -19,23 +19,29 @@ export default async function handler(
     return res.status(400).json({ error: "Event id is required." });
   }
 
-  const event = await prisma.event.findFirst({
-    where: {
-      id: eventId,
-      business: {
-        deletedAt: null,
-        isActive: true
-      }
-    },
-    include: {
-      business: {
-        select: {
-          name: true,
-          slug: true
+  // Event is tenant-scoped (FORCE RLS) with no public-read policy; this public
+  // ICS feed resolves an event by its public id before any business scope is
+  // known, so it must run under the explicit system scope. The business
+  // active/not-deleted filter preserves the public-surface guarantee.
+  const event = await withSystemScope((tx) =>
+    tx.event.findFirst({
+      where: {
+        id: eventId,
+        business: {
+          deletedAt: null,
+          isActive: true
+        }
+      },
+      include: {
+        business: {
+          select: {
+            name: true,
+            slug: true
+          }
         }
       }
-    }
-  });
+    })
+  );
 
   if (!event) {
     return res.status(404).json({ error: "Event not found." });

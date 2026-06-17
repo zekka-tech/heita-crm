@@ -62,21 +62,30 @@ Domain services & paths:
 `notifications` router stays on `ctx.prisma`: `Notification` has **no** RLS
 policy (absent from migrations 0040/0043/0044 and `BUSINESS_SCOPED_MODELS`).
 
-## Remaining gaps (W1 continuation)
+## Closed (branch `chore/rls-app-role-coverage-verify`)
 
-| # | Site | Model | Recommended scope | Notes |
-|---|------|-------|-------------------|-------|
-| 1 | `app/api/email/webhook/route.ts:117` | `businessInboundAddress` | `withSystemScope` | Inbound routing; no tenant ctx until address resolves |
-| 2 | `app/api/email/webhook/route.ts:175` | `salesThread` | `withSystemScope` | Same inbound path |
-| 3 | `server/http/webhook-handlers.ts:57` | `businessInboundAddress` | `withSystemScope` | WhatsApp inbound routing |
-| 4 | `server/http/qr-handler.ts:11` | `qrCode` | `withSystemScope` | Token resolution, then re-scope to resolved businessId |
-| 5 | `server/http/qr-handler.ts:12` | `joinLink` | `withSystemScope` | Token resolution |
-| 6 | `pages/api/events/[eventId].ics.ts:22` | `event` | `withSystemScope` | Public ICS by eventId; no session/tenant ctx |
-| 7 | `server/services/business.service.ts:93` | `business` (create) | `withSystemScope` | **Write** — public SELECT policy doesn't cover INSERT; business bootstrap fails under `heita_app` without this |
-| 8 | `server/services/referral.service.ts` `resolveReferralCode` | `referralCode` | pass `tx` / `withBusinessScope` | `input.tx ?? prisma` fallback: bare-`prisma` branch reads outside scope when called without a tx |
+All eight previously-tracked gaps are now wrapped. The inventory command at the
+top of this doc returns **zero** non-test, non-Business-SELECT hits.
 
-After wrapping the above, re-run the inventory command (expect zero non-test,
-non-Business-SELECT hits) and run the full E2E suite with `DATABASE_URL`
-pointing at the `heita_app` role to prove end-to-end enforcement. The dev
-`[RLS-WARN]` guard in `src/lib/prisma.ts` will flag any miss when
+| # | Site | Model | Scope applied | Notes |
+|---|------|-------|---------------|-------|
+| 1 | `app/api/email/webhook/route.ts` `resolveBusinessIdsForInboundEmail` | `businessInboundAddress` | `withSystemScope` | Pre-scope inbound routing |
+| 2 | `app/api/email/webhook/route.ts` (no business-id header branch) | `salesThread` | `withSystemScope` | Cross-tenant resolve by thread id; `userThreadWhere` keeps it to the sender |
+| 3 | `server/http/webhook-handlers.ts` `findBusinessForInboundSms` | `businessInboundAddress` | `withSystemScope` | WhatsApp/SMS inbound routing |
+| 4 | `server/http/qr-handler.ts` | `qrCode` | `withSystemScope` | Public token resolution |
+| 5 | `server/http/qr-handler.ts` | `joinLink` | `withSystemScope` | Public token resolution |
+| 6 | `pages/api/events/[eventId].ics.ts` | `event` | `withSystemScope` | Public ICS by event id; business active/not-deleted filter retained |
+| 7 | `server/services/business.service.ts` `createBusinessWithDefaults` | `business` (+ nested child writes) | `withSystemScope` | **Write** — new id can't be set as the GUC before INSERT; public SELECT policy doesn't cover INSERT |
+| 8 | `server/services/referral.service.ts` `resolveReferralCode` | `referralCode` | caller `tx` else `withBusinessScope` | Removed the bare-`prisma` fallback branch |
+
+Additional gap found during this pass (the inventory grep doesn't catch
+`prisma.$transaction`):
+
+| # | Site | Model | Scope applied | Notes |
+|---|------|-------|---------------|-------|
+| 9 | `server/services/business.service.ts` `updateBusinessWhatsApp` | `business` (update) + `staffAuditLog` (insert) | `withBusinessScope` | Was a bare `prisma.$transaction`; both writes carry a `WITH CHECK` on `app.current_business_id` |
+
+**Remaining to fully prove the role:** run the full E2E suite with
+`DATABASE_URL` pointing at the `heita_app` role to prove end-to-end enforcement.
+The dev `[RLS-WARN]` guard in `src/lib/prisma.ts` flags any new miss when
 `NODE_ENV !== 'production'`.

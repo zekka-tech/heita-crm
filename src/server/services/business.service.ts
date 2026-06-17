@@ -5,7 +5,7 @@ import { BusinessCategory, Prisma, Province, StaffRole } from "@prisma/client";
 import { createJoinToken, createUniqueBusinessSlug } from "@/lib/business";
 import { scanStoredObjectForMalware } from "@/lib/malware-scan";
 import { isE164, maskPhone, normalizeZaPhone } from "@/lib/phone";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope, withSystemScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import type { LeadAttribution } from "@/lib/telemetry-events";
 import {
@@ -63,11 +63,6 @@ export async function uploadBusinessLogo(file: File): Promise<string> {
   return url;
 }
 
-const BUSINESS_TRANSACTION_OPTIONS = {
-  maxWait: 5_000,
-  timeout: 15_000
-};
-
 const WHATSAPP_MANAGER_ROLES = [StaffRole.OWNER, StaffRole.MANAGER] as const;
 // Meta's WhatsApp phone-number ID is an opaque numeric string (~15-16 digits).
 const WABA_PHONE_ID_PATTERN = /^\d{6,20}$/;
@@ -90,7 +85,12 @@ export async function createBusinessWithDefaults(input: CreateBusinessInput) {
   const qrToken = createJoinToken("qr");
   const joinToken = createJoinToken("join");
 
-  return prisma.business.create({
+  // Business bootstrap: the new id doesn't exist yet, so we can't set
+  // app.current_business_id ahead of the INSERT. Under FORCE RLS the Business
+  // write policy (and child WITH CHECKs) would reject this create as the app
+  // role, so it runs under the explicit system scope.
+  return withSystemScope((tx) =>
+    tx.business.create({
     data: {
       slug,
       name: input.name,
@@ -175,7 +175,8 @@ export async function createBusinessWithDefaults(input: CreateBusinessInput) {
       joinLinks: true,
       loyaltyTiers: true
     }
-  });
+    })
+  );
 }
 
 type UpdateBusinessWhatsAppInput = {
@@ -226,7 +227,10 @@ export async function updateBusinessWhatsApp(input: UpdateBusinessWhatsAppInput)
   const whatsappPhoneNumber = normalizeWhatsappDisplayNumber(input.whatsappPhoneNumber);
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    // Business UPDATE + StaffAuditLog INSERT both carry a WITH CHECK on
+    // app.current_business_id under FORCE RLS, so this must run inside the
+    // tenant scope rather than a bare transaction.
+    return await withBusinessScope(input.businessId, async (tx) => {
       const business = await tx.business.update({
         where: { id: input.businessId },
         data: { wabaPhoneId, whatsappPhoneNumber },
@@ -251,7 +255,7 @@ export async function updateBusinessWhatsApp(input: UpdateBusinessWhatsAppInput)
       );
 
       return business;
-    }, BUSINESS_TRANSACTION_OPTIONS);
+    });
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&

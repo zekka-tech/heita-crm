@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 
 import { logger } from "@/lib/logger";
 import { normalizeZaPhone } from "@/lib/phone";
-import { prisma, withBusinessScope } from "@/lib/prisma";
+import { prisma, withBusinessScope, withSystemScope } from "@/lib/prisma";
 import { incrementWebhookAuthFailure, observeHttpRoute } from "@/lib/metrics";
 import { requestIdHeader, resolveRequestId } from "@/lib/request-context";
 import {
@@ -54,15 +54,20 @@ async function findBusinessForInboundSms(rawTo: string) {
   ].filter((value): value is string => Boolean(value)))];
 
   if (addressCandidates.length) {
-    const mapped = await prisma.businessInboundAddress.findFirst({
-      where: {
-        channel: MessageChannel.SMS,
-        provider: "africas-talking",
-        address: { in: addressCandidates },
-        isActive: true
-      },
-      select: { businessId: true }
-    });
+    // BusinessInboundAddress is tenant-scoped (FORCE RLS) with no public-read
+    // policy; this pre-scope inbound-routing lookup must run under the explicit
+    // system scope to avoid silently returning 0 rows under the app role.
+    const mapped = await withSystemScope((tx) =>
+      tx.businessInboundAddress.findFirst({
+        where: {
+          channel: MessageChannel.SMS,
+          provider: "africas-talking",
+          address: { in: addressCandidates },
+          isActive: true
+        },
+        select: { businessId: true }
+      })
+    );
     if (mapped) return { id: mapped.businessId };
   }
 
