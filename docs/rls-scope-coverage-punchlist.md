@@ -2,7 +2,7 @@
 
 Tracking doc for production-readiness blocker #1: proving the entire app runs
 green under the non-`BYPASSRLS` `heita_app` role. See
-[`rls-enforcement.md`](./rls-enforcement.md) for the two-role model and the
+[`rls-enforcement.md`](./runbooks/rls-enforcement.md) for the two-role model and the
 `withBusinessScope` / `withUserScope` / `withSystemScope` helpers.
 
 ## Method
