@@ -1,13 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/prisma", () => {
+  const prisma = {
     reward: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma,
+    withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma)),
+  };
+});
 
 vi.mock("@/lib/whatsapp", () => ({
   sendWhatsAppInteractiveListMessage: vi.fn(),

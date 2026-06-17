@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { sendWhatsAppInteractiveListMessage, sendWhatsAppTextMessage } from "@/lib/whatsapp";
 
@@ -8,21 +8,23 @@ export async function sendRewardsCatalog(input: {
   businessId: string;
   businessName: string;
 }) {
-  const rewards = await prisma.reward.findMany({
-    where: {
-      businessId: input.businessId,
-      isActive: true,
-      stock: { gt: 0 }
-    },
-    select: {
-      id: true,
-      title: true,
-      pointsCost: true,
-      description: true
-    },
-    orderBy: { pointsCost: "asc" },
-    take: 10
-  });
+  const rewards = await withBusinessScope(input.businessId, (tx) =>
+    tx.reward.findMany({
+      where: {
+        businessId: input.businessId,
+        isActive: true,
+        stock: { gt: 0 }
+      },
+      select: {
+        id: true,
+        title: true,
+        pointsCost: true,
+        description: true
+      },
+      orderBy: { pointsCost: "asc" },
+      take: 10
+    })
+  );
 
   if (rewards.length === 0) {
     return sendWhatsAppTextMessage({
@@ -90,13 +92,15 @@ export async function handleCommerceCommand(input: {
     }
 
     try {
-      const reward = await prisma.reward.findFirst({
-        where: { businessId: input.businessId, isActive: true, stock: { gt: 0 } },
-        orderBy: { pointsCost: "asc" },
-        skip: rewardIndex - 1,
-        take: 1,
-        select: { id: true, title: true, pointsCost: true }
-      });
+      const reward = await withBusinessScope(input.businessId, (tx) =>
+        tx.reward.findFirst({
+          where: { businessId: input.businessId, isActive: true, stock: { gt: 0 } },
+          orderBy: { pointsCost: "asc" },
+          skip: rewardIndex - 1,
+          take: 1,
+          select: { id: true, title: true, pointsCost: true }
+        })
+      );
 
       if (!reward) {
         return {

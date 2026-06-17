@@ -27,7 +27,9 @@ const prisma = {
   }
 };
 
-vi.mock("@/lib/prisma", () => ({ prisma }));
+const withBusinessScope = vi.fn(async (_businessId: string, fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma));
+
+vi.mock("@/lib/prisma", () => ({ prisma, withBusinessScope }));
 
 const { getOrCreateReferralCode, resolveReferralCode, applyReferralRewardIfEligible } =
   await import("@/server/services/referral.service");

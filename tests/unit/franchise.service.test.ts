@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/prisma", () => {
+  const prisma = {
     business: {
       findMany: vi.fn(),
       count: vi.fn(),
@@ -11,8 +11,12 @@ vi.mock("@/lib/prisma", () => ({
       count: vi.fn(),
       aggregate: vi.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma,
+    withSystemScope: vi.fn(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),
+  };
+});
 
 import { getFranchiseAggregateStats, getFranchiseChildBusinesses } from "@/server/services/franchise.service";
 import { prisma } from "@/lib/prisma";

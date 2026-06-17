@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { signIn, signOut } from "@/lib/auth";
 import { requireCsrfFormData } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { prisma, withUserScope } from "@/lib/prisma";
 import { createBusinessWithDefaults } from "@/server/services/business.service";
 
 const DEV_TEST_USER = {
@@ -79,20 +79,24 @@ export async function devBypassSignInAction(formData: FormData) {
       }
     });
 
-    const existingStaffMembership = await prisma.staffMember.findFirst({
-      where: {
-        userId: user.id,
-        business: {
-          deletedAt: null
+    // StaffMember is business-scoped with a user-self-read policy; scope by the
+    // signing-in user so RLS resolves their own memberships under the app role.
+    const existingStaffMembership = await withUserScope(user.id, (tx) =>
+      tx.staffMember.findFirst({
+        where: {
+          userId: user.id,
+          business: {
+            deletedAt: null
+          }
+        },
+        select: {
+          businessId: true
+        },
+        orderBy: {
+          joinedAt: "asc"
         }
-      },
-      select: {
-        businessId: true
-      },
-      orderBy: {
-        joinedAt: "asc"
-      }
-    });
+      })
+    );
 
     const businessId =
       existingStaffMembership?.businessId ??

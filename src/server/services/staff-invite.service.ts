@@ -5,7 +5,7 @@ import { StaffInviteStatus, StaffRole } from "@prisma/client";
 import { sendEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
 import { normalizeZaPhone } from "@/lib/phone";
-import { prisma, withBusinessScope } from "@/lib/prisma";
+import { withBusinessScope, withSystemScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { sendOtpSms } from "@/lib/sms";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
@@ -174,9 +174,13 @@ export async function revokeStaffInvite(input: {
   inviteId: string;
   actorUserId: string;
 }) {
-  const invite = await prisma.staffInvite.findUniqueOrThrow({
-    where: { id: input.inviteId }
-  });
+  // Resolve the invite by id under system scope to learn its businessId, then
+  // re-enter withBusinessScope for the revoke write below.
+  const invite = await withSystemScope((tx) =>
+    tx.staffInvite.findUniqueOrThrow({
+      where: { id: input.inviteId }
+    })
+  );
 
   await requireRole({
     businessId: invite.businessId,
@@ -219,12 +223,16 @@ export async function revokeStaffInvite(input: {
 
 export async function getInviteByToken(token: string) {
   const tokenHash = hashInviteToken(token);
-  const invite = await prisma.staffInvite.findUnique({
-    where: { tokenHash },
-    include: {
-      business: { select: { id: true, name: true, slug: true } }
-    }
-  });
+  // Token is the bearer credential; resolve cross-tenant by hash under system
+  // scope (no tenant context exists until the token is resolved).
+  const invite = await withSystemScope((tx) =>
+    tx.staffInvite.findUnique({
+      where: { tokenHash },
+      include: {
+        business: { select: { id: true, name: true, slug: true } }
+      }
+    })
+  );
 
   if (!invite) return null;
 
@@ -249,9 +257,13 @@ export async function acceptStaffInvite(input: {
   userId: string;
 }) {
   const tokenHash = hashInviteToken(input.token);
-  const inviteRecord = await prisma.staffInvite.findUnique({
-    where: { tokenHash }
-  });
+  // Token is the bearer credential; resolve cross-tenant by hash under system
+  // scope before re-entering withBusinessScope for the accept writes below.
+  const inviteRecord = await withSystemScope((tx) =>
+    tx.staffInvite.findUnique({
+      where: { tokenHash }
+    })
+  );
 
   if (!inviteRecord) {
     throw new Error("This invite is no longer valid.");

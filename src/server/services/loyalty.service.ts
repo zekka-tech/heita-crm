@@ -9,7 +9,7 @@ import {
 } from "@/lib/loyalty";
 import { runIdempotentOperation } from "@/lib/idempotency";
 import { logger } from "@/lib/logger";
-import { prisma, withBusinessScope, withSystemScope, type PrismaTransactionClient } from "@/lib/prisma";
+import { withBusinessScope, withSystemScope, type PrismaTransactionClient } from "@/lib/prisma";
 import { withSpan } from "@/lib/tracing";
 import { sendNotification } from "@/server/services/notification.service";
 import { applyReferralRewardIfEligible } from "@/server/services/referral.service";
@@ -301,11 +301,15 @@ async function _earnPoints(input: EarnPointsInput) {
         }
       ),
     replay: async () =>
-      prisma.membership.findUniqueOrThrow({
-        where: {
-          id: input.membershipId
-        }
-      })
+      // Idempotency replay runs outside the main scoped transaction, so it must
+      // re-enter business scope to satisfy RLS under the app role.
+      withBusinessScope(input.businessId, (tx) =>
+        tx.membership.findUniqueOrThrow({
+          where: {
+            id: input.membershipId
+          }
+        })
+      )
   });
 }
 
@@ -441,11 +445,15 @@ async function _redeemPoints(input: RedeemPointsInput) {
         }
       ),
     replay: async () =>
-      prisma.membership.findUniqueOrThrow({
-        where: {
-          id: input.membershipId
-        }
-      })
+      // Idempotency replay runs outside the main scoped transaction, so it must
+      // re-enter business scope to satisfy RLS under the app role.
+      withBusinessScope(input.businessId, (tx) =>
+        tx.membership.findUniqueOrThrow({
+          where: {
+            id: input.membershipId
+          }
+        })
+      )
   });
 }
 
@@ -600,12 +608,16 @@ async function _refundTransaction(input: RefundTransactionInput) {
         }
       ),
     replay: async () =>
-      prisma.loyaltyTransaction.findFirstOrThrow({
-        where: {
-          businessId: input.businessId,
-          refundSourceId: input.transactionId
-        }
-      })
+      // Idempotency replay runs outside the main scoped transaction, so it must
+      // re-enter business scope to satisfy RLS under the app role.
+      withBusinessScope(input.businessId, (tx) =>
+        tx.loyaltyTransaction.findFirstOrThrow({
+          where: {
+            businessId: input.businessId,
+            refundSourceId: input.transactionId
+          }
+        })
+      )
   });
 }
 
