@@ -32,7 +32,7 @@ export default async function LoyaltyDashboardPage({
     return <main className="px-4 pb-24 pt-6 sm:px-8" />;
   }
 
-  const [{ auth }, { prisma }, { hasFreshStaffStepUp }] = await Promise.all([
+  const [{ auth }, { withBusinessScope }, { hasFreshStaffStepUp }] = await Promise.all([
     import("@/lib/auth"),
     import("@/lib/prisma"),
     import("@/lib/staff-step-up")
@@ -43,32 +43,40 @@ export default async function LoyaltyDashboardPage({
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/loyalty`);
   }
 
-  const business = await prisma.business.findFirst({
-    where: {
-      id: businessId,
-      deletedAt: null,
-      staffMembers: { some: { userId: session.user.id } }
-    },
-    include: {
-      memberships: {
-        include: {
-          user: true,
-          tier: true,
-          transactions: {
-            orderBy: { createdAt: "desc" },
-            take: 3
-          }
-        },
-        orderBy: { joinedAt: "desc" }
+  const userId = session.user.id;
+  // Business + its scoped children (memberships, rewards, tiers, import runs)
+  // must be read under the tenant scope: under the FORCE-RLS app role the nested
+  // relations and the staffMembers authorization subquery are RLS-gated and
+  // would otherwise return empty, 404-ing the page. Staff access is already
+  // enforced by the dashboard layout; the staffMembers filter is defence-in-depth.
+  const business = await withBusinessScope(businessId, (tx) =>
+    tx.business.findFirst({
+      where: {
+        id: businessId,
+        deletedAt: null,
+        staffMembers: { some: { userId } }
       },
-      rewards: { orderBy: { createdAt: "desc" } },
-      loyaltyTiers: { orderBy: { minPoints: "asc" } },
-      importRuns: {
-        orderBy: { createdAt: "desc" },
-        take: 5
+      include: {
+        memberships: {
+          include: {
+            user: true,
+            tier: true,
+            transactions: {
+              orderBy: { createdAt: "desc" },
+              take: 3
+            }
+          },
+          orderBy: { joinedAt: "desc" }
+        },
+        rewards: { orderBy: { createdAt: "desc" } },
+        loyaltyTiers: { orderBy: { minPoints: "asc" } },
+        importRuns: {
+          orderBy: { createdAt: "desc" },
+          take: 5
+        }
       }
-    }
-  });
+    })
+  );
 
   if (!business) notFound();
 

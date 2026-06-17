@@ -22,6 +22,7 @@
     "test:a11y": "vitest run tests/unit/a11y.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:e2e:app-role": "APP_DATABASE_URL=\"${APP_DATABASE_URL:-postgresql://heita_app:heita_app@localhost:5432/heita}\" playwright test --project=smoke",
     "test:load": "tsx tests/load/run.ts",
     "test:rls": "tsx scripts/rls-live.ts",
     "db:migrate": "prisma migrate dev",

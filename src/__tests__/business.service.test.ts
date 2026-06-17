@@ -11,7 +11,11 @@ const prisma = {
 const requireRole = vi.fn();
 const recordStaffAuditLog = vi.fn();
 
-vi.mock("@/lib/prisma", () => ({ prisma }));
+vi.mock("@/lib/prisma", () => ({
+  prisma,
+  withBusinessScope: async (_businessId: string, fn: (tx: typeof prisma) => unknown) => fn(prisma),
+  withSystemScope: async (fn: (tx: typeof prisma) => unknown) => fn(prisma)
+}));
 vi.mock("@/lib/staff", () => ({ requireRole }));
 vi.mock("@/server/services/staff-audit.service", () => ({ recordStaffAuditLog }));
 

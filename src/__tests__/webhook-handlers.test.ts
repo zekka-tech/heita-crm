@@ -34,7 +34,8 @@ vi.mock("@/server/services/whatsapp.service", () => ({
 }));
 vi.mock("@/lib/prisma", () => ({
   prisma: prismaMock,
-  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prismaMock) => unknown) => fn(prismaMock))
+  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof prismaMock) => unknown) => fn(prismaMock)),
+  withSystemScope: vi.fn(async (fn: (tx: typeof prismaMock) => unknown) => fn(prismaMock))
 }));
 vi.mock("@/server/services/sales-thread.service", () => salesThreadMock);
 

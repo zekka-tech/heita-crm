@@ -97,6 +97,14 @@ export default defineConfig({
     timeout: 180_000,
     reuseExistingServer: !process.env.CI,
     env: {
+      // When APP_DATABASE_URL is set (CI `e2e-app-role` job), boot the app under
+      // the non-BYPASSRLS `heita_app` role so the whole suite exercises the
+      // FORCE-RLS runtime path. Migrations/seed still run as the owner role via
+      // the job-level DATABASE_URL. Unset locally → app inherits DATABASE_URL as
+      // before, so default runs are unchanged.
+      ...(process.env.APP_DATABASE_URL
+        ? { DATABASE_URL: process.env.APP_DATABASE_URL }
+        : {}),
       PORT: String(PORT),
       HOSTNAME: "0.0.0.0",
       // next/standalone server.js sets NODE_ENV=production at startup,

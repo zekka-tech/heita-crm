@@ -1,7 +1,7 @@
 import { MessageChannel } from "@prisma/client";
 
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -33,20 +33,24 @@ export default async function IntegrationsSettingsPage({
     redirect("/sign-in");
   }
 
-  const business = await prisma.business.findUnique({
-    where: { id: businessId, deletedAt: null },
-    select: {
-      name: true,
-      slug: true,
-      wabaPhoneId: true,
-      whatsappPhoneNumber: true,
-      inboundAddresses: {
-        where: { isActive: true },
-        orderBy: [{ channel: "asc" }, { address: "asc" }],
-        select: { id: true, channel: true, provider: true, address: true, label: true }
+  // inboundAddresses (BusinessInboundAddress) is a FORCE-RLS model, so the nested
+  // select must run under the tenant scope or it returns empty under the app role.
+  const business = await withBusinessScope(businessId, (tx) =>
+    tx.business.findUnique({
+      where: { id: businessId, deletedAt: null },
+      select: {
+        name: true,
+        slug: true,
+        wabaPhoneId: true,
+        whatsappPhoneNumber: true,
+        inboundAddresses: {
+          where: { isActive: true },
+          orderBy: [{ channel: "asc" }, { address: "asc" }],
+          select: { id: true, channel: true, provider: true, address: true, label: true }
+        }
       }
-    }
-  });
+    })
+  );
 
   if (!business) {
     redirect("/dashboard" as Route);

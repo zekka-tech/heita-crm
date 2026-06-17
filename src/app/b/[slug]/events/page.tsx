@@ -7,7 +7,7 @@ import { Calendar, Download, MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/shared/breadcrumb";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 
 // ISR: revalidate every 60 s. Dates use a fixed en-ZA locale on the server so
 // the static shell has no request-time cookie/header reads.
@@ -22,12 +22,21 @@ export default async function BusinessEventsPage({
 }: BusinessEventsPageProps) {
   const { slug } = await params;
   const t = await getTranslations("publicEvents");
-  const business = await prisma.business.findFirst({
-    where: { slug, deletedAt: null },
-    include: {
-      events: { orderBy: { startsAt: "asc" } }
-    }
-  }).catch(() => null);
+  // Resolve by public slug, then load FORCE-RLS children (events) under the
+  // tenant scope — else `events` is empty under the app role.
+  const base = await prisma.business
+    .findFirst({ where: { slug, deletedAt: null }, select: { id: true } })
+    .catch(() => null);
+  const business = base
+    ? await withBusinessScope(base.id, (tx) =>
+        tx.business.findFirst({
+          where: { id: base.id },
+          include: {
+            events: { orderBy: { startsAt: "asc" } }
+          }
+        })
+      ).catch(() => null)
+    : null;
 
   if (!business) notFound();
 

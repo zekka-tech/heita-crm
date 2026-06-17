@@ -15,7 +15,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { getBusinessDashboardAnalytics } from "@/server/services/analytics.service";
 import {
   MemberGrowthChart,
@@ -48,14 +48,19 @@ export default async function AnalyticsPage({
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/analytics`);
   }
 
-  const business = await prisma.business.findFirst({
-    where: {
-      id: businessId,
-      deletedAt: null,
-      staffMembers: { some: { userId: session.user.id } }
-    },
-    select: { id: true, name: true }
-  });
+  const userId = session.user.id;
+  // Scoped read: the staffMembers authorization subquery is RLS-gated under the
+  // app role (else null → 404). Staff access already enforced by the layout.
+  const business = await withBusinessScope(businessId, (tx) =>
+    tx.business.findFirst({
+      where: {
+        id: businessId,
+        deletedAt: null,
+        staffMembers: { some: { userId } }
+      },
+      select: { id: true, name: true }
+    })
+  );
 
   if (!business) {
     notFound();

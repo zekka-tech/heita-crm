@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { Prisma, TransactionType } from "@prisma/client";
 
-import { prisma, withBusinessScope, type PrismaTransactionClient } from "@/lib/prisma";
+import { withBusinessScope, type PrismaTransactionClient } from "@/lib/prisma";
 import { withSpan } from "@/lib/tracing";
 
 const DEFAULT_REFERRAL_BONUS_POINTS = 50;
@@ -84,20 +84,27 @@ export async function resolveReferralCode(input: {
   referredUserId: string;
   tx?: PrismaTransactionClient;
 }) {
-  const client = input.tx ?? prisma;
   const normalizedCode = input.code.trim().toUpperCase();
 
   if (!normalizedCode) {
     return null;
   }
 
-  const referralCode = await client.referralCode.findFirst({
-    where: {
-      businessId: input.businessId,
-      code: normalizedCode,
-      isActive: true
-    }
-  });
+  const findReferralCode = (client: PrismaTransactionClient) =>
+    client.referralCode.findFirst({
+      where: {
+        businessId: input.businessId,
+        code: normalizedCode,
+        isActive: true
+      }
+    });
+
+  // ReferralCode is tenant-scoped under FORCE RLS. Use the caller's scoped tx
+  // when provided; otherwise open our own business scope so the lookup doesn't
+  // silently return 0 rows under the app role.
+  const referralCode = input.tx
+    ? await findReferralCode(input.tx)
+    : await withBusinessScope(input.businessId, findReferralCode);
 
   if (!referralCode || referralCode.ownerUserId === input.referredUserId) {
     return null;
