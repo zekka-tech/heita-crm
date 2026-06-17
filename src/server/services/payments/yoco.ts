@@ -23,12 +23,63 @@ function parseYocoPayload(rawBody: string) {
         id?: string;
         status?: string;
         amount?: number;
-        metadata?: { businessId?: string; planId?: string; appliedCreditZar?: string };
+        metadata?: {
+          businessId?: string;
+          planId?: string;
+          appliedCreditZar?: string;
+          kind?: string;
+          packId?: string;
+        };
       };
     };
   } catch {
     throw new PaymentWebhookError("Invalid JSON.", 400);
   }
+}
+
+/**
+ * One-off reach-pack checkout (money, not account credit). Charges the SKU price
+ * and round-trips `kind=reach_pack` + `packId` via metadata so the webhook can
+ * grant the pack instead of activating a subscription.
+ */
+export async function createYocoReachPackCheckout(input: {
+  businessId: string;
+  packId: string;
+  priceZar: number;
+  returnUrl: string;
+}): Promise<CheckoutResult> {
+  const yocoKey = process.env.YOCO_SECRET_KEY;
+  if (!yocoKey) throw new Error("YOCO_SECRET_KEY not configured.");
+  if (input.priceZar <= 0) throw new Error("Reach-pack price must be positive.");
+
+  const resp = await fetch("https://payments.yoco.com/api/checkouts", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${yocoKey}`,
+      "Idempotency-Key": `reachpack:${input.businessId}:${input.packId}:${Date.now()}`,
+    },
+    body: JSON.stringify({
+      amount: input.priceZar * 100,
+      currency: "ZAR",
+      metadata: { businessId: input.businessId, packId: input.packId, kind: "reach_pack" },
+      successUrl: `${input.returnUrl}?reachpack=success`,
+      cancelUrl: `${input.returnUrl}?reachpack=cancelled`,
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text();
+    logger.error(
+      { businessId: input.businessId, packId: input.packId, status: resp.status, body },
+      "yoco.reachpack_checkout.failed",
+    );
+    throw new Error(`Yoco reach-pack checkout failed: ${resp.status}`);
+  }
+
+  const data = (await resp.json()) as { id: string; redirectUrl: string };
+  return { kind: "redirect", checkoutId: data.id, url: data.redirectUrl };
 }
 
 export const yocoGateway: PaymentGateway = {
@@ -133,26 +184,38 @@ export const yocoGateway: PaymentGateway = {
     }
 
     const payload = parseYocoPayload(rawBody);
-    const businessId = payload.payload?.metadata?.businessId;
-    const planId = payload.payload?.metadata?.planId;
-    if (!businessId || !isPaidPlanId(planId)) {
+    const meta = payload.payload?.metadata;
+    const businessId = meta?.businessId;
+    const isReachPack = meta?.kind === "reach_pack";
+    const planId = meta?.planId;
+    if (!businessId || (isReachPack ? !meta?.packId : !isPaidPlanId(planId))) {
       logger.warn({ type: payload.type }, "yoco.webhook.missing_metadata");
       return null;
     }
-    const appliedCreditZar = Number(payload.payload?.metadata?.appliedCreditZar ?? 0);
+    const appliedCreditZar = Number(meta?.appliedCreditZar ?? 0);
+    const amountZar = typeof payload.payload?.amount === "number" ? payload.payload.amount / 100 : undefined;
+
+    if (payload.type === "payment.succeeded" && isReachPack) {
+      return {
+        provider: "YOCO",
+        type: "payment_succeeded",
+        businessId,
+        kind: "reach_pack",
+        packId: meta?.packId,
+        providerPaymentId: payload.payload?.id,
+        amountZar,
+      };
+    }
 
     if (payload.type === "payment.succeeded") {
       return {
         provider: "YOCO",
         type: "payment_succeeded",
         businessId,
-        planId,
+        planId: planId as NormalizedPaymentEvent["planId"],
         providerPaymentId: payload.payload?.id,
         providerSubscriptionId: payload.payload?.id,
-        amountZar:
-          typeof payload.payload?.amount === "number"
-            ? payload.payload.amount / 100
-            : undefined,
+        amountZar,
         appliedCreditZar: Number.isFinite(appliedCreditZar) ? appliedCreditZar : 0,
       };
     }
@@ -161,7 +224,7 @@ export const yocoGateway: PaymentGateway = {
         provider: "YOCO",
         type: "payment_failed",
         businessId,
-        planId,
+        planId: planId as NormalizedPaymentEvent["planId"],
         providerPaymentId: payload.payload?.id,
       };
     }
@@ -170,7 +233,7 @@ export const yocoGateway: PaymentGateway = {
         provider: "YOCO",
         type: "subscription_cancelled",
         businessId,
-        planId,
+        planId: planId as NormalizedPaymentEvent["planId"],
         providerSubscriptionId: payload.payload?.id,
       };
     }

@@ -31,6 +31,9 @@ vi.mock("@/server/services/merchant-credit.service", () => ({
 vi.mock("@/server/services/merchant-referral.service", () => ({
   settleMerchantReferralForReferred: vi.fn().mockResolvedValue(null)
 }));
+vi.mock("@/server/services/reach-pack.service", () => ({
+  grantReachPackFromPayment: vi.fn().mockResolvedValue({ id: "pack_1" })
+}));
 
 const {
   applyPaymentEvent,
@@ -46,6 +49,7 @@ const { consumeMerchantCredit } = await import("@/server/services/merchant-credi
 const { settleMerchantReferralForReferred } = await import(
   "@/server/services/merchant-referral.service"
 );
+const { grantReachPackFromPayment } = await import("@/server/services/reach-pack.service");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -267,6 +271,24 @@ describe("handleYocoWebhook — payment.succeeded idempotency", () => {
       expect.objectContaining({ businessId: "biz1", requestedZar: 500, invoiceId: "inv_net" })
     );
     expect(settleMerchantReferralForReferred).toHaveBeenCalledWith("biz1");
+  });
+
+  it("grants a reach-pack and skips subscription logic for a reach_pack purchase", async () => {
+    await handleYocoWebhook({
+      type: "payment.succeeded",
+      payload: {
+        id: "pay_reachpack",
+        amount: 14900,
+        metadata: { businessId: "biz1", kind: "reach_pack", packId: "wa_500" }
+      }
+    });
+
+    expect(grantReachPackFromPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ businessId: "biz1", packId: "wa_500", providerPaymentId: "pay_reachpack", amountZar: 149 })
+    );
+    // Must NOT run the subscription path.
+    expect(prisma.businessInvoice.create).not.toHaveBeenCalled();
+    expect(prisma.businessSubscription.create).not.toHaveBeenCalled();
   });
 });
 

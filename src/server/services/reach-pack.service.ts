@@ -1,5 +1,6 @@
 import type { MessagePackGroup } from "@prisma/client";
 
+import { logger } from "@/lib/logger";
 import { withBusinessScope, type PrismaTransactionClient } from "@/lib/prisma";
 import { getReachPackSku } from "@/lib/reach-packs";
 import type { MessageQuotaGroup } from "@/server/services/message-usage.service";
@@ -47,6 +48,61 @@ export async function getActivePackUnits(
   businessId: string
 ): Promise<Record<"whatsapp" | "in_app", number>> {
   return withBusinessScope(businessId, (tx) => sumActivePackUnits(tx, businessId));
+}
+
+/**
+ * Grant a reach-pack from a confirmed external payment (money checkout webhook).
+ * Idempotent: a repeat webhook delivery for the same `providerPaymentId` is a
+ * no-op (the payment id is stored on `MessagePack.invoiceId`). Validates the
+ * charged amount against the SKU price. Returns the granted pack, or null when
+ * the SKU is unknown, the amount mismatches, or the payment was already applied.
+ */
+export async function grantReachPackFromPayment(input: {
+  businessId: string;
+  packId: string;
+  providerPaymentId: string;
+  amountZar?: number;
+}) {
+  const sku = getReachPackSku(input.packId);
+  if (!sku) {
+    logger.warn({ packId: input.packId, businessId: input.businessId }, "reach_pack.payment.unknown_sku");
+    return null;
+  }
+  if (typeof input.amountZar === "number" && Math.round(input.amountZar) !== sku.priceZar) {
+    logger.warn(
+      { packId: input.packId, expected: sku.priceZar, received: input.amountZar },
+      "reach_pack.payment.amount_mismatch"
+    );
+    return null;
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + sku.validDays * 24 * 60 * 60 * 1000);
+
+  return withBusinessScope(input.businessId, async (tx) => {
+    const existing = await tx.messagePack.findFirst({
+      where: { businessId: input.businessId, invoiceId: input.providerPaymentId },
+      select: { id: true }
+    });
+    if (existing) {
+      logger.info(
+        { businessId: input.businessId, providerPaymentId: input.providerPaymentId },
+        "reach_pack.payment.duplicate_ignored"
+      );
+      return null;
+    }
+
+    return tx.messagePack.create({
+      data: {
+        businessId: input.businessId,
+        group: sku.group,
+        units: sku.units,
+        source: "PURCHASE",
+        invoiceId: input.providerPaymentId,
+        expiresAt
+      }
+    });
+  });
 }
 
 export async function listActiveReachPacks(businessId: string) {

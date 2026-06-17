@@ -11,6 +11,7 @@ import { captureEvent } from "@/lib/telemetry";
 import { TELEMETRY_EVENTS } from "@/lib/telemetry-events";
 import { withBusinessScope, type PrismaTransactionClient } from "@/lib/prisma";
 import { consumeMerchantCredit } from "@/server/services/merchant-credit.service";
+import { grantReachPackFromPayment } from "@/server/services/reach-pack.service";
 import { settleMerchantReferralForReferred } from "@/server/services/merchant-referral.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 import {
@@ -187,13 +188,17 @@ async function buildSubscriptionTelemetry(
   tx: Pick<PrismaTransactionClient, "business" | "staffMember">,
   event: NormalizedPaymentEvent,
 ): Promise<SubscriptionTelemetry | null> {
+  // Subscription telemetry only applies to plan payments (reach-pack purchases
+  // carry no planId).
+  if (!event.planId) return null;
+  const newPlan = event.planId;
   const previousBusiness = await tx.business.findUnique({
     where: { id: event.businessId },
     select: { planId: true },
   });
   const previousPlan = previousBusiness?.planId ?? "FREE";
 
-  if (previousPlan === event.planId) {
+  if (previousPlan === newPlan) {
     return null;
   }
 
@@ -213,7 +218,7 @@ async function buildSubscriptionTelemetry(
       userId: owner.userId,
       properties: {
         businessId: event.businessId,
-        plan: event.planId,
+        plan: newPlan,
         billingInterval: "monthly",
       },
     };
@@ -226,7 +231,7 @@ async function buildSubscriptionTelemetry(
       properties: {
         businessId: event.businessId,
         previousPlan,
-        newPlan: event.planId,
+        newPlan: newPlan,
         billingInterval: "monthly",
       },
     };
@@ -268,7 +273,7 @@ export async function createYocoCheckoutSession(
 function normalizeLegacyYocoWebhook(payload: {
   type: string;
   payload: {
-    metadata?: { businessId?: string; planId?: string; appliedCreditZar?: string };
+    metadata?: { businessId?: string; planId?: string; appliedCreditZar?: string; kind?: string; packId?: string };
     id?: string;
     status?: string;
     amount?: number;
@@ -277,26 +282,39 @@ function normalizeLegacyYocoWebhook(payload: {
   const meta = payload.payload?.metadata;
   const businessId = meta?.businessId;
   const planId = meta?.planId;
+  const isReachPack = meta?.kind === "reach_pack";
 
-  if (!businessId || !isPaidPlanId(planId)) {
+  // Reach-pack purchases carry a packId instead of a plan; subscription events
+  // must have a valid paid plan.
+  if (!businessId || (isReachPack ? !meta?.packId : !isPaidPlanId(planId))) {
     logger.warn({ type: payload.type }, "yoco.webhook.missing_metadata");
     return null;
   }
 
   const appliedCreditZar = Number(meta?.appliedCreditZar ?? 0);
+  const amountZar = typeof payload.payload.amount === "number" ? payload.payload.amount / 100 : undefined;
+
+  if (payload.type === "payment.succeeded" && isReachPack) {
+    return {
+      provider: "YOCO",
+      type: "payment_succeeded",
+      businessId,
+      kind: "reach_pack",
+      packId: meta?.packId,
+      providerPaymentId: payload.payload.id,
+      amountZar,
+    };
+  }
 
   if (payload.type === "payment.succeeded") {
     return {
       provider: "YOCO",
       type: "payment_succeeded",
       businessId,
-      planId,
+      planId: planId as NormalizedPaymentEvent["planId"],
       providerPaymentId: payload.payload.id,
       providerSubscriptionId: payload.payload.id,
-      amountZar:
-        typeof payload.payload.amount === "number"
-          ? payload.payload.amount / 100
-          : undefined,
+      amountZar,
       appliedCreditZar: Number.isFinite(appliedCreditZar) ? appliedCreditZar : 0,
     };
   }
@@ -306,7 +324,7 @@ function normalizeLegacyYocoWebhook(payload: {
       provider: "YOCO",
       type: "payment_failed",
       businessId,
-      planId,
+      planId: planId as NormalizedPaymentEvent["planId"],
       providerPaymentId: payload.payload.id,
     };
   }
@@ -316,7 +334,7 @@ function normalizeLegacyYocoWebhook(payload: {
       provider: "YOCO",
       type: "subscription_cancelled",
       businessId,
-      planId,
+      planId: planId as NormalizedPaymentEvent["planId"],
       providerSubscriptionId: payload.payload.id,
     };
   }
@@ -361,9 +379,33 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
       return;
     }
 
+    // One-off reach-pack purchase (money checkout): grant volume and stop —
+    // this is not a subscription payment, so it skips invoice/subscription logic.
+    if (event.kind === "reach_pack") {
+      if (!event.packId) {
+        logger.warn({ businessId: event.businessId, provider: event.provider }, "billing.webhook.reach_pack.missing_pack_id");
+        return;
+      }
+      await grantReachPackFromPayment({
+        businessId: event.businessId,
+        packId: event.packId,
+        providerPaymentId: event.providerPaymentId,
+        amountZar: event.amountZar,
+      });
+      return;
+    }
+
+    if (!event.planId) {
+      logger.warn({ businessId: event.businessId, provider: event.provider }, "billing.webhook.missing_plan_id");
+      return;
+    }
+    // Capture the narrowed plan id; TS loses the guard's narrowing inside the
+    // withBusinessScope async closure below.
+    const planId = event.planId;
+
     assertPaidEventAmount(event);
 
-    const plan = getBusinessPlan(event.planId);
+    const plan = getBusinessPlan(planId);
     const appliedCredit = Math.max(0, event.appliedCreditZar ?? 0);
     const netAmountZar = Math.max(0, plan.monthlyPriceZar - appliedCredit);
     const now = new Date();
@@ -397,7 +439,7 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
           const invoice = await tx.businessInvoice.create({
             data: {
               businessId: event.businessId,
-              planId: event.planId,
+              planId: planId,
               amountZar: netAmountZar,
               status: "PAID",
               provider: event.provider,
@@ -430,12 +472,12 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
           });
           await tx.business.update({
             where: { id: event.businessId },
-            data: { planId: event.planId },
+            data: { planId: planId },
           });
           await tx.businessSubscription.create({
             data: {
               businessId: event.businessId,
-              planId: event.planId,
+              planId: planId,
               status: "ACTIVE",
               provider: event.provider,
               providerCustomerId: event.providerCustomerId,
@@ -460,7 +502,7 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
               targetType: "Business",
               targetId: event.businessId,
               metadata: {
-                planId: event.planId,
+                planId: planId,
                 provider: event.provider,
                 providerPaymentId: event.providerPaymentId,
                 amountZar: plan.monthlyPriceZar,
@@ -615,7 +657,7 @@ export async function applyPaymentEvent(event: NormalizedPaymentEvent | null) {
 export async function handleYocoWebhook(payload: {
   type: string;
   payload: {
-    metadata?: { businessId?: string; planId?: string; appliedCreditZar?: string };
+    metadata?: { businessId?: string; planId?: string; appliedCreditZar?: string; kind?: string; packId?: string };
     id?: string;
     status?: string;
     amount?: number;
