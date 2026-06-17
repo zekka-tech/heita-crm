@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { withSystemScope } from "@/lib/prisma";
 import { protectedProcedure, router } from "@/server/trpc";
 import {
   createEvent,
@@ -31,21 +32,26 @@ const updateInputSchema = z.object({
 
 export const eventsRouter = router({
   upcoming: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.event.findMany({
-      where: {
-        business: {
-          staffMembers: {
-            some: {
-              userId: ctx.userId
+    // Spans every business the caller staffs, so it is a legitimate
+    // cross-tenant read: run under system scope with the staff-membership
+    // filter (bound to the session userId) doing the tenant gating.
+    return withSystemScope((tx) =>
+      tx.event.findMany({
+        where: {
+          business: {
+            staffMembers: {
+              some: {
+                userId: ctx.userId
+              }
             }
           }
-        }
-      },
-      orderBy: {
-        startsAt: "asc"
-      },
-      take: 20
-    });
+        },
+        orderBy: {
+          startsAt: "asc"
+        },
+        take: 20
+      })
+    );
   }),
 
   list: protectedProcedure

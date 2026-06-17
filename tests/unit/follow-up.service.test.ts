@@ -27,7 +27,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: mocks.prisma,
-  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
+  withBusinessScope: vi.fn(async (_businessId: string, fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma)),
+  withSystemScope: vi.fn(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
 }));
 vi.mock("@/lib/staff", () => ({ requireRole: mocks.requireRole }));
 vi.mock("@/server/services/billing.service", () => ({

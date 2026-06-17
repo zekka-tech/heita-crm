@@ -2,7 +2,7 @@ import { ConsentType, Prisma, StaffRole } from "@prisma/client";
 
 import { logger } from "@/lib/logger";
 import { shouldDeliverNotificationChannel } from "@/lib/notification-preferences";
-import { prisma, withBusinessScope } from "@/lib/prisma";
+import { prisma, withBusinessScope, withSystemScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { sendNotification } from "@/server/services/notification.service";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
@@ -304,30 +304,36 @@ export async function sendDueEventReminders(
   const windowMs = input.windowMs ?? DEFAULT_REMINDER_WINDOW_MS;
   const windowEnd = new Date(now.getTime() + windowMs);
 
-  const dueEvents = await prisma.event.findMany({
-    where: {
-      isReminderOn: true,
-      reminderSentAt: null,
-      startsAt: { gt: now, lte: windowEnd }
-    },
-    include: {
-      business: {
-        select: { id: true, slug: true, name: true, wabaPhoneId: true }
-      }
-    },
-    orderBy: { startsAt: "asc" },
-    take: REMINDER_BATCH_SIZE
-  });
+  // Cross-tenant reminder sweep (cron): read due events across every tenant
+  // under system scope; per-event writes below re-enter withBusinessScope.
+  const dueEvents = await withSystemScope((tx) =>
+    tx.event.findMany({
+      where: {
+        isReminderOn: true,
+        reminderSentAt: null,
+        startsAt: { gt: now, lte: windowEnd }
+      },
+      include: {
+        business: {
+          select: { id: true, slug: true, name: true, wabaPhoneId: true }
+        }
+      },
+      orderBy: { startsAt: "asc" },
+      take: REMINDER_BATCH_SIZE
+    })
+  );
 
   let totalRecipients = 0;
   let totalFailures = 0;
 
   // Batch-fetch all memberships for all due events in one query to avoid N+1
   const allBusinessIds = [...new Set(dueEvents.map((e) => e.businessId))];
-  const allMemberships = await prisma.membership.findMany({
-    where: { businessId: { in: allBusinessIds }, isActive: true },
-    select: { userId: true, businessId: true }
-  });
+  const allMemberships = await withSystemScope((tx) =>
+    tx.membership.findMany({
+      where: { businessId: { in: allBusinessIds }, isActive: true },
+      select: { userId: true, businessId: true }
+    })
+  );
   const membershipsByBusiness = new Map<string, { userId: string }[]>();
   for (const m of allMemberships) {
     const list = membershipsByBusiness.get(m.businessId) ?? [];

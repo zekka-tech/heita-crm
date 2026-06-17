@@ -31,10 +31,12 @@ const sendNotification = vi.fn();
 const sendEventReminderWhatsApp = vi.fn();
 
 const withBusinessScope = vi.fn(async (_businessId: string, callback: (tx: typeof prisma) => unknown) => callback(prisma));
+const withSystemScope = vi.fn(async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
 
 vi.mock("@/lib/prisma", () => ({
   prisma,
-  withBusinessScope
+  withBusinessScope,
+  withSystemScope
 }));
 
 vi.mock("@/server/services/notification.service", () => ({

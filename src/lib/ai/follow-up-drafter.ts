@@ -4,7 +4,7 @@ import { embedText } from "@/lib/ai/embeddings";
 import { generateText, type GenerateTextResult } from "@/lib/ai/generate";
 import { hybridSearch } from "@/lib/ai/vector-store";
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 
 const MAX_HISTORY = 20;
 const MAX_KNOWLEDGE = 4;
@@ -45,27 +45,33 @@ export async function generateFollowUpDraft(input: {
   threadId: string;
   channel: MessageChannel;
 }): Promise<GenerateTextResult & { body: string }> {
-  const thread = await prisma.salesThread.findFirstOrThrow({
-    where: { id: input.threadId, businessId: input.businessId },
-    include: {
-      business: { select: { name: true, category: true, city: true } },
-      stage: true,
-      membership: { include: { tier: true, user: { select: { name: true, email: true, phone: true } } } },
-      documents: { orderBy: { createdAt: "desc" }, take: 3 }
-    }
-  });
+  // SalesThread + Message are business-scoped; read both under the owning
+  // business so RLS resolves them under the app role.
+  const { thread, messages } = await withBusinessScope(input.businessId, async (tx) => {
+    const thread = await tx.salesThread.findFirstOrThrow({
+      where: { id: input.threadId, businessId: input.businessId },
+      include: {
+        business: { select: { name: true, category: true, city: true } },
+        stage: true,
+        membership: { include: { tier: true, user: { select: { name: true, email: true, phone: true } } } },
+        documents: { orderBy: { createdAt: "desc" }, take: 3 }
+      }
+    });
 
-  const messages = await prisma.message.findMany({
-    where: {
-      businessId: input.businessId,
-      OR: [
-        { salesThreadId: input.threadId },
-        { contactPhone: thread.contactPhone }
-      ]
-    },
-    orderBy: { createdAt: "desc" },
-    take: MAX_HISTORY,
-    select: { direction: true, channel: true, body: true, createdAt: true }
+    const messages = await tx.message.findMany({
+      where: {
+        businessId: input.businessId,
+        OR: [
+          { salesThreadId: input.threadId },
+          { contactPhone: thread.contactPhone }
+        ]
+      },
+      orderBy: { createdAt: "desc" },
+      take: MAX_HISTORY,
+      select: { direction: true, channel: true, body: true, createdAt: true }
+    });
+
+    return { thread, messages };
   });
 
   const orderedHistory = messages.reverse().map((message) => {

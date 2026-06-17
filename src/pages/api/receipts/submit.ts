@@ -4,7 +4,7 @@ import { verifyCsrfNextApiRequest } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { authenticateRequestUser } from "@/lib/request-auth";
 import { assertOwnedStorageUrl } from "@/lib/security";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { submitOcrReceipt } from "@/server/services/ocr-receipt.service";
 
 export default async function handler(
@@ -59,10 +59,12 @@ export default async function handler(
   // Verify the caller is an active member of this business before submitting
   // a receipt on its behalf. Without this check any authenticated user could
   // spam the review queue of any business.
-  const membership = await prisma.membership.findFirst({
-    where: { businessId, userId: session.userId, isActive: true },
-    select: { id: true }
-  });
+  const membership = await withBusinessScope(businessId, (tx) =>
+    tx.membership.findFirst({
+      where: { businessId, userId: session.userId, isActive: true },
+      select: { id: true }
+    })
+  );
   if (!membership) {
     return res.status(403).json({ error: "You are not a member of this business." });
   }

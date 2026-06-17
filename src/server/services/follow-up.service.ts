@@ -3,7 +3,7 @@ import { FollowUpStatus, MessageChannel, SalesThreadStatus, StaffRole } from "@p
 import { generateFollowUpDraft } from "@/lib/ai/follow-up-drafter";
 import { enqueueFollowUpJob, removeFollowUpJob } from "@/lib/follow-up-queue";
 import { logger } from "@/lib/logger";
-import { prisma, withBusinessScope } from "@/lib/prisma";
+import { withBusinessScope, withSystemScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { requirePaidBusinessPlan, isPaidBusinessPlan, getEffectivePlan } from "@/server/services/billing.service";
 import { sendOnChannel } from "@/server/services/channel-dispatch.service";
@@ -120,20 +120,22 @@ export async function cancelActiveFollowUps(input: {
 }
 
 export async function draftFollowUp(taskId: string) {
-  // Initial lookup without scope — needed because we don't know businessId yet.
-  // This is a worker-context call where RLS is handled by the migrator/admin role
-  // or the task row is fetched using a known taskId from the queue.
-  const task = await prisma.followUpTask.findUnique({
-    where: { id: taskId },
-    include: {
-      salesThread: {
-        include: {
-          stage: true,
-          documents: { orderBy: { createdAt: "desc" }, take: 1 }
+  // Worker call by queue-supplied taskId: we don't know the businessId yet, so
+  // resolve the task (and its scoped relations) under system scope, then re-enter
+  // withBusinessScope once task.businessId is known.
+  const task = await withSystemScope((tx) =>
+    tx.followUpTask.findUnique({
+      where: { id: taskId },
+      include: {
+        salesThread: {
+          include: {
+            stage: true,
+            documents: { orderBy: { createdAt: "desc" }, take: 1 }
+          }
         }
       }
-    }
-  });
+    })
+  );
 
   if (!task || (task.status !== FollowUpStatus.SCHEDULED && task.status !== FollowUpStatus.DRAFTING)) {
     return { skipped: true, reason: "not_scheduled" };

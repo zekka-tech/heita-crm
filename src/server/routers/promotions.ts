@@ -1,6 +1,7 @@
 import { PromotionType } from "@prisma/client";
 import { z } from "zod";
 
+import { withSystemScope } from "@/lib/prisma";
 import { protectedProcedure, router } from "@/server/trpc";
 import {
   broadcastPromotion,
@@ -40,22 +41,26 @@ const updateInputSchema = z.object({
 
 export const promotionsRouter = router({
   active: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.promotion.findMany({
-      where: {
-        business: {
-          staffMembers: {
-            some: {
-              userId: ctx.userId
+    // Spans every business the caller staffs (legitimate cross-tenant read):
+    // run under system scope with the session-bound staff-membership filter.
+    return withSystemScope((tx) =>
+      tx.promotion.findMany({
+        where: {
+          business: {
+            staffMembers: {
+              some: {
+                userId: ctx.userId
+              }
             }
-          }
+          },
+          isActive: true
         },
-        isActive: true
-      },
-      orderBy: {
-        startsAt: "desc"
-      },
-      take: 20
-    });
+        orderBy: {
+          startsAt: "desc"
+        },
+        take: 20
+      })
+    );
   }),
 
   list: protectedProcedure

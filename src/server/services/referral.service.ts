@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { Prisma, TransactionType } from "@prisma/client";
 
-import { prisma, type PrismaTransactionClient } from "@/lib/prisma";
+import { prisma, withBusinessScope, type PrismaTransactionClient } from "@/lib/prisma";
 import { withSpan } from "@/lib/tracing";
 
 const DEFAULT_REFERRAL_BONUS_POINTS = 50;
@@ -24,15 +24,19 @@ export async function getOrCreateReferralCode(input: {
   businessId: string;
   ownerUserId: string;
 }) {
+  // ReferralCode is business-scoped: read/write under the owning business so
+  // RLS resolves the row under the app role.
   // Check first to avoid burning a code on every call for users who already have one.
-  const existing = await prisma.referralCode.findUnique({
-    where: {
-      businessId_ownerUserId: {
-        businessId: input.businessId,
-        ownerUserId: input.ownerUserId
+  const existing = await withBusinessScope(input.businessId, (tx) =>
+    tx.referralCode.findUnique({
+      where: {
+        businessId_ownerUserId: {
+          businessId: input.businessId,
+          ownerUserId: input.ownerUserId
+        }
       }
-    }
-  });
+    })
+  );
 
   if (existing) {
     return existing;
@@ -43,20 +47,22 @@ export async function getOrCreateReferralCode(input: {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const code = generateReferralCodeValue();
     try {
-      return await prisma.referralCode.upsert({
-        where: {
-          businessId_ownerUserId: {
+      return await withBusinessScope(input.businessId, (tx) =>
+        tx.referralCode.upsert({
+          where: {
+            businessId_ownerUserId: {
+              businessId: input.businessId,
+              ownerUserId: input.ownerUserId
+            }
+          },
+          update: {},
+          create: {
             businessId: input.businessId,
-            ownerUserId: input.ownerUserId
+            ownerUserId: input.ownerUserId,
+            code
           }
-        },
-        update: {},
-        create: {
-          businessId: input.businessId,
-          ownerUserId: input.ownerUserId,
-          code
-        }
-      });
+        })
+      );
     } catch (error) {
       // P2002 on the `code` unique index — try a different code value
       if (

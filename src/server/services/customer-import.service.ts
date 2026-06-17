@@ -2,7 +2,7 @@ import { parse } from "csv-parse/sync";
 import { ImportStatus, JoinChannel, Prisma, TransactionType } from "@prisma/client";
 
 import { normalizeZaPhone } from "@/lib/phone";
-import { prisma, withBusinessScope } from "@/lib/prisma";
+import { withBusinessScope, withSystemScope } from "@/lib/prisma";
 import { recordStaffAuditLog } from "@/server/services/staff-audit.service";
 
 type ImportRow = {
@@ -87,12 +87,14 @@ export async function createCustomerImportRun(input: {
 }
 
 export async function processCustomerImportRun(importRunId: string) {
-  // Look up the import run outside the RLS scope to obtain the businessId
-  // for tenant scoping. The caller is already authenticated via middleware;
-  // this read is a prerequisite for RLS enforcement, not a data-access bypass.
-  const importRunMeta = await prisma.customerImportRun.findUniqueOrThrow({
-    where: { id: importRunId }
-  });
+  // Resolve the import run by id under system scope to obtain its businessId
+  // before re-entering withBusinessScope. The caller is already authenticated
+  // via middleware; this is a controlled cross-tenant resolve, not a bypass.
+  const importRunMeta = await withSystemScope((tx) =>
+    tx.customerImportRun.findUniqueOrThrow({
+      where: { id: importRunId }
+    })
+  );
 
   return withBusinessScope(importRunMeta.businessId, async (tx) => {
     const importRun = await tx.customerImportRun.update({
