@@ -203,10 +203,12 @@ npm run build
 APP_DATABASE_URL="postgresql://heita_app:heita_app@localhost:5432/heita" npm run test:e2e:app-role
 ```
 
-**Rollout status:** the job is currently `continue-on-error: true` (non-blocking)
-per shadow → enforce (§3). Once it has been green for a stable window, drop
-`continue-on-error` so it gates merges — that closes production-readiness
-blocker #1.
+**Rollout status:** ENFORCED — the job is a required gate (no
+`continue-on-error`), so a missed tenant-scope wrapper fails the build and RLS
+enforcement cannot regress. This closes production-readiness blocker #1. If the
+job ever needs to be temporarily relaxed (e.g. a confirmed infra flake, not a
+real RLS miss), re-add `continue-on-error: true` with a tracking issue rather
+than disabling the job.
 
 ## 8. Key files
 

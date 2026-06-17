@@ -250,15 +250,13 @@ jobs:
   # `heita_app` role with FORCE ROW LEVEL SECURITY active — production-readiness
   # blocker #1 (multi-tenant isolation). Migrations run as the owner role;
   # the app boots under `heita_app` via APP_DATABASE_URL (see playwright.config
-  # webServer.env). Currently NON-BLOCKING (continue-on-error) per the
-  # shadow → enforce rollout in docs/runbooks/rls-enforcement.md: once it has
-  # been green for a stable window, drop `continue-on-error` to make it a gate.
+  # webServer.env). BLOCKING: a missed tenant-scope wrapper fails the build, so
+  # RLS enforcement cannot regress. See docs/runbooks/rls-enforcement.md §7a.
   e2e-app-role:
     name: E2E under heita_app role (RLS enforcement proof)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: quality
-    continue-on-error: true
     services:
       postgres:
         image: pgvector/pgvector:pg16
