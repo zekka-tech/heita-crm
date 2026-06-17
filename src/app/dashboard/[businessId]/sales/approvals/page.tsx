@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { requirePaidBusinessPlan } from "@/server/services/billing.service";
 
@@ -31,18 +31,26 @@ export default async function SalesApprovalsPage({ params }: PageProps) {
     redirect(("/dashboard/" + businessId + "/settings/billing?sales=upgrade") as never);
   }
 
-  const business = await prisma.business.findFirst({
-    where: { id: businessId, staffMembers: { some: { userId: session.user.id } } },
-    select: { id: true, name: true }
-  });
+  const userId = session.user.id;
+  // Scoped reads: the staffMembers authorization subquery AND followUpTask (a
+  // FORCE-RLS model) both require the tenant scope under the app role, else they
+  // return empty. Staff access already enforced by the layout.
+  const business = await withBusinessScope(businessId, (tx) =>
+    tx.business.findFirst({
+      where: { id: businessId, staffMembers: { some: { userId } } },
+      select: { id: true, name: true }
+    })
+  );
   if (!business) notFound();
 
-  const tasks = await prisma.followUpTask.findMany({
-    where: { businessId, status: FollowUpStatus.AWAITING_APPROVAL },
-    include: { salesThread: { include: { stage: true, membership: { include: { user: true } } } } },
-    orderBy: { updatedAt: "asc" },
-    take: 100
-  });
+  const tasks = await withBusinessScope(businessId, (tx) =>
+    tx.followUpTask.findMany({
+      where: { businessId, status: FollowUpStatus.AWAITING_APPROVAL },
+      include: { salesThread: { include: { stage: true, membership: { include: { user: true } } } } },
+      orderBy: { updatedAt: "asc" },
+      take: 100
+    })
+  );
 
   return (
     <main className="px-4 pb-24 pt-6 sm:px-8">

@@ -31,7 +31,7 @@ export default async function CustomersPage({ params, searchParams }: Props) {
     return <main className="px-4 pb-24 pt-6 sm:px-8" />;
   }
 
-  const [{ auth }, { prisma, withBusinessScope }] = await Promise.all([
+  const [{ auth }, { withBusinessScope }] = await Promise.all([
     import("@/lib/auth"),
     import("@/lib/prisma")
   ]);
@@ -41,14 +41,19 @@ export default async function CustomersPage({ params, searchParams }: Props) {
     redirect(`/sign-in?callbackUrl=/dashboard/${businessId}/customers`);
   }
 
-  const business = await prisma.business.findFirst({
-    where: {
-      id: businessId,
-      deletedAt: null,
-      staffMembers: { some: { userId: session.user.id } }
-    },
-    select: { id: true, name: true }
-  });
+  const userId = session.user.id;
+  // Scoped read: the staffMembers authorization subquery is RLS-gated under the
+  // app role (else null → 404). Staff access already enforced by the layout.
+  const business = await withBusinessScope(businessId, (tx) =>
+    tx.business.findFirst({
+      where: {
+        id: businessId,
+        deletedAt: null,
+        staffMembers: { some: { userId } }
+      },
+      select: { id: true, name: true }
+    })
+  );
 
   if (!business) notFound();
 

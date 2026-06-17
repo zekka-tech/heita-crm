@@ -49,7 +49,6 @@ export default async function DashboardMessagesPage({
     { auth },
     { requireRole },
     {
-      prisma,
       withBusinessScope
     },
     {
@@ -76,17 +75,22 @@ export default async function DashboardMessagesPage({
     allowedRoles: [StaffRole.STAFF]
   });
 
-  const business = await prisma.business.findFirst({
-    where: {
-      id: businessId,
-      deletedAt: null,
-      staffMembers: {
-        some: {
-          userId: session.user.id
+  const userId = session.user.id;
+  // Scoped read: the staffMembers authorization subquery is RLS-gated under the
+  // app role (else null → 404). Staff access already enforced by layout + requireRole.
+  const business = await withBusinessScope(businessId, (tx) =>
+    tx.business.findFirst({
+      where: {
+        id: businessId,
+        deletedAt: null,
+        staffMembers: {
+          some: {
+            userId
+          }
         }
       }
-    }
-  });
+    })
+  );
 
   if (!business) {
     notFound();

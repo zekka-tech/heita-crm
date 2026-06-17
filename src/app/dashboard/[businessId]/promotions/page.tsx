@@ -17,7 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 
 export const dynamic = "force-dynamic";
@@ -64,17 +64,23 @@ export default async function PromotionsDashboardPage({
     allowedRoles: [StaffRole.MANAGER]
   });
 
-  const business = await prisma.business.findFirst({
-    where: {
-      id: businessId,
-      deletedAt: null,
-      staffMembers: { some: { userId: session.user.id } }
-    },
-    include: {
-      promotions: { orderBy: { startsAt: "desc" } },
-      loyaltyTiers: { orderBy: { minPoints: "asc" } }
-    }
-  });
+  const userId = session.user.id;
+  // Read under tenant scope so the FORCE-RLS app role can resolve the
+  // staffMembers authorization subquery + nested relations (else 404). Staff
+  // access is already enforced by the dashboard layout + requireRole above.
+  const business = await withBusinessScope(businessId, (tx) =>
+    tx.business.findFirst({
+      where: {
+        id: businessId,
+        deletedAt: null,
+        staffMembers: { some: { userId } }
+      },
+      include: {
+        promotions: { orderBy: { startsAt: "desc" } },
+        loyaltyTiers: { orderBy: { minPoints: "asc" } }
+      }
+    })
+  );
 
   if (!business) notFound();
 

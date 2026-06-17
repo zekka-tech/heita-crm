@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { auth } from "@/lib/auth";
-import { prisma, withBusinessScope } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { requirePaidBusinessPlan } from "@/server/services/billing.service";
 import { listPipelineStages, listThreads } from "@/server/services/sales-thread.service";
@@ -41,10 +41,15 @@ export default async function SalesPage({ params, searchParams }: SalesPageProps
   } catch {
     redirect(("/dashboard/" + businessId + "/settings/billing?sales=upgrade") as never);
   }
-  const business = await prisma.business.findFirst({
-    where: { id: businessId, staffMembers: { some: { userId: session.user.id } } },
-    select: { id: true, name: true }
-  });
+  const userId = session.user.id;
+  // Scoped read: staffMembers authorization subquery is RLS-gated under the app
+  // role (else null → 404). Staff access already enforced by the layout.
+  const business = await withBusinessScope(businessId, (tx) =>
+    tx.business.findFirst({
+      where: { id: businessId, staffMembers: { some: { userId } } },
+      select: { id: true, name: true }
+    })
+  );
   if (!business) notFound();
 
   const [stages, threads, memberships] = await Promise.all([

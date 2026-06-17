@@ -14,7 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/badge";
 import { Input, Textarea } from "@/components/ui/input";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withBusinessScope } from "@/lib/prisma";
 import { requireRole } from "@/lib/staff";
 import { listEventsForStaff } from "@/server/services/events.service";
 
@@ -48,14 +48,19 @@ export default async function EventsDashboardPage({
     allowedRoles: [StaffRole.MANAGER]
   });
 
-  const business = await prisma.business.findFirst({
-    where: {
-      id: businessId,
-      deletedAt: null,
-      staffMembers: { some: { userId: session.user.id } }
-    },
-    select: { id: true, name: true }
-  });
+  const userId = session.user.id;
+  // Scoped read: the staffMembers authorization subquery is RLS-gated under the
+  // app role (else null → 404). Staff access already enforced by layout + requireRole.
+  const business = await withBusinessScope(businessId, (tx) =>
+    tx.business.findFirst({
+      where: {
+        id: businessId,
+        deletedAt: null,
+        staffMembers: { some: { userId } }
+      },
+      select: { id: true, name: true }
+    })
+  );
 
   if (!business) notFound();
 

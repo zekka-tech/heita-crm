@@ -16,7 +16,7 @@ import { Chip } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/shared/breadcrumb";
 import { withBusinessProfileCache } from "@/lib/data-cache";
 import { describeTierPerks } from "@/lib/loyalty";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusinessScope } from "@/lib/prisma";
 
 import { MembershipCard, MembershipCta } from "./_components/membership-cta";
 
@@ -76,25 +76,34 @@ export default async function BusinessLandingPage({
 }: BusinessLandingPageProps) {
   const t = await getTranslations("businessProfile");
   const { slug } = await params;
-  const business = await withBusinessProfileCache(slug, () =>
-    prisma.business.findFirst({
-      where: { slug, deletedAt: null },
-      include: {
-        rewards: { where: { isActive: true }, orderBy: { pointsCost: "asc" }, take: 3 },
-        promotions: {
-          where: { isActive: true, endsAt: { gt: new Date() } },
-          orderBy: { endsAt: "asc" },
-          take: 3
-        },
-        events: {
-          where: { startsAt: { gte: new Date() } },
-          orderBy: { startsAt: "asc" },
-          take: 3
-        },
-        loyaltyTiers: { orderBy: { minPoints: "asc" } }
-      }
-    }).catch(() => null)
-  );
+  const business = await withBusinessProfileCache(slug, async () => {
+    // Resolve the business by its public slug (Business public-read policy), then
+    // load its FORCE-RLS children under the tenant scope — otherwise the nested
+    // rewards/promotions/events/tiers come back empty under the app role.
+    const base = await prisma.business
+      .findFirst({ where: { slug, deletedAt: null }, select: { id: true } })
+      .catch(() => null);
+    if (!base) return null;
+    return withBusinessScope(base.id, (tx) =>
+      tx.business.findFirst({
+        where: { id: base.id },
+        include: {
+          rewards: { where: { isActive: true }, orderBy: { pointsCost: "asc" }, take: 3 },
+          promotions: {
+            where: { isActive: true, endsAt: { gt: new Date() } },
+            orderBy: { endsAt: "asc" },
+            take: 3
+          },
+          events: {
+            where: { startsAt: { gte: new Date() } },
+            orderBy: { startsAt: "asc" },
+            take: 3
+          },
+          loyaltyTiers: { orderBy: { minPoints: "asc" } }
+        }
+      })
+    ).catch(() => null);
+  });
 
   if (!business) {
     notFound();
