@@ -116,6 +116,14 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: "Content is required." }, { status: 400 });
   }
 
+  const MAX_CONTENT_CHARS = 4_000;
+  if (content.trim().length > MAX_CONTENT_CHARS) {
+    return NextResponse.json(
+      { error: `Message too long (max ${MAX_CONTENT_CHARS} characters).` },
+      { status: 400 }
+    );
+  }
+
   if (!businessId) {
     return NextResponse.json({ error: "businessId is required." }, { status: 400 });
   }
@@ -150,6 +158,20 @@ export async function POST(request: NextRequest): Promise<Response> {
         { error: "Monthly in-app message limit reached. Please upgrade your plan." },
         { status: 429 }
       );
+    }
+  }
+
+  // When an existing conversation is supplied, verify the caller is a participant
+  // (the GET handler enforces this; the POST must too to prevent IDOR).
+  if (conversationId) {
+    const participant = await withBusinessScope(businessId, (tx) =>
+      tx.conversationParticipant.findFirst({
+        where: { conversationId, userId },
+        select: { id: true }
+      })
+    );
+    if (!participant) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
 

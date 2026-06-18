@@ -6,6 +6,7 @@ import { csrfFailureResponse } from "@/lib/csrf";
 import { runIdempotentOperation } from "@/lib/idempotency";
 import { logger } from "@/lib/logger";
 import { withBusinessScope } from "@/lib/prisma";
+import { assertOwnedStorageUrl } from "@/lib/security";
 import { requireRole } from "@/lib/staff";
 import { earnPoints } from "@/server/services/loyalty.service";
 
@@ -93,6 +94,12 @@ async function processScanReceipt(
   }
   if (!imageUrl) {
     return { id: item.id, ok: false, error: "Invalid scan_receipt payload: missing imageUrl." };
+  }
+
+  try {
+    assertOwnedStorageUrl(imageUrl);
+  } catch {
+    return { id: item.id, ok: false, error: "Invalid scan_receipt payload: imageUrl must be a storage URL." };
   }
 
   try {
