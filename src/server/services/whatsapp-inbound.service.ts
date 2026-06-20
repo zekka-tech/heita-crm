@@ -243,18 +243,23 @@ async function persistInboundMediaAttachment(input: {
       sourceUrl = stored.url ?? null;
     }
 
-    await prisma.messageAttachment.create({
-      data: {
-        messageId: input.messageId,
-        mediaType: media.mediaType,
-        mimeType,
-        fileName: media.fileName,
-        byteSize,
-        externalMediaId: media.mediaId,
-        storageKey,
-        sourceUrl
-      }
-    });
+    // MessageAttachment RLS derives tenant scope from its parent Message, so
+    // the write must run inside the business scope (a raw prisma write would be
+    // rejected by the row-level security policy).
+    await withBusinessScope(input.businessId, (tx) =>
+      tx.messageAttachment.create({
+        data: {
+          messageId: input.messageId,
+          mediaType: media.mediaType,
+          mimeType,
+          fileName: media.fileName,
+          byteSize,
+          externalMediaId: media.mediaId,
+          storageKey,
+          sourceUrl
+        }
+      })
+    );
   } catch (error) {
     logger.error(
       {

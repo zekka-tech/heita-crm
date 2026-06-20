@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { ConsentChannel, ConsentType } from "@prisma/client";
 
 import { auth } from "@/lib/auth";
+import { csrfFailureResponse } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 
@@ -38,6 +39,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const session = await auth();
   const userId = session?.user?.id;
+
+  // Only enforce CSRF for authenticated requests that will write to the DB.
+  if (userId) {
+    const csrfFailure = await csrfFailureResponse(request);
+    if (csrfFailure) return csrfFailure as NextResponse;
+  }
 
   // If there is no authenticated session we skip the DB write — the UI still
   // persists the choice to localStorage on the client.

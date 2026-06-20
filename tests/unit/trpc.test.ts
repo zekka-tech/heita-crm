@@ -1,9 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
+
 vi.mock("@/lib/auth", () => ({
   auth: vi.fn()
 }));
 
+// notificationsRouter uses withUserScope; we forward the call to fn so the
+// test can control what the scoped transaction client returns.
+vi.mock("@/lib/prisma", () => ({
+  prisma: {},
+  withUserScope: vi.fn(async (_userId: string, fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      notification: {
+        findMany: vi.fn().mockResolvedValue([]),
+        count: vi.fn().mockResolvedValue(0)
+      }
+    })
+  )
+}));
+
 const { appRouter } = await import("@/server/routers");
+const { withUserScope } = await import("@/lib/prisma");
 
 describe("tRPC router", () => {
   it("rejects protected notification queries without a session", async () => {
@@ -29,16 +45,16 @@ describe("tRPC router", () => {
       }
     ]);
 
+    vi.mocked(withUserScope).mockImplementationOnce((_userId, fn) =>
+      (fn as (tx: unknown) => Promise<unknown>)({
+        notification: { findMany, count: vi.fn().mockResolvedValue(1) }
+      })
+    );
+
     const caller = appRouter.createCaller({
-      prisma: {
-        notification: {
-          findMany
-        }
-      } as never,
+      prisma: {} as never,
       session: {
-        user: {
-          id: "user_123"
-        }
+        user: { id: "user_123" }
       } as never,
       requestId: "test-request"
     });
@@ -46,12 +62,8 @@ describe("tRPC router", () => {
     const result = await caller.notifications.recent({ limit: 10 });
 
     expect(findMany).toHaveBeenCalledWith({
-      where: {
-        userId: "user_123"
-      },
-      orderBy: {
-        createdAt: "desc"
-      },
+      where: { userId: "user_123" },
+      orderBy: { createdAt: "desc" },
       take: 10
     });
     expect(result).toHaveLength(1);

@@ -177,7 +177,7 @@ const providers: NonNullable<NextAuthConfig["providers"]> = [
   })
 ];
 
-if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEV_AUTH_BYPASS === "true") {
   providers.push(
     Credentials({
       id: "dev-bypass",

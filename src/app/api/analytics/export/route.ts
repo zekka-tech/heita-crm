@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { withSystemScope } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { constantTimeEqual } from "@/lib/security";
 import { generateAnonymisedBasketReport } from "@/server/services/analytics-export.service";
 
 const BASKET_REPORT_SECRET = process.env.BASKET_REPORT_SECRET;
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const isAuthenticated = (() => {
     if (BASKET_REPORT_SECRET) {
       const header = request.headers.get("authorization");
-      if (header?.startsWith("Bearer ") && header.slice(7) === BASKET_REPORT_SECRET) {
+      if (header?.startsWith("Bearer ") && constantTimeEqual(header.slice(7), BASKET_REPORT_SECRET)) {
         return true;
       }
     }

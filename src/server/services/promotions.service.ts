@@ -454,14 +454,13 @@ export async function broadcastPromotion(
     const batchFailed = results.filter((r) => r.status === "rejected").length;
     totalSent += batch.length - batchFailed;
     totalFailed += batchFailed;
-    totalWhatsappFailed += whatsappResults.filter(
-      (r) => r.status === "rejected"
-    ).length;
+    const batchWhatsappFailed = whatsappResults.filter((r) => r.status === "rejected").length;
+    totalWhatsappFailed += batchWhatsappFailed;
     cursor = batch[batch.length - 1]?.id;
   } while (true);
 
   const failedCount = totalFailed;
-  const memberships = { length: totalSent + totalFailed };
+  const recipientCount = totalSent + totalFailed;
 
   if (failedCount > 0 || totalWhatsappFailed > 0) {
     logger.warn(
@@ -470,7 +469,7 @@ export async function broadcastPromotion(
         businessId: promotion.businessId,
         failedCount,
         whatsappFailedCount: totalWhatsappFailed,
-        total: memberships.length
+        total: recipientCount
       },
       "promotion.broadcast.partial_failure"
     );
@@ -490,9 +489,10 @@ export async function broadcastPromotion(
         targetType: "Promotion",
         targetId: promotion.id,
         metadata: {
-          recipientCount: memberships.length,
+          recipientCount,
           tierIds: promotion.targetTierIds,
-          failed: failedCount
+          failed: failedCount,
+          whatsappFailed: totalWhatsappFailed
         }
       },
       tx
@@ -501,7 +501,7 @@ export async function broadcastPromotion(
 
   return {
     promotionId: promotion.id,
-    recipientCount: memberships.length,
+    recipientCount,
     failedCount,
     broadcastAt
   };

@@ -52,7 +52,7 @@ function isDatabaseUnavailableError(error: unknown): boolean {
 }
 
 export async function devBypassSignInAction(formData: FormData) {
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "production" || process.env.ENABLE_DEV_AUTH_BYPASS !== "true") {
     redirect("/sign-in");
   }
 

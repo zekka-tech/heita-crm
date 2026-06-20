@@ -14,7 +14,8 @@ const mocks = vi.hoisted(() => ({
       create: vi.fn()
     },
     notification: {
-      create: vi.fn()
+      create: vi.fn(),
+      createMany: vi.fn().mockResolvedValue({ count: 1 })
     }
   },
   captureEvent: vi.fn(),

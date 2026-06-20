@@ -8,6 +8,10 @@ vi.mock("@/server/services/billing.service", () => ({
   applyPaymentEvent: vi.fn().mockResolvedValue(undefined)
 }));
 
+// Hoist the route import so the cold module-load doesn't eat into the first
+// test's 5-second timeout when running inside the full suite.
+const { POST } = await import("@/app/api/webhooks/yoco/route");
+
 const SECRET = "test-yoco-webhook-secret-32char";
 
 function makeSignature(body: string, secret = SECRET): string {
@@ -43,7 +47,7 @@ describe("Yoco webhook route", () => {
 
   it("rejects a request without timestamp header", async () => {
     const body = JSON.stringify({ type: "payment.succeeded", payload: {} });
-    const { POST } = await import("@/app/api/webhooks/yoco/route");
+
     const req = makeRequest(body, { timestamp: null });
     const res = await POST(req as never);
     expect(res.status).toBe(401);
@@ -51,7 +55,7 @@ describe("Yoco webhook route", () => {
 
   it("accepts a valid request with timestamp within 5 minutes", async () => {
     const body = JSON.stringify({ type: "payment.succeeded", payload: {} });
-    const { POST } = await import("@/app/api/webhooks/yoco/route");
+
     const req = makeRequest(body, { timestamp: String(nowSeconds() - 60) });
     const res = await POST(req as never);
     expect(res.status).toBe(200);
@@ -59,7 +63,7 @@ describe("Yoco webhook route", () => {
 
   it("rejects a replayed request with timestamp older than 5 minutes", async () => {
     const body = JSON.stringify({ type: "payment.succeeded", payload: {} });
-    const { POST } = await import("@/app/api/webhooks/yoco/route");
+
     const req = makeRequest(body, { timestamp: String(nowSeconds() - 400) });
     const res = await POST(req as never);
     expect(res.status).toBe(401);
@@ -69,7 +73,7 @@ describe("Yoco webhook route", () => {
 
   it("rejects a request with an invalid signature", async () => {
     const body = JSON.stringify({ type: "payment.succeeded", payload: {} });
-    const { POST } = await import("@/app/api/webhooks/yoco/route");
+
     const req = makeRequest(body, { signature: "badsignature" });
     const res = await POST(req as never);
     expect(res.status).toBe(401);
@@ -77,7 +81,7 @@ describe("Yoco webhook route", () => {
 
   it("rejects a request with a missing signature", async () => {
     const body = JSON.stringify({ type: "payment.succeeded", payload: {} });
-    const { POST } = await import("@/app/api/webhooks/yoco/route");
+
     const headers = { "Content-Type": "application/json" };
     const req = new Request("http://localhost/api/webhooks/yoco", { method: "POST", headers, body });
     const res = await POST(req as never);
@@ -87,7 +91,7 @@ describe("Yoco webhook route", () => {
   it("returns 500 when YOCO_WEBHOOK_SECRET is not configured", async () => {
     process.env.YOCO_WEBHOOK_SECRET = "";
     const body = JSON.stringify({ type: "payment.succeeded", payload: {} });
-    const { POST } = await import("@/app/api/webhooks/yoco/route");
+
     const req = makeRequest(body);
     const res = await POST(req as never);
     expect(res.status).toBe(500);

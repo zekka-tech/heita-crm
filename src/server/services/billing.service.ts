@@ -352,7 +352,7 @@ function assertPaidEventAmount(event: NormalizedPaymentEvent) {
   // expected charge is the plan price net of credit applied at checkout.
   const appliedCredit = Math.max(0, event.appliedCreditZar ?? 0);
   const expected = getBusinessPlan(event.planId).monthlyPriceZar - appliedCredit;
-  if (Number(event.amountZar.toFixed(2)) !== expected) {
+  if (Math.round(event.amountZar * 100) !== Math.round(expected * 100)) {
     logger.warn(
       {
         businessId: event.businessId,
@@ -710,6 +710,15 @@ export async function billAiOverageCharges(businessId: string) {
     );
 
     if (amountZar <= 0) return null;
+
+    // Guard against duplicate invoices from back-to-back cron runs.
+    const existing = await tx.businessInvoice.findFirst({
+      where: { businessId, status: "PENDING", periodStart: monthStart },
+      select: { id: true }
+    });
+    if (existing) {
+      return { overageCount, amountZar, invoiceId: existing.id };
+    }
 
     // Create an invoice for overage charges.
     // provider defaults to YOCO per schema; planId uses effective plan

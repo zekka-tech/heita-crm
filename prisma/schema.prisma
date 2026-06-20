@@ -75,6 +75,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model VerificationToken {
@@ -722,6 +724,7 @@ model SalesThread {
   @@index([businessId, stageId])
   @@index([businessId, contactPhone])
   @@index([nextFollowUpAt])
+  @@index([businessId, status, nextFollowUpAt])
   @@index([membershipId])
   @@index([userId])
   @@index([createdByUserId])
@@ -1108,6 +1111,7 @@ model OcrReceipt {
 
   @@index([businessId, status, createdAt])
   @@index([userId])
+  @@index([membershipId])
 }
 
 enum OcrReceiptStatus {

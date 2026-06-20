@@ -35,15 +35,20 @@ export async function createNotificationInTx(
     metadata?: Record<string, unknown>;
   }
 ) {
-  return tx.notification.create({
-    data: {
-      userId: input.userId,
-      title: input.title,
-      body: input.body,
-      type: input.type,
-      actionUrl: input.actionUrl ?? null,
-      metadata: input.metadata as Prisma.InputJsonValue | undefined
-    }
+  // createMany (no RETURNING) so the insert is not subject to a SELECT policy.
+  // Notification has no business-scope SELECT policy by design, so a plain
+  // create() under withBusinessScope would fail when hydrating the result row.
+  return tx.notification.createMany({
+    data: [
+      {
+        userId: input.userId,
+        title: input.title,
+        body: input.body,
+        type: input.type,
+        actionUrl: input.actionUrl ?? null,
+        metadata: input.metadata as Prisma.InputJsonValue | undefined
+      }
+    ]
   });
 }
 
@@ -117,6 +122,15 @@ export async function recalculateTier(
         membershipId: membership.id,
         tierId: nextTier.id
       }
+    });
+  } else if (previousTierId !== null) {
+    await createNotificationInTx(tx, {
+      userId: membership.userId,
+      title: "Membership tier removed",
+      body: `Your ${membership.business.name} loyalty tier has been removed.`,
+      type: "TIER_DOWNGRADE",
+      actionUrl: `/b/${membership.business.slug}/rewards`,
+      metadata: { membershipId: membership.id }
     });
   }
 

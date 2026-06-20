@@ -144,9 +144,11 @@ export function ChatWindow({
 
   // SSE: handle message.new, typing, and message.status_update events.
   useEffect(() => {
-    const source = new EventSource("/api/connect/stream");
+    let source: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
 
-    source.addEventListener("message", (event) => {
+    const handleMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data) as {
           type: string;
@@ -202,22 +204,31 @@ export function ChatWindow({
       } catch {
         // Ignore malformed events.
       }
-    });
-
-    eventSourceRef.current = source;
-
-    source.onerror = () => {
-      source.close();
-      setTimeout(() => {
-        if (eventSourceRef.current === source) {
-          const newSource = new EventSource("/api/connect/stream");
-          eventSourceRef.current = newSource;
-        }
-      }, 5000);
     };
 
+    const connect = () => {
+      if (closed) return;
+      const next = new EventSource("/api/connect/stream");
+      next.addEventListener("message", handleMessage);
+      next.onerror = () => {
+        next.close();
+        if (eventSourceRef.current === next) eventSourceRef.current = null;
+        if (closed) return;
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connect();
+        }, 5000);
+      };
+      source = next;
+      eventSourceRef.current = next;
+    };
+
+    connect();
+
     return () => {
-      source.close();
+      closed = true;
+      if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+      source?.close();
       eventSourceRef.current = null;
     };
   }, [activeConversationId, userId]);

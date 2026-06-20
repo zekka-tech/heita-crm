@@ -72,7 +72,10 @@ const txClient = {
   },
   reward: { findFirstOrThrow: vi.fn(), update: vi.fn() },
   staffAuditLog: { create: vi.fn() },
-  notification: { create: vi.fn().mockResolvedValue({ id: "notif_1" }) },
+  notification: {
+    create: vi.fn().mockResolvedValue({ id: "notif_1" }),
+    createMany: vi.fn().mockResolvedValue({ count: 1 })
+  },
   pushSubscription: { findMany: vi.fn().mockResolvedValue([]) }
 };
 

@@ -256,18 +256,16 @@ async function _redeemPoints(input: RedeemPointsInput) {
               rewardTitle: reward.title
             };
 
-            if (reward.stock !== null && reward.stock <= 0) {
-              throw new Error("That reward is out of stock.");
-            }
-
-            await tx.reward.update({
-              where: {
-                id: reward.id
-              },
-              data: {
-                stock: reward.stock === null ? null : { decrement: 1 }
+            if (reward.stock !== null) {
+              // Atomic conditional decrement — prevents oversell under concurrent redemptions.
+              const updated = await tx.reward.updateMany({
+                where: { id: reward.id, stock: { gt: 0 } },
+                data: { stock: { decrement: 1 } }
+              });
+              if (updated.count === 0) {
+                throw new Error("That reward is out of stock.");
               }
-            });
+            }
           } else {
             pointsToRedeem = input.points;
           }

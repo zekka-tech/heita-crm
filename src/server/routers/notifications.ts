@@ -1,12 +1,15 @@
 import { z } from "zod";
 
+import { withUserScope } from "@/lib/prisma";
 import { protectedProcedure, router } from "@/server/trpc";
 
 export const notificationsRouter = router({
   unreadCount: protectedProcedure.query(async ({ ctx }) => {
-    const count = await ctx.prisma.notification.count({
-      where: { userId: ctx.userId, readAt: null }
-    });
+    const count = await withUserScope(ctx.userId, (tx) =>
+      tx.notification.count({
+        where: { userId: ctx.userId, readAt: null }
+      })
+    );
     return { count };
   }),
 
@@ -19,14 +22,12 @@ export const notificationsRouter = router({
         .optional()
     )
     .query(async ({ ctx, input }) => {
-      return ctx.prisma.notification.findMany({
-        where: {
-          userId: ctx.userId
-        },
-        orderBy: {
-          createdAt: "desc"
-        },
-        take: input?.limit ?? 50
-      });
+      return withUserScope(ctx.userId, (tx) =>
+        tx.notification.findMany({
+          where: { userId: ctx.userId },
+          orderBy: { createdAt: "desc" },
+          take: input?.limit ?? 50
+        })
+      );
     })
 });

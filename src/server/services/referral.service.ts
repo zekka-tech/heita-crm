@@ -197,19 +197,23 @@ async function _applyReferralRewardIfEligible(
     }
   });
 
-  await tx.notification.create({
-    data: {
-      userId: membership.referredByCode.ownerUserId,
-      title: `Referral bonus from ${membership.business.name}`,
-      body: `You earned ${points} points after your referral made their first purchase.`,
-      type: "REFERRAL_BONUS",
-      actionUrl: `/b/${membership.business.slug}/rewards`,
-      metadata: {
-        referralCode: membership.referredByCode.code,
-        membershipId: referrerMembership.id,
-        transactionId: transaction.id
+  // createMany (no RETURNING) — Notification has no business-scope SELECT
+  // policy, so a create() under withBusinessScope would fail hydrating the row.
+  await tx.notification.createMany({
+    data: [
+      {
+        userId: membership.referredByCode.ownerUserId,
+        title: `Referral bonus from ${membership.business.name}`,
+        body: `You earned ${points} points after your referral made their first purchase.`,
+        type: "REFERRAL_BONUS",
+        actionUrl: `/b/${membership.business.slug}/rewards`,
+        metadata: {
+          referralCode: membership.referredByCode.code,
+          membershipId: referrerMembership.id,
+          transactionId: transaction.id
+        }
       }
-    }
+    ]
   });
 
   return {

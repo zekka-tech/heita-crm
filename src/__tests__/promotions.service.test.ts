@@ -306,7 +306,8 @@ describe("promotions service", () => {
           metadata: {
             recipientCount: 2,
             tierIds: [],
-            failed: 1
+            failed: 1,
+            whatsappFailed: 0
           }
         })
       });
