@@ -96,12 +96,17 @@ export async function exportAccountData(userId: string) {
     return { memberships, loyaltyTransactions, messages, aiChatSessions };
   });
 
+  // AiChatMessage has RLS (parent-session business scope) but no user-scope
+  // policy; the rows are already constrained to this user's own sessions, so we
+  // read them under system scope, which spans every business the user belongs to.
   const aiChatMessages = scoped.aiChatSessions.length > 0
-    ? await prisma.aiChatMessage.findMany({
-        where: { sessionId: { in: scoped.aiChatSessions.map((session) => session.id) } },
-        orderBy: { createdAt: "asc" },
-        take: EXPORT_ROW_CAP
-      }).then((rows) => {
+    ? await withSystemScope((tx) =>
+        tx.aiChatMessage.findMany({
+          where: { sessionId: { in: scoped.aiChatSessions.map((session) => session.id) } },
+          orderBy: { createdAt: "asc" },
+          take: EXPORT_ROW_CAP
+        })
+      ).then((rows) => {
         const sessionsById = new Map(scoped.aiChatSessions.map((session) => [session.id, session]));
         return rows.map((row) => ({
           ...row,
@@ -111,11 +116,14 @@ export async function exportAccountData(userId: string) {
     : [];
 
   const [notifications, consents] = await Promise.all([
-    prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: "asc" },
-      take: EXPORT_ROW_CAP
-    }),
+    // Notification RLS only exposes rows to the matching user scope.
+    withUserScope(userId, (tx) =>
+      tx.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: "asc" },
+        take: EXPORT_ROW_CAP
+      })
+    ),
     prisma.userConsent.findMany({
       where: { userId },
       include: { business: true },

@@ -13,7 +13,11 @@ const sendPushToUser = vi.fn();
 const sendEmail = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
-  prisma
+  prisma,
+  // notification.service uses withSystemScope to write Notification rows.
+  // Forward calls to fn with the same mock prisma so assertions on
+  // prisma.notification.create still work.
+  withSystemScope: vi.fn(async (fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma))
 }));
 
 vi.mock("@/lib/push", () => ({

@@ -18,7 +18,8 @@ const prisma = {
     create: vi.fn()
   },
   notification: {
-    create: vi.fn()
+    create: vi.fn(),
+    createMany: vi.fn().mockResolvedValue({ count: 1 })
   },
   staffMember: {
     findUnique: vi.fn().mockResolvedValue({ role: StaffRole.MANAGER })

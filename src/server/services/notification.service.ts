@@ -7,7 +7,7 @@ import {
   isWithinQuietHours,
   normalizeNotificationPreferences
 } from "@/lib/notification-preferences";
-import { prisma } from "@/lib/prisma";
+import { prisma, withSystemScope } from "@/lib/prisma";
 import { sendPushToUser } from "@/lib/push";
 
 type NotificationInput = {
@@ -43,16 +43,18 @@ export async function sendNotification(input: NotificationInput) {
   });
 
   const notification = businessPreference.channels.inApp
-    ? await prisma.notification.create({
-        data: {
-          userId: input.userId,
-          title: input.title,
-          body: input.body,
-          type: input.type,
-          actionUrl: input.actionUrl ?? null,
-          metadata: input.metadata as Prisma.InputJsonValue | undefined
-        }
-      })
+    ? await withSystemScope((tx) =>
+        tx.notification.create({
+          data: {
+            userId: input.userId,
+            title: input.title,
+            body: input.body,
+            type: input.type,
+            actionUrl: input.actionUrl ?? null,
+            metadata: input.metadata as Prisma.InputJsonValue | undefined
+          }
+        })
+      )
     : null;
 
   const deliveries: Promise<unknown>[] = [];

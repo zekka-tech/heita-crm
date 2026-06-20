@@ -3,9 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { enforceRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/security";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = getClientIp(request.headers);
   const rateLimit = await enforceRateLimit({
     identifier: `unsubscribe:${ip}`,
     windowSeconds: 60,
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = getClientIp(request.headers);
   const rateLimit = await enforceRateLimit({
     identifier: `unsubscribe:${ip}`,
     windowSeconds: 60,

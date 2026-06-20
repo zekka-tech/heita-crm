@@ -3,6 +3,14 @@
 import Script from "next/script";
 import { useEffect, useRef } from "react";
 
+// Stable ref wrapper so that an inline onToken prop doesn't re-mount the widget
+// on every parent render (the Cloudflare widget teardown resets the challenge).
+function useStableCallback<T extends (...args: never[]) => unknown>(fn: T): T {
+  const ref = useRef(fn);
+  ref.current = fn;
+  return useRef((...args: Parameters<T>) => ref.current(...args) as ReturnType<T>).current as T;
+}
+
 type TurnstileWidgetProps = {
   siteKey: string | null;
   action?: string;
@@ -32,6 +40,7 @@ declare global {
 export function TurnstileWidget({ siteKey, action, onToken, className }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const stableOnToken = useStableCallback(onToken);
 
   useEffect(() => {
     if (!siteKey || typeof window === "undefined") return;
@@ -43,9 +52,9 @@ export function TurnstileWidget({ siteKey, action, onToken, className }: Turnsti
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
         sitekey: siteKey,
         action,
-        callback: onToken,
-        "expired-callback": () => onToken(""),
-        "error-callback": () => onToken("")
+        callback: stableOnToken,
+        "expired-callback": () => stableOnToken(""),
+        "error-callback": () => stableOnToken("")
       });
       return true;
     };
@@ -64,7 +73,7 @@ export function TurnstileWidget({ siteKey, action, onToken, className }: Turnsti
         window.turnstile.remove(widgetIdRef.current);
       }
     };
-  }, [siteKey, action, onToken]);
+  }, [siteKey, action, stableOnToken]);
 
   if (!siteKey) return null;
 

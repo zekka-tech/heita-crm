@@ -20,10 +20,12 @@ const prisma = {
   reward: {
     findFirstOrThrow: vi.fn(),
     findUnique: vi.fn(),
-    update: vi.fn()
+    update: vi.fn(),
+    updateMany: vi.fn()
   },
   notification: {
-    create: vi.fn()
+    create: vi.fn(),
+    createMany: vi.fn().mockResolvedValue({ count: 1 })
   },
   staffAuditLog: {
     create: vi.fn()
@@ -227,7 +229,7 @@ describe("redeemPoints", () => {
 
     const reward = { id: "rwd_1", title: "Coffee", pointsCost: 200, isActive: true, stock: 5, businessId: "biz_1" };
     prisma.reward.findFirstOrThrow.mockResolvedValue(reward);
-    prisma.reward.update.mockResolvedValue({ ...reward, stock: 4 });
+    prisma.reward.updateMany.mockResolvedValue({ count: 1 });
     prisma.membership.update.mockResolvedValue({ ...membership, pointsBalance: 300 });
     prisma.loyaltyTransaction.create.mockResolvedValue({ id: "tx_r3" });
     prisma.notification.create.mockResolvedValue({});
@@ -240,8 +242,9 @@ describe("redeemPoints", () => {
       rewardId: "rwd_1"
     });
 
-    expect(prisma.reward.update).toHaveBeenCalledWith(
+    expect(prisma.reward.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ id: "rwd_1", stock: { gt: 0 } }),
         data: { stock: { decrement: 1 } }
       })
     );
@@ -259,6 +262,8 @@ describe("redeemPoints", () => {
       stock: 0,
       businessId: "biz_1"
     });
+    // updateMany returns count: 0 when no rows matched (stock was already 0).
+    prisma.reward.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(
       redeemPoints({
@@ -449,6 +454,8 @@ describe("redeemPoints — concurrent last-reward-stock scenarios", () => {
       isActive: true,
       stock: 0
     });
+    // stock > 0 condition not met; updateMany matches 0 rows.
+    prisma.reward.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(
       redeemPoints({
@@ -460,7 +467,6 @@ describe("redeemPoints — concurrent last-reward-stock scenarios", () => {
       })
     ).rejects.toThrow(/out of stock/i);
 
-    expect(prisma.reward.update).not.toHaveBeenCalled();
     expect(prisma.loyaltyTransaction.create).not.toHaveBeenCalled();
   });
 
@@ -474,7 +480,8 @@ describe("redeemPoints — concurrent last-reward-stock scenarios", () => {
       isActive: true,
       stock: 1
     });
-    prisma.reward.update.mockResolvedValue({ id: "reward_ltd2", stock: 0 });
+    // Exactly one row matched the stock > 0 condition.
+    prisma.reward.updateMany.mockResolvedValue({ count: 1 });
     prisma.membership.update.mockResolvedValue(makeMembership({ pointsBalance: 450 }));
     prisma.loyaltyTransaction.create.mockResolvedValue({ id: "tx_redeem_stock" });
     prisma.notification.create.mockResolvedValue({});
@@ -487,8 +494,9 @@ describe("redeemPoints — concurrent last-reward-stock scenarios", () => {
       idempotencyKey: "idem_oos_2"
     });
 
-    expect(prisma.reward.update).toHaveBeenCalledWith(
+    expect(prisma.reward.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ id: "reward_ltd2", stock: { gt: 0 } }),
         data: { stock: { decrement: 1 } }
       })
     );
@@ -504,7 +512,6 @@ describe("redeemPoints — concurrent last-reward-stock scenarios", () => {
       isActive: true,
       stock: null
     });
-    prisma.reward.update.mockResolvedValue({ id: "reward_unlimited", stock: null });
     prisma.membership.update.mockResolvedValue(makeMembership({ pointsBalance: 450 }));
     prisma.loyaltyTransaction.create.mockResolvedValue({ id: "tx_redeem_unlimited" });
     prisma.notification.create.mockResolvedValue({});
@@ -517,10 +524,8 @@ describe("redeemPoints — concurrent last-reward-stock scenarios", () => {
       idempotencyKey: "idem_oos_3"
     });
 
-    expect(prisma.reward.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { stock: null }
-      })
-    );
+    // Null stock means unlimited — no stock update should occur.
+    expect(prisma.reward.update).not.toHaveBeenCalled();
+    expect(prisma.reward.updateMany).not.toHaveBeenCalled();
   });
 });

@@ -33,7 +33,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   } catch (err) {
     logger.warn({ err, userId }, "account.email.verify.failed");
     return NextResponse.json(
-      { error: (err as Error).message ?? "Verification failed." },
+      { error: "Verification failed." },
       { status: 400 }
     );
   }

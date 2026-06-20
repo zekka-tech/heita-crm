@@ -83,17 +83,21 @@ export async function joinBusiness(input: JoinBusinessInput) {
       });
     }
 
-    await tx.notification.create({
-      data: {
-        userId: input.userId,
-        title: `Joined ${business.name}`,
-        body:
-          business.loyaltySignupBonus > 0
-            ? `Welcome to ${business.name}. You received ${business.loyaltySignupBonus} points.`
-            : `Welcome to ${business.name}.`,
-        type: "MEMBERSHIP_JOINED",
-        actionUrl: `/b/${business.slug}`
-      }
+    // createMany (no RETURNING) — Notification has no business-scope SELECT
+    // policy, so a create() under withBusinessScope would fail hydrating the row.
+    await tx.notification.createMany({
+      data: [
+        {
+          userId: input.userId,
+          title: `Joined ${business.name}`,
+          body:
+            business.loyaltySignupBonus > 0
+              ? `Welcome to ${business.name}. You received ${business.loyaltySignupBonus} points.`
+              : `Welcome to ${business.name}.`,
+          type: "MEMBERSHIP_JOINED",
+          actionUrl: `/b/${business.slug}`
+        }
+      ]
     });
 
     const joinTelemetry = {
